@@ -9,11 +9,11 @@ No base class, no `Widget()` wrapper, no manifest file, no registration step. A 
 `App.tsx` renders exactly one widget:
 
 ```tsx
-import { Wigl } from "./Wigl";
+import { ReposWidget } from "./ReposWidget";
 import "./App.css";
 
 function App() {
-  return <Wigl />;
+  return <ReposWidget />;
 }
 ```
 
@@ -21,11 +21,11 @@ To switch to a different widget, change the import and the returned element. To 
 
 ## What a real-data widget needs
 
-Looking at `src/Wigl.tsx` + `src/useWigl.ts` as the reference shape:
+Looking at `src/ReposWidget.tsx` + `src/useReposWidget.ts` as the reference shape (the repo-status widget — its name describes what it does, not "the app"; see `docs/architecture.md`'s naming note):
 
-1. **A config module** (`src/config.ts`) — plain exported constants for anything you might want to tweak (poll interval, source paths). No env vars, no settings UI, no runtime config loading.
-2. **A data hook** (`src/useWigl.ts`) — owns the `setInterval` + shell-command + `useState` cycle described in `docs/architecture.md`. One hook per widget; don't share it across widgets, don't generalize it into a "data fetching framework."
-3. **The component** (`src/Wigl.tsx`) — consumes the hook, renders rows/state, wires up interactions (click-to-act, buttons).
+1. **A config module** (`src/reposWidget.config.ts`) — plain exported constants for anything you might want to tweak (poll interval, source paths). No env vars, no settings UI, no runtime config loading. Prefix a new widget's config file with its own name (e.g. `clockWidget.config.ts`) rather than a generic `config.ts` — a second widget will otherwise collide with or shadow this one.
+2. **A data hook** (`src/useReposWidget.ts`) — owns the `setInterval` + shell-command + `useState` cycle described in `docs/architecture.md`. One hook per widget; don't share it across widgets, don't generalize it into a "data fetching framework."
+3. **The component** (`src/ReposWidget.tsx`) — consumes the hook, renders rows/state, wires up interactions (click-to-act, buttons).
 4. **A drag handle** — attach `onMouseDown={onDragHandleMouseDown}` (from `src/drag.ts`) to whatever should drag the window, typically a header. Any button/interactive element inside that header needs `onMouseDown={(e) => e.stopPropagation()}` or the drag handler will eat its click before `onClick` ever fires.
 
 ## Running shell commands from a widget
@@ -37,9 +37,9 @@ import { Command } from "@tauri-apps/plugin-shell";
 const output = await Command.create("git", ["status"]).execute();
 ```
 
-The `name` here (`"git"`) must match a `name` entry under `shell:allow-execute` in `src-tauri/capabilities/default.json`, which maps it to an actual binary (`cmd`) and an args policy. **New binary → new capability entry**, or the call fails silently or with a permission error at runtime (check via `log show`, not visually — see `docs/debugging.md`). If you need a whole pipeline (multiple commands, conditionals), it's usually simpler to write one `sh -c "..."` script string (see `scanScript` in `useWigl.ts`) than to orchestrate multiple `Command.create` calls from JS.
+The `name` here (`"git"`) must match a `name` entry under `shell:allow-execute` in `src-tauri/capabilities/default.json`, which maps it to an actual binary (`cmd`) and an args policy. **New binary → new capability entry**, or the call fails silently or with a permission error at runtime (check via `log show`, not visually — see `docs/debugging.md`). If you need a whole pipeline (multiple commands, conditionals), it's usually simpler to write one `sh -c "..."` script string (see `scanScript` in `useReposWidget.ts`) than to orchestrate multiple `Command.create` calls from JS.
 
-`cmd` can be a fixed absolute path, not just a bare binary name — e.g. `openInEditor` in `useWigl.ts` calls the bundled VS Code CLI at its full app-bundle path (`name: "code"`, `cmd: "/Applications/Visual Studio Code.app/.../bin/code"`) rather than relying on `$PATH`, since GUI apps launched outside a shell often have a minimal `PATH` that doesn't include user-installed CLI tools. Prefer passing args as an array (`Command.create("open", ["-a", "X", path])`) over interpolating a path into a shell string — it sidesteps shell-quoting/injection entirely for the common case, only reach for `sh -c` when you genuinely need shell features (pipes, conditionals, `||` fallback chains).
+`cmd` can be a fixed absolute path, not just a bare binary name — e.g. `openInEditor` in `useReposWidget.ts` calls the bundled VS Code CLI at its full app-bundle path (`name: "code"`, `cmd: "/Applications/Visual Studio Code.app/.../bin/code"`) rather than relying on `$PATH`, since GUI apps launched outside a shell often have a minimal `PATH` that doesn't include user-installed CLI tools. Prefer passing args as an array (`Command.create("open", ["-a", "X", path])`) over interpolating a path into a shell string — it sidesteps shell-quoting/injection entirely for the common case, only reach for `sh -c` when you genuinely need shell features (pipes, conditionals, `||` fallback chains).
 
 ## Icons
 
@@ -59,7 +59,7 @@ This drops a real `.tsx` file into `src/components/ui/`, which you own and can e
 
 Init already ran once (`components.json`, `@/*` path alias in `tsconfig.json` + `vite.config.ts`, `src/lib/utils.ts`, and the design-token theme in `src/App.css`) — you don't need to redo that, just run `add` for whatever component you need. Only pull in a component when a widget actually needs that primitive; don't pre-install the full set "just in case."
 
-Wigl's panel forces the `dark` class on its root wrapper (`<div className="dark ...">`) since coss ui components read their colors from CSS variables scoped to `:root`/`.dark` in `App.css` — without it, coss components render with the light-theme palette regardless of the app's own dark styling.
+`ReposWidget`'s panel forces the `dark` class on its root wrapper (`<div className="dark ...">`) since coss ui components read their colors from CSS variables scoped to `:root`/`.dark` in `App.css` — without it, coss components render with the light-theme palette regardless of the app's own dark styling.
 
 ## Window chrome
 

@@ -4,6 +4,8 @@
 
 One app renders one widget. `App.tsx` imports one widget component and returns it — nothing else. There is no widget registry, no manifest, no dynamic loading, no `Widget()` wrapper. Swapping widgets means editing `App.tsx`'s import/return and, if the old widget is fully retired, deleting its file. See `INIT.md` in the repo root for the full rationale — read it before changing this. This document assumes you already have.
 
+**Naming note**: "wigl" is the app (`package.json` name, Tauri `productName`/`identifier`). It is not a widget. The widget currently mounted is `ReposWidget` (`src/ReposWidget.tsx`) — a repo-status list, one of potentially several widgets this app could host one at a time. Don't name a future widget "Wigl" or reuse the app's name for a widget file; it's the thing most likely to confuse the next person (or agent) reading this codebase.
+
 ## What's actually shared
 
 Only two things are window-level, not widget-level, and both live outside any widget file:
@@ -15,7 +17,7 @@ Everything else — data fetching, polling, local state, styling — is plain co
 
 ## Data flow pattern
 
-Every widget that needs live system data follows the same shape (see `src/useWigl.ts`):
+Every widget that needs live system data follows the same shape (see `src/useReposWidget.ts`, the data hook for the currently-mounted repo-status widget):
 
 ```
 config (what to fetch / where)

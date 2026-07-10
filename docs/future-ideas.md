@@ -4,14 +4,14 @@ Everything here is unbuilt and unapproved — a list of things that came up duri
 
 **Important**: `.idea/full-conversation.md` describes an earlier, much bigger vision — a full widget *platform* with a manifest-free discovery convention (any `.tsx` in a `widgets/` folder auto-registers), a plugin SDK, multi-display "placement engine" that treats widgets as position-independent nodes, and a native tiling layout system. That direction was explicitly rejected — this app is one widget at a time, hand-edited in `App.tsx`. Don't resurrect that architecture piecemeal by building toward it feature-by-feature; if a real need for multiple concurrent widgets ever emerges, that's a deliberate re-architecture decision to make explicitly, not something to slide into.
 
-## Deferred for Wigl specifically (from INIT.md)
+## Deferred for the repo-status widget specifically (from INIT.md)
 
 - Backlog-item counts per project (would require parsing project-internal files).
 - Any parsing of project-internal files beyond git state.
-- Settings UI (source directory is currently a hardcoded constant in `config.ts`).
+- Settings UI (source directory is currently a hardcoded constant in `reposWidget.config.ts`).
 - The npm:deploy-gated three-state badge from the original Übersicht widget (deliberately dropped in favor of a simpler always-checked two-real-state + error scheme).
 
-~~Sorting / multiple header actions~~ and ~~a VS Code open action~~ from the reference widget are now built (2026-07-10) — see `src/Wigl.tsx`'s `SORT_ACTIONS`/`SORTERS` and `openInEditor` in `src/useWigl.ts`.
+~~Sorting / multiple header actions~~ and ~~a VS Code open action~~ from the reference widget are now built (2026-07-10) — see `src/ReposWidget.tsx`'s `SORT_ACTIONS`/`SORTERS` and `openInEditor` in `src/useReposWidget.ts`.
 
 ## Decided (not just deferred)
 
@@ -31,4 +31,4 @@ Everything here is unbuilt and unapproved — a list of things that came up duri
 - A published/shared hook package.
 - A plugin ecosystem or marketplace.
 - Cloud sync of any kind.
-- Cross-platform support beyond macOS (Wigl's window behavior is macOS-only by design; INIT.md is explicit about this).
+- Cross-platform support beyond macOS (the window behavior is macOS-only by design; INIT.md is explicit about this).

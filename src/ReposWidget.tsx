@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ArrowDownAZ, Circle, Clock, Code2, FolderOpen, RefreshCw, TriangleAlert } from "lucide-react";
-import { ProjectStatus, openInEditor, revealInFinder, useWigl } from "./useWigl";
+import { ProjectStatus, openInEditor, revealInFinder, useReposWidget } from "./useReposWidget";
 import { onDragHandleMouseDown } from "./drag";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -42,8 +42,8 @@ function relTime(epochSeconds: number) {
   return `${Math.floor(diff / 604800)}w`;
 }
 
-export function Wigl() {
-  const { projects, loading, refresh } = useWigl();
+export function ReposWidget() {
+  const { projects, loading, refresh } = useReposWidget();
   const [sortBy, setSortBy] = useState<SortKey>("time");
   const sorted = [...projects].sort(SORTERS[sortBy]);
 
@@ -53,7 +53,7 @@ export function Wigl() {
         onMouseDown={onDragHandleMouseDown}
         className="flex cursor-grab items-center justify-between border-b border-white/10 px-2 py-1 active:cursor-grabbing"
       >
-        <span className="px-1 text-[10px] tracking-widest opacity-40">WIGL</span>
+        <span className="px-1 text-[10px] tracking-widest opacity-40">REPOS</span>
         <div className="flex items-center gap-0.5" onMouseDown={(e) => e.stopPropagation()}>
           {SORT_ACTIONS.map(({ key, icon: Icon, title }) => (
             <Button

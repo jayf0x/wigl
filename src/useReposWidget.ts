@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Command } from "@tauri-apps/plugin-shell";
 import { homeDir, join } from "@tauri-apps/api/path";
-import { POLL_INTERVAL_MS, SOURCE_DIR_RELATIVE_TO_HOME } from "./config";
+import { POLL_INTERVAL_MS, SOURCE_DIR_RELATIVE_TO_HOME } from "./reposWidget.config";
 
 export type ReleaseStatus = "unreleased" | "clean" | "error";
 
@@ -53,7 +53,7 @@ function parseLine(sourceDir: string, line: string): ProjectStatus | null {
   };
 }
 
-export function useWigl() {
+export function useReposWidget() {
   const [projects, setProjects] = useState<ProjectStatus[]>([]);
   const [loading, setLoading] = useState(true);
 
