@@ -81,3 +81,17 @@ export function useWigl() {
 export function revealInFinder(path: string) {
   Command.create("open", ["-R", path]).execute();
 }
+
+// bundled VS Code CLI first (reuses an already-open window instead of
+// spawning a new one), falls back to `open -a` if VS Code isn't installed there.
+export async function openInEditor(path: string) {
+  try {
+    await Command.create("code", [path]).execute();
+  } catch {
+    try {
+      await Command.create("open", ["-a", "Visual Studio Code", path]).execute();
+    } catch {
+      // no VS Code install found — nothing more we can do
+    }
+  }
+}

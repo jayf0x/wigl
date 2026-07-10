@@ -9,9 +9,14 @@ Everything here is unbuilt and unapproved — a list of things that came up duri
 - Backlog-item counts per project (would require parsing project-internal files).
 - Any parsing of project-internal files beyond git state.
 - Settings UI (source directory is currently a hardcoded constant in `config.ts`).
-- Sorting / multiple header actions (the reference widget had sort-by-name/npm/time; current Wigl has none).
-- A "VS Code" / editor-open action alongside Finder reveal (reference widget had both; current Wigl only reveals in Finder).
 - The npm:deploy-gated three-state badge from the original Übersicht widget (deliberately dropped in favor of a simpler always-checked two-real-state + error scheme).
+
+~~Sorting / multiple header actions~~ and ~~a VS Code open action~~ from the reference widget are now built (2026-07-10) — see `src/Wigl.tsx`'s `SORT_ACTIONS`/`SORTERS` and `openInEditor` in `src/useWigl.ts`.
+
+## Decided (not just deferred)
+
+- **UI component library: coss ui.** Considered shadcn/ui and Chakra too. Picked coss ui because it's copy-paste like shadcn (no monolithic runtime dependency, components live in `src/components/ui/` as owned code) and Tailwind-v4-native, so it doesn't fight the existing setup. See `docs/widgets.md`'s Styling section for how to add components. Chakra was rejected specifically for being a real runtime dependency with its own styling system, which would compete with Tailwind. Decided 2026-07-10.
+- **Monorepo / Turborepo (per-widget package isolation): rejected for now.** Considered so that widgets could have independent, non-conflicting dependency installs (e.g. one widget on a table lib, another on something incompatible). Rejected because only one widget is ever mounted at a time (see `docs/architecture.md`), so there's no actual dependency conflict today — a monorepo here is pure ceremony (extra config, extra install step, more ways for HMR to break) for a problem that doesn't exist yet. Trigger to revisit: multiple widgets need to run **concurrently** (a deliberate architecture change on its own, see below) **and** they need genuinely incompatible dependency versions. Until both are true, everything stays in the single root `package.json`.
 
 ## Ideas worth considering if/when they become real needs
 
