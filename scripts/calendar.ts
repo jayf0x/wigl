@@ -13,7 +13,7 @@ import { dirname } from "node:path";
 
 const DB_PATH = `${process.env.HOME}/Library/Application Support/wigl/wigl.db`;
 mkdirSync(dirname(DB_PATH), { recursive: true });
-const KEY = "calendar_events"; // EVENTS_STORAGE_KEY in src/widgets/calendar/index.tsx
+const KEY = "calendar_events"; // EVENTS_STORAGE_KEY in src/widgets/calendar/calendar.utils.ts
 
 interface CalendarEvent {
   id: string;

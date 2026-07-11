@@ -1,22 +1,27 @@
 # Adding or editing a widget
 
+This file is the contract and the reasoning. It deliberately names no current widgets — for every pattern below, the living example is in `src/widgets/`: open the existing widget most similar to what you're building and read it top to bottom. If this doc and a widget's code ever disagree on style, the code is newer; fix whichever is wrong rather than following the stale one.
+
 ## Philosophy (shadcn-style)
 
 Widgets and shared components are **owned code**, not framework surface. A component's API is children + `className` (merged via `cn()` from `@/lib/utils`), not a prop for every conceivable variation — if a widget needs the header green, it passes `className="bg-green-950"`, it doesn't wait for a `background` prop to be added. When a shared component doesn't fit, edit it or don't use it; never grow a config system around it.
 
 ## A widget is one folder
 
-The entire contract, typed by `WidgetModule` in `src/wigl/types.ts`:
+The contract, typed by `WidgetModule` in `src/wigl/types.ts`:
 
 ```
 src/widgets/<name>/
-  index.tsx        ← default-exports the component
+  index.tsx        ← default-exports the component (required)
                      optionally exports `windowConfig` (size / first-launch x,y / title)
-  use<Name>.ts     ← only if it fetches data (see below)
+  use<Name>.ts     ← only if it fetches external data (see below)
   <name>.config.ts ← only if it has tunable constants
+  anything else    ← the widget's own business: sub-components, utils, whatever
+                     keeps index.tsx readable. Private to the folder — never
+                     imported by another widget.
 ```
 
-`src/App.tsx` discovers folders with `import.meta.glob("./widgets/*/index.tsx")` at build time and opens one OS window per folder at launch — the folder name becomes the window label (so don't name a folder `main`; that's the hidden bootstrap window). **Adding a widget = creating the folder. Deleting it = removing the folder. No registration, no config edits, nothing else.**
+`src/App.tsx` discovers folders with `import.meta.glob("./widgets/*/index.tsx")` at build time and opens one OS window per folder at launch — the folder name becomes the window label (so don't name a folder `main` — that's the hidden bootstrap window — or `wigl`, the app's name). **Adding a widget = creating the folder. Deleting it = removing the folder. No registration, no config edits, nothing else.**
 
 ```tsx
 // src/widgets/clock/index.tsx — a complete, working widget
@@ -36,25 +41,25 @@ export default function ClockWidget() {
 }
 ```
 
-`windowConfig` is optional — omit it and you get 260×320 at an auto-offset position. `x`/`y` are only the first-launch position; `tauri-plugin-window-state` persists wherever the user drags the window after that. Pick defaults that don't overlap other widgets'. Standard window chrome (transparent, undecorated, always-on-bottom, skip-taskbar, non-resizable) is applied by the spawner in `App.tsx`, not per widget — a widget that needs *different* chrome is no longer "just another widget" and is worth a second thought.
+`windowConfig` is optional — omit it and you get 260×320 at an auto-offset position. **Spell it exactly `windowConfig` and spell `default` export as an actual default export** — the glob does no validation, so a typo'd export name or a named-only component export fails silently (default window / blank window). `x`/`y` are only the first-launch position; `tauri-plugin-window-state` persists wherever the user drags the window after that. Pick defaults that don't overlap other widgets' (check their `windowConfig`s). Standard window chrome (transparent, undecorated, always-on-bottom, skip-taskbar, non-resizable) is applied by the spawner in `App.tsx`, not per widget — a widget that needs *different* chrome is no longer "just another widget" and is worth a second thought.
 
 No capability edit needed either — `src-tauri/capabilities/default.json`'s `windows` field is a `["*"]` glob, so new window labels are covered automatically. You only touch that file for new *permissions* (see "Running shell commands" below).
 
 ## What a real-data widget needs
 
-Looking at `src/widgets/repos/` as the reference shape (the repo-status widget — its name describes what it does, not "the app"; see `docs/architecture.md`'s naming note):
+The shape, in dependency order (any widget in `src/widgets/` with a hook is the reference in action):
 
-1. **A config module** (`src/widgets/repos/reposWidget.config.ts`) — plain exported constants for anything you might want to tweak (poll interval, source paths). No env vars, no settings UI, no runtime config loading.
-2. **A data hook** (`src/widgets/repos/useReposWidget.ts`) — owns the `setInterval` + shell-command + `useState` cycle described in `docs/architecture.md`. One hook per widget; don't share it across widgets, don't generalize it into a "data fetching framework." Don't add this until there's actually external data to fetch — the todo widget has neither a hook nor a config yet, because it has nothing to fetch or tune.
-3. **The component** (`src/widgets/repos/index.tsx`) — consumes the hook, renders rows/state, wires up interactions. Wrapped in `Widget`/`WidgetHeader` (below).
-4. **Import with the `@/` alias**, not relative paths, for anything outside the widget's own folder (`@/wigl`, `@/components/ui/button`). Within a widget's own folder, relative imports (`./useReposWidget`) are fine.
+1. **A config module** (`<name>.config.ts`) — plain exported constants for anything you might want to tweak (poll interval, source paths). No env vars, no settings UI, no runtime config loading.
+2. **A data hook** (`use<Name>.ts`) — owns the `setInterval` + shell-command + `useState` cycle described in `docs/architecture.md`. One hook per widget; don't share it across widgets, don't generalize it into a "data fetching framework." Don't add a hook or config until there's actually external data to fetch or a constant to tune — a static widget is just `index.tsx`.
+3. **The component** (`index.tsx`) — consumes the hook, renders rows/state, wires up interactions. Wrapped in the shared panel chrome (below). When it grows past comfortable reading length, split sub-components/utils into sibling files in the same folder — that's expected, not a smell.
+4. **Import with the `@/` alias**, not relative paths, for anything outside the widget's own folder (`@/wigl`, `@/components/ui/...`). Within a widget's own folder, relative imports are fine.
 
-## Panel chrome (`Widget` / `WidgetHeader`)
+## Shared helpers (`@/wigl`)
 
-`@/wigl` (barrel over `src/wigl/`) exports the two shared pieces, both children + `className` only (see "Philosophy" above):
+Everything shared is exported from the `@/wigl` barrel — **read `src/wigl/index.ts` for the current list**; each module carries its own doc comment. The two you'll always use:
 
-- **`Widget`** — the dark rounded panel (also forces the `dark` class coss ui needs). Override looks via `className`.
-- **`WidgetHeader`** — a drag handle, and *only* a drag handle. Its single job is making window-drag and clicking coexist: mousedown on anything interactive (`button, a, input, select, textarea`, or any element carrying `data-no-drag`) passes through to the element; mousedown anywhere else starts the window drag. Content is whatever children you pass — a title span, status info, buttons (`ml-auto` to right-align them), nothing at all. **Never** attach `onMouseDown`/`stopPropagation` workarounds inside it, and don't import `src/wigl/drag.ts` in a widget — if a click is being eaten, add `data-no-drag` to that element instead.
+- **`Widget`** — the dark rounded panel (also forces the `dark` class coss ui needs). Override looks via `className`. Children + `className` only, per the philosophy above.
+- **`WidgetHeader`** — a drag handle, and *only* a drag handle. Its single job is making window-drag and clicking coexist: mousedown on anything interactive (`button, a, input, select, textarea`, or any element carrying `data-no-drag`) passes through to the element; mousedown anywhere else starts the window drag. Content is whatever children you pass — a title span, status info, buttons (`ml-auto` to right-align them), nothing at all. **Never** attach `onMouseDown`/`stopPropagation` workarounds inside it, and never import the drag module directly in a widget — if a click is being eaten, add `data-no-drag` to that element instead.
 
 ```tsx
 <WidgetHeader className="bg-emerald-950/40">
@@ -63,16 +68,18 @@ Looking at `src/widgets/repos/` as the reference shape (the repo-status widget �
 </WidgetHeader>
 ```
 
+Before writing a utility inside your widget folder, skim the barrel — the helper you need (e.g. live relative-time labels, persisted state) may already exist. Conversely, don't add to `src/wigl/` for a single widget's needs; the promotion threshold is in `docs/architecture.md`.
+
 ## Persistent storage (`useStorage`)
 
 ```ts
 import { useStorage } from "@/wigl";
-const [events, setEvents, { loading }] = useStorage<Event[]>("calendar_events", []);
+const [items, setItems, { loading }] = useStorage<Item[]>("<widget>_items", []);
 ```
 
-`src/wigl/storage.ts` — useState persisted as a JSON blob in a kv table in `~/Library/Application Support/wigl/wigl.db`, via macOS's built-in `sqlite3` CLI (no Rust, no Tauri plugin — same "shell out to a real CLI" rule as data fetching). Writes are optimistic; external changes (another window, a CLI script) are picked up by a 3s poll. Keys must match `[a-zA-Z0-9_-]+`.
+`useState` persisted as a JSON blob in a kv table in `~/Library/Application Support/wigl/wigl.db`, via macOS's built-in `sqlite3` CLI (no Rust, no Tauri plugin — same "shell out to a real CLI" rule as data fetching). Writes are optimistic; external changes (another window, a CLI script) are picked up by a poll (a few seconds). Keys must match `[a-zA-Z0-9_-]+` and share one flat namespace across all widgets — **prefix your keys with the widget's folder name** (`calendar_events`, not `events`).
 
-External tools can write the same data: `scripts/calendar.ts` (run as `bun run calendar:add "2027-12-12" "some event" [HH:MM] [description]`, `calendar:list`, `calendar:rm <id-prefix>`) uses `bun:sqlite` against the same DB file and key, and an open calendar widget sees the change within a poll. If you build a CLI for another widget's data, copy that shape: same DB path, one kv key, JSON blob, `CREATE TABLE IF NOT EXISTS kv (...)` before use — the key name is the whole contract between widget and CLI, so keep it in one exported constant on the widget side and reference it in the CLI comment.
+External tools can write the same data: any script in `scripts/` that talks to the DB is the pattern in action (run them via the `bun run` entries in `package.json`). If you build a CLI for a widget's data, copy that shape: same DB path, one kv key, JSON blob, `CREATE TABLE IF NOT EXISTS kv (...)` before use. The contract between widget and CLI is the key **and the JSON shape** — export both the key constant and the TypeScript type from the widget folder and import them in the CLI (scripts run under bun and can import from `src/` directly; don't hand-duplicate the type).
 
 Ceiling to know about: last-writer-wins on the whole blob — two writers mutating the same key within one poll window can drop a write. Fine for single-user widget data; if that ever bites, move that key to its own table with row-level writes.
 
@@ -85,9 +92,9 @@ import { Command } from "@tauri-apps/plugin-shell";
 const output = await Command.create("git", ["status"]).execute();
 ```
 
-The `name` here (`"git"`) must match a `name` entry under `shell:allow-execute` in `src-tauri/capabilities/default.json`, which maps it to an actual binary (`cmd`) and an args policy. **New binary → new capability entry**, or the call fails silently or with a permission error at runtime (check via `log show`, not visually — see `docs/debugging.md`). If you need a whole pipeline (multiple commands, conditionals), it's usually simpler to write one `sh -c "..."` script string (see `scanScript` in `useReposWidget.ts`) than to orchestrate multiple `Command.create` calls from JS.
+The `name` here (`"git"`) must match a `name` entry under `shell:allow-execute` in `src-tauri/capabilities/default.json`, which maps it to an actual binary (`cmd`) and an args policy. **New binary → new capability entry**, or the call fails silently or with a permission error at runtime (check via `log show`, not visually — see `docs/debugging.md`). If you need a whole pipeline (multiple commands, conditionals), it's usually simpler to write one `sh -c "..."` script string than to orchestrate multiple `Command.create` calls from JS — several existing hooks do exactly this.
 
-`cmd` can be a fixed absolute path, not just a bare binary name — e.g. `openInEditor` in `useReposWidget.ts` calls the bundled VS Code CLI at its full app-bundle path (`name: "code"`, `cmd: "/Applications/Visual Studio Code.app/.../bin/code"`) rather than relying on `$PATH`, since GUI apps launched outside a shell often have a minimal `PATH` that doesn't include user-installed CLI tools. Prefer passing args as an array (`Command.create("open", ["-a", "X", path])`) over interpolating a path into a shell string — it sidesteps shell-quoting/injection entirely for the common case, only reach for `sh -c` when you genuinely need shell features (pipes, conditionals, `||` fallback chains).
+`cmd` can be a fixed absolute path, not just a bare binary name — useful for CLI tools inside app bundles, since GUI apps launched outside a shell often have a minimal `PATH` that doesn't include user-installed tools. Prefer passing args as an array (`Command.create("open", ["-a", "X", path])`) over interpolating a path into a shell string — it sidesteps shell-quoting/injection entirely for the common case; only reach for `sh -c` when you genuinely need shell features (pipes, conditionals, `||` fallback chains).
 
 ## Icons
 
@@ -95,7 +102,7 @@ Use `lucide-react` (already a dependency, pulled in by the coss ui init) rather 
 
 ## Styling
 
-Tailwind utility classes directly in JSX. No CSS modules, no styled-components.
+Tailwind utility classes directly in JSX. No CSS modules, no styled-components. Never `dangerouslySetInnerHTML` (CSP is disabled; see AGENTS.md hard rules).
 
 For real UI primitives (tables, dialogs, form controls — anything beyond what a few div/flex utility classes reasonably express), use **coss ui** (`coss.com/ui`, aka `@coss/*`), a copy-paste component set built on Base UI + Tailwind v4. It works through the `shadcn` CLI:
 
