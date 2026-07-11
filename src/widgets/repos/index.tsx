@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ArrowDownAZ, Circle, Clock, Code2, FolderOpen, RefreshCw, TriangleAlert } from "lucide-react";
 import { ProjectStatus, openInEditor, revealInFinder, useReposWidget } from "./useReposWidget";
-import { onDragHandleMouseDown } from "./drag";
+import { Widget, WidgetHeader, type WidgetWindowConfig } from "@/wigl";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 
@@ -42,19 +42,23 @@ function relTime(epochSeconds: number) {
   return `${Math.floor(diff / 604800)}w`;
 }
 
-export function ReposWidget() {
+export const windowConfig: WidgetWindowConfig = {
+  width: 270,
+  height: 400,
+  x: 40,
+  y: 40,
+};
+
+export default function ReposWidget() {
   const { projects, loading, refresh } = useReposWidget();
   const [sortBy, setSortBy] = useState<SortKey>("time");
   const sorted = [...projects].sort(SORTERS[sortBy]);
 
   return (
-    <div className="dark flex h-full w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-black/80 font-mono text-white/85 backdrop-blur-xl">
-      <div
-        onMouseDown={onDragHandleMouseDown}
-        className="flex cursor-grab items-center justify-between border-b border-white/10 px-2 py-1 active:cursor-grabbing"
-      >
+    <Widget>
+      <WidgetHeader>
         <span className="px-1 text-[10px] tracking-widest opacity-40">REPOS</span>
-        <div className="flex items-center gap-0.5" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="ml-auto flex items-center gap-0.5">
           {SORT_ACTIONS.map(({ key, icon: Icon, title }) => (
             <Button
               key={key}
@@ -77,7 +81,7 @@ export function ReposWidget() {
             <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
-      </div>
+      </WidgetHeader>
       <div className="flex-1 overflow-y-auto">
         {!loading && projects.length === 0 && (
           <div className="px-3 py-2 text-[11px] opacity-40">no projects found</div>
@@ -122,6 +126,6 @@ export function ReposWidget() {
           </Table>
         )}
       </div>
-    </div>
+    </Widget>
   );
 }

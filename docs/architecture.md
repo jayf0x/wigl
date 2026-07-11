@@ -2,22 +2,31 @@
 
 ## The rule
 
-One app renders one widget. `App.tsx` imports one widget component and returns it — nothing else. There is no widget registry, no manifest, no dynamic loading, no `Widget()` wrapper. Swapping widgets means editing `App.tsx`'s import/return and, if the old widget is fully retired, deleting its file. See `INIT.md` in the repo root for the full rationale — read it before changing this. This document assumes you already have.
+One OS window renders one widget, and a widget is one folder. `src/widgets/<name>/index.tsx` default-exports the component and may export a `windowConfig` (size / first-launch position / title — type in `src/wigl/types.ts`, exported from `@/wigl`). `src/App.tsx` discovers widget folders at build time with Vite's `import.meta.glob("./widgets/*/index.tsx")` — the folder name becomes the window label. There is no registry file, no manifest, no runtime filesystem scanning, no HOC/registration wrapper; the glob is resolved statically by Vite at build time. Adding a widget = adding a folder. Retiring one = deleting it. Nothing else is edited.
 
-**Naming note**: "wigl" is the app (`package.json` name, Tauri `productName`/`identifier`). It is not a widget. The widget currently mounted is `ReposWidget` (`src/ReposWidget.tsx`) — a repo-status list, one of potentially several widgets this app could host one at a time. Don't name a future widget "Wigl" or reuse the app's name for a widget file; it's the thing most likely to confuse the next person (or agent) reading this codebase.
+**How windows come to exist**: `tauri.conf.json` declares exactly one window — a hidden 1×1 bootstrap labeled `main`. On launch, `App.tsx` (running in `main`) spawns one `WebviewWindow` per widget folder, applying the app's standard window chrome (transparent, undecorated, always-on-bottom, skip-taskbar, non-resizable — hardcoded in the spawner) plus the widget's own `windowConfig`. Every window loads the same bundle; each realm looks up its own label in the glob result to decide what to render (`main` renders nothing). The `main` window is denylisted from `tauri-plugin-window-state` in `src-tauri/src/lib.rs` — see `docs/debugging.md` for why that matters.
+
+**Why windows, not one window with several components**: `src/wigl/drag.ts` and `tauri-plugin-window-state` (below) already operate at the OS-window level — a window's position is a single (x, y), dragging moves the whole window. Two widgets that need to be independently positioned and dragged therefore need to *be* two windows; stacking them as sibling elements in one window would mean writing a second, incompatible drag/position system from scratch. One window per widget reuses `drag.ts` and window-state persistence completely unchanged, and gets each widget its own JS realm as a side effect — see "Render isolation" below.
+
+**Naming note**: "wigl" is the app (`package.json` name, Tauri `productName`/`identifier`). It is not a widget. Widget folders currently: `src/widgets/repos/` (a repo-status list) and `src/widgets/todo/` (a placeholder). Don't name a future widget "wigl" or reuse the app's name for a widget folder; it's the thing most likely to confuse the next person (or agent) reading this codebase. Also don't create a folder named `main` — that label is taken by the bootstrap window.
+
+## Render isolation between widgets
+
+Every widget window loads the same frontend bundle but runs it in its own WebView — its own JS realm, own React tree, own event loop. A widget's `setInterval`/`useState`/re-renders can never touch another widget's render tree; there is no shared store, no shared React context, no possible cross-widget re-render bleed to guard against. This means: don't build cross-widget memoization, a shared state store, or a "coordinator" of any kind — the isolation is structural, not something application code needs to maintain. If you want to *see* a single widget's own re-renders while developing, `bun run tauri dev` wires up `react-scan` in dev builds only (`src/main.tsx`, gated behind `import.meta.env.DEV` so it's fully absent from production bundles) — each widget's WebView gets its own overlay.
 
 ## What's actually shared
 
-Only two things are window-level, not widget-level, and both live outside any widget file:
+These are window-level or cross-widget-UI level, not single-widget-level, and live outside any widget folder:
 
-- **Dragging** — `src/drag.ts`. A widget opts in by attaching `onMouseDown={onDragHandleMouseDown}` to whichever element should act as the drag handle (usually a header bar). It's a plain function, not a hook or a wrapped component — any interactive child (buttons, rows) inside the drag handle must call `e.stopPropagation()` on its own `onMouseDown`, or its clicks get eaten by the drag start.
-- **Window persistence** — `tauri-plugin-window-state`, configured once in `src-tauri/src/lib.rs`. It listens for the native window "moved"/"resized" events and persists automatically; no widget-side code needed. `drag.ts` calls `setPosition()`, which fires the same native event, so manual dragging is transparently persisted too.
+- **Dragging** — `src/wigl/drag.ts`, a plain mousedown handler that moves the OS window. Widgets don't touch it directly — `WidgetHeader` (below) is the drag handle.
+- **Window persistence** — `tauri-plugin-window-state`, configured once in `src-tauri/src/lib.rs`. It listens for the native window "moved"/"resized" events and persists automatically per window label; no widget-side code needed. `drag.ts` calls `setPosition()`, which fires the same native event, so manual dragging is transparently persisted too.
+- **Panel chrome** — `src/wigl/widget.tsx` (`Widget`, `WidgetHeader`), imported from `@/wigl`. Extracted once `TodoWidget` needed the exact same dark rounded-panel wrapper and draggable header row `ReposWidget` already had — see the threshold rule below. Both follow the shadcn philosophy: owned code, children + `className` (merged via `cn()`), no prop-per-feature API. `WidgetHeader`'s single responsibility is making drag and click coexist — it starts a window drag on mousedown *unless* the target is interactive (`button, a, input, select, textarea,` or anything with `data-no-drag`), so widgets never touch `drag.ts` or `stopPropagation` themselves.
 
-Everything else — data fetching, polling, local state, styling — is plain component code scoped to its own widget file. Don't extract a second "shared" hook or utility until a second widget actually needs the same logic; one hook used by one widget is over-engineering with extra steps.
+Everything else — data fetching, polling, local state specific to one widget's own logic — is plain component code scoped to its own `src/widgets/<name>/` folder. Don't extract a second "shared" hook or utility until a second widget actually needs the *same* logic; one hook used by one widget is over-engineering with extra steps. `Widget`/`WidgetHeader` crossing that threshold is the concrete example of when to promote something, not a license to pre-extract further.
 
 ## Data flow pattern
 
-Every widget that needs live system data follows the same shape (see `src/useReposWidget.ts`, the data hook for the currently-mounted repo-status widget):
+Every widget that needs live system data follows the same shape (see `src/widgets/repos/useReposWidget.ts`, the data hook for the repo-status widget):
 
 ```
 config (what to fetch / where)
@@ -38,6 +47,8 @@ No query library, no cache layer, no IPC-based Rust commands for data — shell 
 Tauri's `core:default` capability does **not** include window position read/write, despite feeling like a basic window operation. Every new native capability a widget needs (new shell binaries, new window APIs, filesystem access, etc.) requires an explicit entry in `src-tauri/capabilities/default.json`. If you add a Tauri API call and it silently does nothing (no thrown error, no log line), permissions are the first thing to check — see `docs/debugging.md`.
 
 Shell commands are scoped by name+binary, not just "shell access": each command you want to run (`git`, `sh`, `open`, ...) needs its own entry under the `shell:allow-execute` permission's `allow` array in `default.json`. Adding a new shell-backed feature almost always means adding a new entry there.
+
+`default.json`'s `windows` field is `["*"]` (a glob, matched against window labels), not an explicit per-window list — so a new widget's window label needs no capability edit. Only touch `default.json` when a widget needs a new *permission* (a new shell binary, a new window/fs API), never just because it's a new window.
 
 ## Extending this app
 

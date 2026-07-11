@@ -1,32 +1,67 @@
 # Adding or editing a widget
 
-## A widget is just a component
+## Philosophy (shadcn-style)
 
-No base class, no `Widget()` wrapper, no manifest file, no registration step. A widget is a `.tsx` file exporting a function component that returns JSX. That's the entire contract.
+Widgets and shared components are **owned code**, not framework surface. A component's API is children + `className` (merged via `cn()` from `@/lib/utils`), not a prop for every conceivable variation — if a widget needs the header green, it passes `className="bg-green-950"`, it doesn't wait for a `background` prop to be added. When a shared component doesn't fit, edit it or don't use it; never grow a config system around it.
 
-## Swapping the active widget
+## A widget is one folder
 
-`App.tsx` renders exactly one widget:
+The entire contract, typed by `WidgetModule` in `src/wigl/types.ts`:
+
+```
+src/widgets/<name>/
+  index.tsx        ← default-exports the component
+                     optionally exports `windowConfig` (size / first-launch x,y / title)
+  use<Name>.ts     ← only if it fetches data (see below)
+  <name>.config.ts ← only if it has tunable constants
+```
+
+`src/App.tsx` discovers folders with `import.meta.glob("./widgets/*/index.tsx")` at build time and opens one OS window per folder at launch — the folder name becomes the window label (so don't name a folder `main`; that's the hidden bootstrap window). **Adding a widget = creating the folder. Deleting it = removing the folder. No registration, no config edits, nothing else.**
 
 ```tsx
-import { ReposWidget } from "./ReposWidget";
-import "./App.css";
+// src/widgets/clock/index.tsx — a complete, working widget
+import { Widget, WidgetHeader, type WidgetWindowConfig } from "@/wigl";
 
-function App() {
-  return <ReposWidget />;
+export const windowConfig: WidgetWindowConfig = { width: 200, height: 90, x: 640, y: 40 };
+
+export default function ClockWidget() {
+  return (
+    <Widget>
+      <WidgetHeader>
+        <span className="px-1 text-[10px] tracking-widest opacity-40">CLOCK</span>
+      </WidgetHeader>
+      {/* body */}
+    </Widget>
+  );
 }
 ```
 
-To switch to a different widget, change the import and the returned element. To retire a widget for good, delete its file too — don't leave dead widgets around "in case," and don't build a way to switch between them at runtime. If you're prototyping a new widget alongside an existing one, do it on a branch or just accept the churn of editing `App.tsx` back and forth — it's a one-line edit, not a feature to build around.
+`windowConfig` is optional — omit it and you get 260×320 at an auto-offset position. `x`/`y` are only the first-launch position; `tauri-plugin-window-state` persists wherever the user drags the window after that. Pick defaults that don't overlap other widgets'. Standard window chrome (transparent, undecorated, always-on-bottom, skip-taskbar, non-resizable) is applied by the spawner in `App.tsx`, not per widget — a widget that needs *different* chrome is no longer "just another widget" and is worth a second thought.
+
+No capability edit needed either — `src-tauri/capabilities/default.json`'s `windows` field is a `["*"]` glob, so new window labels are covered automatically. You only touch that file for new *permissions* (see "Running shell commands" below).
 
 ## What a real-data widget needs
 
-Looking at `src/ReposWidget.tsx` + `src/useReposWidget.ts` as the reference shape (the repo-status widget — its name describes what it does, not "the app"; see `docs/architecture.md`'s naming note):
+Looking at `src/widgets/repos/` as the reference shape (the repo-status widget — its name describes what it does, not "the app"; see `docs/architecture.md`'s naming note):
 
-1. **A config module** (`src/reposWidget.config.ts`) — plain exported constants for anything you might want to tweak (poll interval, source paths). No env vars, no settings UI, no runtime config loading. Prefix a new widget's config file with its own name (e.g. `clockWidget.config.ts`) rather than a generic `config.ts` — a second widget will otherwise collide with or shadow this one.
-2. **A data hook** (`src/useReposWidget.ts`) — owns the `setInterval` + shell-command + `useState` cycle described in `docs/architecture.md`. One hook per widget; don't share it across widgets, don't generalize it into a "data fetching framework."
-3. **The component** (`src/ReposWidget.tsx`) — consumes the hook, renders rows/state, wires up interactions (click-to-act, buttons).
-4. **A drag handle** — attach `onMouseDown={onDragHandleMouseDown}` (from `src/drag.ts`) to whatever should drag the window, typically a header. Any button/interactive element inside that header needs `onMouseDown={(e) => e.stopPropagation()}` or the drag handler will eat its click before `onClick` ever fires.
+1. **A config module** (`src/widgets/repos/reposWidget.config.ts`) — plain exported constants for anything you might want to tweak (poll interval, source paths). No env vars, no settings UI, no runtime config loading.
+2. **A data hook** (`src/widgets/repos/useReposWidget.ts`) — owns the `setInterval` + shell-command + `useState` cycle described in `docs/architecture.md`. One hook per widget; don't share it across widgets, don't generalize it into a "data fetching framework." Don't add this until there's actually external data to fetch — the todo widget has neither a hook nor a config yet, because it has nothing to fetch or tune.
+3. **The component** (`src/widgets/repos/index.tsx`) — consumes the hook, renders rows/state, wires up interactions. Wrapped in `Widget`/`WidgetHeader` (below).
+4. **Import with the `@/` alias**, not relative paths, for anything outside the widget's own folder (`@/wigl`, `@/components/ui/button`). Within a widget's own folder, relative imports (`./useReposWidget`) are fine.
+
+## Panel chrome (`Widget` / `WidgetHeader`)
+
+`@/wigl` (barrel over `src/wigl/`) exports the two shared pieces, both children + `className` only (see "Philosophy" above):
+
+- **`Widget`** — the dark rounded panel (also forces the `dark` class coss ui needs). Override looks via `className`.
+- **`WidgetHeader`** — a drag handle, and *only* a drag handle. Its single job is making window-drag and clicking coexist: mousedown on anything interactive (`button, a, input, select, textarea`, or any element carrying `data-no-drag`) passes through to the element; mousedown anywhere else starts the window drag. Content is whatever children you pass — a title span, status info, buttons (`ml-auto` to right-align them), nothing at all. **Never** attach `onMouseDown`/`stopPropagation` workarounds inside it, and don't import `src/wigl/drag.ts` in a widget — if a click is being eaten, add `data-no-drag` to that element instead.
+
+```tsx
+<WidgetHeader className="bg-emerald-950/40">
+  <span className="px-1 text-[10px] tracking-widest opacity-40">REPOS</span>
+  <div className="ml-auto flex items-center gap-0.5">{/* buttons — clicks just work */}</div>
+</WidgetHeader>
+```
 
 ## Running shell commands from a widget
 
@@ -59,8 +94,12 @@ This drops a real `.tsx` file into `src/components/ui/`, which you own and can e
 
 Init already ran once (`components.json`, `@/*` path alias in `tsconfig.json` + `vite.config.ts`, `src/lib/utils.ts`, and the design-token theme in `src/App.css`) — you don't need to redo that, just run `add` for whatever component you need. Only pull in a component when a widget actually needs that primitive; don't pre-install the full set "just in case."
 
-`ReposWidget`'s panel forces the `dark` class on its root wrapper (`<div className="dark ...">`) since coss ui components read their colors from CSS variables scoped to `:root`/`.dark` in `App.css` — without it, coss components render with the light-theme palette regardless of the app's own dark styling.
+`Widget` forces the `dark` class on its root wrapper since coss ui components read their colors from CSS variables scoped to `:root`/`.dark` in `App.css` — without it, coss components render with the light-theme palette regardless of the app's own dark styling. Widgets built via `Widget` get this for free; don't re-add `dark` on anything inside it.
 
 ## Window chrome
 
-Transparent/undecorated/always-on-bottom/skip-taskbar window behavior is configured once in `src-tauri/tauri.conf.json` under `app.windows[0]`, plus `macOSPrivateApi: true` (required for transparency) and the matching `macos-private-api` Cargo feature in `src-tauri/Cargo.toml`. This is app-level, not widget-level — a new widget doesn't touch this file unless it needs genuinely different window dimensions/behavior, in which case you're deciding whether it's still "one app, one widget" or something bigger (see `docs/architecture.md`'s hard rule).
+The standard flags (transparent, undecorated, no shadow, always-on-bottom, skip-taskbar, non-resizable) live in one place: the spawner in `src/App.tsx`. `src-tauri/tauri.conf.json` only declares the hidden `main` bootstrap window. App-level prerequisites, set once: `macOSPrivateApi: true` in `tauri.conf.json` (required for transparency) and the matching `macos-private-api` Cargo feature in `src-tauri/Cargo.toml`.
+
+## Checking a widget's own re-renders
+
+`bun run tauri dev` runs `src/main.tsx`'s dev-only `react-scan` overlay inside every widget's WebView (see `docs/architecture.md`'s "Render isolation" — this is for spotting waste inside *one* widget's own render tree; there is no cross-widget re-render leakage to check for, since each widget is a separate JS realm by construction). It's gated behind `import.meta.env.DEV`, so it's entirely absent from `bun run build`/`bun run tauri build` output — no prod bundle-size cost, nothing to remember to strip out.
