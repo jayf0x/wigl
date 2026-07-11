@@ -11,7 +11,7 @@ import {
   startOfWeek,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Widget, WidgetHeader, useStorage, type WidgetWindowConfig } from "@/wigl";
+import { Widget, WidgetHeader, useStorage, type WidgetGridConfig } from "@/wigl";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "./Sidebar";
@@ -26,7 +26,8 @@ import {
   type Draft,
 } from "./calendar.utils";
 
-export const windowConfig: WidgetWindowConfig = { width: 470, height: 380, x: 640, y: 40 };
+// Cells, not px: 6×5 cells ≈ the old 470×380 at the default cell size.
+export const gridConfig: WidgetGridConfig = { w: 6, h: 5, x: 8, y: 0 };
 
 export default function CalendarWidget() {
   const [events, setEvents] = useStorage<CalendarEvent[]>(EVENTS_STORAGE_KEY, []);

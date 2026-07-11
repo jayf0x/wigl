@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { onDragHandleMouseDown } from "./drag";
 import { cn } from "@/lib/utils";
 
 // The `dark` class is required: coss ui components read colors from CSS
@@ -17,19 +16,13 @@ export function Widget({ className, children }: { className?: string; children: 
   );
 }
 
-// Anything matching this inside the header keeps its own clicks; everything
-// else starts a window drag. Add data-no-drag to opt out any custom element.
-const INTERACTIVE = "button, a, input, select, textarea, [data-no-drag]";
-
-// One job: make dragging and clicking coexist. Content and styling are the
-// widget's own business — pass children, override looks via className.
+// data-drag-handle is what the tiling Desktop looks for on pointerdown:
+// anything inside it drags the widget, except interactive elements and
+// anything marked data-no-drag (Desktop filters those).
 export function WidgetHeader({ className, children }: { className?: string; children?: ReactNode }) {
   return (
     <div
-      onMouseDown={(e) => {
-        if ((e.target as HTMLElement).closest(INTERACTIVE)) return;
-        onDragHandleMouseDown(e);
-      }}
+      data-drag-handle
       className={cn(
         "flex cursor-grab items-center border-b border-white/10 px-2 py-1 active:cursor-grabbing",
         className,

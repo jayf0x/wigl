@@ -1,7 +1,7 @@
 import { Widget, WidgetHeader } from "@/wigl";
 
-// No windowConfig export — the spawner's defaults (260×320, auto-offset
-// position) fit. Placeholder: no useTodoWidget hook / todoWidget.config.ts
+// No gridConfig export — the desktop's defaults (3×4 cells, first open slot)
+// fit. Placeholder: no useTodoWidget hook / todoWidget.config.ts
 // yet — add them alongside this file, mirroring src/widgets/repos, once
 // storage is real.
 export default function TodoWidget() {

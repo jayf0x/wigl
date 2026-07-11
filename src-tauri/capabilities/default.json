@@ -1,16 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability shared by every widget window (matched by glob, so a new widget's window label needs no edit here)",
+  "description": "Capability for the single fullscreen desktop window",
   "windows": [
-    "*"
+    "main"
   ],
   "permissions": [
     "core:default",
-    "core:webview:allow-create-webview-window",
-    "core:window:allow-outer-position",
     "core:window:allow-set-position",
-    "core:window:allow-current-monitor",
+    "core:window:allow-set-size",
+    "core:window:allow-primary-monitor",
+    "core:window:allow-show",
     "opener:default",
     "shell:default",
     {

@@ -7,7 +7,7 @@ import {
   revealInFinder,
   useReposWidget,
 } from "./useReposWidget";
-import { Widget, WidgetHeader, useRelativeTime, useStorage, type WidgetWindowConfig } from "@/wigl";
+import { Widget, WidgetHeader, useRelativeTime, useStorage, type WidgetGridConfig } from "@/wigl";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 
@@ -59,12 +59,8 @@ function RelativeTime({ epochSeconds }: { epochSeconds: number }) {
   return <>{useRelativeTime(epochSeconds)}</>;
 }
 
-export const windowConfig: WidgetWindowConfig = {
-  width: 400,
-  height: 400,
-  x: 40,
-  y: 40,
-};
+// Cells, not px: 5×5 cells ≈ the old 400×400 at the default cell size.
+export const gridConfig: WidgetGridConfig = { w: 5, h: 5, x: 0, y: 0 };
 
 export default function ReposWidget() {
   const { projects, loading, refresh } = useReposWidget();
