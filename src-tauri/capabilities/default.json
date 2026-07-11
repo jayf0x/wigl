@@ -17,6 +17,7 @@
       "identifier": "shell:allow-execute",
       "allow": [
         { "name": "sh", "cmd": "sh", "args": true },
+        { "name": "sqlite3", "cmd": "sqlite3", "args": true },
         { "name": "open", "cmd": "open", "args": true },
         {
           "name": "code",

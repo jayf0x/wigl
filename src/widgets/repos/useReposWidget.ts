@@ -3,51 +3,56 @@ import { Command } from "@tauri-apps/plugin-shell";
 import { homeDir, join } from "@tauri-apps/api/path";
 import { POLL_INTERVAL_MS, SOURCE_DIR_RELATIVE_TO_HOME } from "./reposWidget.config";
 
-export type ReleaseStatus = "unreleased" | "clean" | "error";
-
 export interface ProjectStatus {
   name: string;
   path: string;
-  status: ReleaseStatus;
+  isGitRepo: boolean;
+  hasNpmRelease: boolean; // package.json declares an "npm:deploy" script
+  // only meaningful when hasNpmRelease: a tag exists AND there are open
+  // changes or commits since it. No tag at all means "never released" —
+  // that's not something to flag, so it's left false.
+  npmUnreleased: boolean;
   lastCommit: number; // epoch seconds, 0 if unknown
   error?: string;
 }
 
 // One shell round-trip per poll: scan SOURCE_DIR one level deep, and for each
-// directory decide dirty/tagged/errored. Mirrors .idea/example.widget.jsx,
-// minus the npm:deploy gate — every repo gets checked the same way.
+// directory decide git-validity and npm release freshness.
 const scanScript = (sourceDir: string) => `
 cd "${sourceDir}" 2>/dev/null || exit 0
 for d in */; do
   d="\${d%/}"
   if ! git -C "$d" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "$d|error|0|not a git repository"
+    echo "$d|0|0|0|0|not a git repository"
     continue
   fi
   ct=$(git -C "$d" log -1 --format=%ct 2>/dev/null)
-  tag=$(git -C "$d" describe --tags --abbrev=0 2>/dev/null)
-  dirty=$(git -C "$d" status --porcelain 2>/dev/null)
-  if [ -z "$tag" ]; then
-    state="unreleased"
-  else
-    ahead=$(git -C "$d" rev-list "$tag"..HEAD --count 2>/dev/null)
-    if [ -n "$dirty" ] || [ "\${ahead:-0}" != "0" ]; then
-      state="unreleased"
-    else
-      state="clean"
+  hasNpm="0"
+  unreleased="0"
+  if grep -q '"npm:deploy"' "$d/package.json" 2>/dev/null; then
+    hasNpm="1"
+    tag=$(git -C "$d" describe --tags --abbrev=0 2>/dev/null)
+    if [ -n "$tag" ]; then
+      dirty=$(git -C "$d" status --porcelain 2>/dev/null)
+      ahead=$(git -C "$d" rev-list "$tag"..HEAD --count 2>/dev/null)
+      if [ -n "$dirty" ] || [ "\${ahead:-0}" != "0" ]; then
+        unreleased="1"
+      fi
     fi
   fi
-  echo "$d|$state|\${ct:-0}|"
+  echo "$d|1|$hasNpm|$unreleased|\${ct:-0}|"
 done
 `;
 
 function parseLine(sourceDir: string, line: string): ProjectStatus | null {
-  const [name, status, lastCommit, error] = line.split("|");
+  const [name, isGitRepo, hasNpmRelease, npmUnreleased, lastCommit, error] = line.split("|");
   if (!name) return null;
   return {
     name,
     path: `${sourceDir}/${name}`,
-    status: status as ReleaseStatus,
+    isGitRepo: isGitRepo === "1",
+    hasNpmRelease: hasNpmRelease === "1",
+    npmUnreleased: npmUnreleased === "1",
     lastCommit: Number(lastCommit) || 0,
     error: error || undefined,
   };
@@ -94,4 +99,10 @@ export async function openInEditor(path: string) {
       // no VS Code install found — nothing more we can do
     }
   }
+}
+
+// GitHub Desktop registers the x-github-client:// URL scheme and handles
+// openLocalRepo itself — no bundled CLI to shell out to like VS Code has.
+export function openInGithubDesktop(path: string) {
+  Command.create("open", [`x-github-client://openLocalRepo/${encodeURIComponent(path)}`]).execute();
 }

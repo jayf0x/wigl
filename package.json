@@ -10,7 +10,10 @@
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
     "verify": "sh scripts/verify.sh",
-    "kill": "pkill -x wigl || true"
+    "kill": "pkill -x wigl || true",
+    "calendar:add": "bun scripts/calendar.ts add",
+    "calendar:list": "bun scripts/calendar.ts list",
+    "calendar:rm": "bun scripts/calendar.ts rm"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -22,6 +25,7 @@
     "@tauri-apps/plugin-window-state": "~2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
     "lucide-react": "^1.24.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

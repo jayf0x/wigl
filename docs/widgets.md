@@ -63,6 +63,19 @@ Looking at `src/widgets/repos/` as the reference shape (the repo-status widget �
 </WidgetHeader>
 ```
 
+## Persistent storage (`useStorage`)
+
+```ts
+import { useStorage } from "@/wigl";
+const [events, setEvents, { loading }] = useStorage<Event[]>("calendar_events", []);
+```
+
+`src/wigl/storage.ts` — useState persisted as a JSON blob in a kv table in `~/Library/Application Support/wigl/wigl.db`, via macOS's built-in `sqlite3` CLI (no Rust, no Tauri plugin — same "shell out to a real CLI" rule as data fetching). Writes are optimistic; external changes (another window, a CLI script) are picked up by a 3s poll. Keys must match `[a-zA-Z0-9_-]+`.
+
+External tools can write the same data: `scripts/calendar.ts` (run as `bun run calendar:add "2027-12-12" "some event" [HH:MM] [description]`, `calendar:list`, `calendar:rm <id-prefix>`) uses `bun:sqlite` against the same DB file and key, and an open calendar widget sees the change within a poll. If you build a CLI for another widget's data, copy that shape: same DB path, one kv key, JSON blob, `CREATE TABLE IF NOT EXISTS kv (...)` before use — the key name is the whole contract between widget and CLI, so keep it in one exported constant on the widget side and reference it in the CLI comment.
+
+Ceiling to know about: last-writer-wins on the whole blob — two writers mutating the same key within one poll window can drop a write. Fine for single-user widget data; if that ever bites, move that key to its own table with row-level writes.
+
 ## Running shell commands from a widget
 
 Use `Command.create(name, args)` from `@tauri-apps/plugin-shell`, e.g.:
