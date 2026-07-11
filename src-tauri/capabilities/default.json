@@ -23,7 +23,8 @@
           "name": "code",
           "cmd": "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
           "args": true
-        }
+        },
+        { "name": "github", "cmd": "/usr/local/bin/github", "args": true }
       ]
     }
   ]

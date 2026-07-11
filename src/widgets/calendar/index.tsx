@@ -210,3 +210,53 @@ export default function CalendarWidget() {
     </Widget>
   );
 }
+
+// Month/year label: double-click either part to type a target ("january",
+// "jan", "1" for month; a number for year); blur or Enter navigates.
+function MonthYearLabel({ anchor, setAnchor }: { anchor: Date; setAnchor: (d: Date) => void }) {
+  const [editing, setEditing] = useState<"month" | "year" | null>(null);
+  const [text, setText] = useState("");
+
+  const commit = () => {
+    if (editing === "month") {
+      const m = parseMonth(text);
+      if (m !== null) setAnchor(new Date(anchor.getFullYear(), m, 1));
+    } else if (editing === "year") {
+      const y = Number(text.trim());
+      if (Number.isInteger(y) && y >= 1000 && y <= 9999) setAnchor(new Date(y, anchor.getMonth(), 1));
+    }
+    setEditing(null);
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") commit();
+    if (e.key === "Escape") setEditing(null);
+  };
+
+  const edit = (which: "month" | "year") => {
+    setText(which === "month" ? format(anchor, "MMMM") : format(anchor, "yyyy"));
+    setEditing(which);
+  };
+
+  const inputCls =
+    "rounded border border-white/20 bg-white/10 px-1 text-center text-[11px] outline-none focus:border-white/40";
+
+  return (
+    <span className="flex items-center gap-1 text-[11px] opacity-70">
+      {editing === "month" ? (
+        <input autoFocus value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={onKeyDown} className={cn(inputCls, "w-16")} />
+      ) : (
+        <span onDoubleClick={() => edit("month")} title="Double-click to edit" className="cursor-text">
+          {format(anchor, "MMMM")}
+        </span>
+      )}
+      {editing === "year" ? (
+        <input autoFocus value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={onKeyDown} className={cn(inputCls, "w-10")} />
+      ) : (
+        <span onDoubleClick={() => edit("year")} title="Double-click to edit" className="cursor-text">
+          {format(anchor, "yyyy")}
+        </span>
+      )}
+    </span>
+  );
+}

@@ -101,8 +101,17 @@ export async function openInEditor(path: string) {
   }
 }
 
-// GitHub Desktop registers the x-github-client:// URL scheme and handles
-// openLocalRepo itself — no bundled CLI to shell out to like VS Code has.
-export function openInGithubDesktop(path: string) {
-  Command.create("open", [`x-github-client://openLocalRepo/${encodeURIComponent(path)}`]).execute();
+// "Install Command Line Tool" from GitHub Desktop's menu drops a `github`
+// wrapper at /usr/local/bin — reuses an already-open window like `code` does.
+// Falls back to the x-github-client:// URL scheme it always registers.
+export async function openInGithubDesktop(path: string) {
+  try {
+    await Command.create("github", [path]).execute();
+  } catch {
+    try {
+      await Command.create("open", [`x-github-client://openLocalRepo/${encodeURIComponent(path)}`]).execute();
+    } catch {
+      // GitHub Desktop isn't installed — nothing more we can do
+    }
+  }
 }
