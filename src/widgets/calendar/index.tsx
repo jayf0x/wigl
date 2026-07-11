@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import {
   addDays,
   addMonths,
@@ -10,70 +10,34 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Widget, WidgetHeader, useStorage, type WidgetWindowConfig } from "@/wigl";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Sidebar } from "./Sidebar";
+import {
+  EVENTS_STORAGE_KEY,
+  avatarColor,
+  draftFrom,
+  parseMonth,
+  emptyDraft,
+  sameDraft,
+  type CalendarEvent,
+  type Draft,
+} from "./calendar.utils";
 
 export const windowConfig: WidgetWindowConfig = { width: 470, height: 380, x: 640, y: 40 };
-
-export interface CalendarEvent {
-  id: string;
-  title: string;
-  date: string; // "YYYY-MM-DD"
-  time?: string; // "HH:MM"
-  description?: string;
-}
-
-// Same kv key the CLI writes (scripts/calendar.ts) — keep them in sync.
-export const EVENTS_STORAGE_KEY = "calendar_events";
-
-// Deterministic color from the event's first two chars — same label, same color.
-const AVATAR_COLORS = [
-  "bg-sky-400/25 text-sky-200",
-  "bg-emerald-400/25 text-emerald-200",
-  "bg-amber-400/25 text-amber-200",
-  "bg-rose-400/25 text-rose-200",
-  "bg-violet-400/25 text-violet-200",
-  "bg-teal-400/25 text-teal-200",
-  "bg-orange-400/25 text-orange-200",
-  "bg-fuchsia-400/25 text-fuchsia-200",
-];
-const avatarColor = (title: string) => {
-  const s = title.slice(0, 2).toLowerCase();
-  return AVATAR_COLORS[(s.charCodeAt(0) * 31 + (s.charCodeAt(1) || 0)) % AVATAR_COLORS.length];
-};
-
-interface Draft {
-  title: string;
-  date: string;
-  time: string;
-  description: string;
-}
-const emptyDraft = (date: string): Draft => ({ title: "", date, time: "", description: "" });
-const draftFrom = (ev: CalendarEvent): Draft => ({
-  title: ev.title,
-  date: ev.date,
-  time: ev.time ?? "",
-  description: ev.description ?? "",
-});
 
 export default function CalendarWidget() {
   const [events, setEvents] = useStorage<CalendarEvent[]>(EVENTS_STORAGE_KEY, []);
   const [view, setView] = useState<"month" | "week">("month");
   const [anchor, setAnchor] = useState(() => new Date());
-  // selectedId: editing that event. null: creating a new one. Sidebar is
-  // always the same form; only where "save" writes to differs.
+  // selectedId set: sidebar edits that event. null: sidebar is a new-event form.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(() => emptyDraft(format(new Date(), "yyyy-MM-dd")));
 
   const selected = events.find((e) => e.id === selectedId) ?? null;
-  const baseline = selected ? draftFrom(selected) : emptyDraft(draft.date);
-  const dirty =
-    draft.title !== baseline.title ||
-    draft.date !== baseline.date ||
-    draft.time !== baseline.time ||
-    draft.description !== baseline.description;
+  const dirty = !sameDraft(draft, selected ? draftFrom(selected) : emptyDraft(draft.date));
   const canSave = dirty && draft.title.trim() !== "" && draft.date !== "";
 
   const eventsByDate = useMemo(() => {
@@ -143,6 +107,14 @@ export default function CalendarWidget() {
               {v}
             </Button>
           ))}
+          <Button
+            variant="ghost"
+            size="xs"
+            className="h-5 px-1.5 text-[10px] opacity-40 hover:opacity-90"
+            onClick={() => setAnchor(new Date())}
+          >
+            now
+          </Button>
         </div>
       </WidgetHeader>
 
@@ -153,9 +125,11 @@ export default function CalendarWidget() {
             <Button variant="ghost" size="xs" className="h-5 w-5 p-0 opacity-50" onClick={() => go(-1)}>
               <ChevronLeft size={12} />
             </Button>
-            <span className="text-[11px] opacity-70">
-              {view === "month" ? format(anchor, "MMMM yyyy") : `Week of ${format(days[0], "MMM d")}`}
-            </span>
+            {view === "month" ? (
+              <MonthYearLabel anchor={anchor} setAnchor={setAnchor} />
+            ) : (
+              <span className="text-[11px] opacity-70">{`Week of ${format(days[0], "MMM d")}`}</span>
+            )}
             <Button variant="ghost" size="xs" className="h-5 w-5 p-0 opacity-50" onClick={() => go(1)}>
               <ChevronRight size={12} />
             </Button>
@@ -175,11 +149,13 @@ export default function CalendarWidget() {
               const dayEvents = eventsByDate.get(key) ?? [];
               const faded = view === "month" && !isSameMonth(d, anchor);
               return (
+                // Click a day → new empty event on that date. Clicking an
+                // event inside it stops propagation and opens its details.
                 <div
                   key={key}
-                  onDoubleClick={() => startNew(key)}
+                  onClick={() => startNew(key)}
                   className={cn(
-                    "flex flex-col overflow-hidden border-b border-r border-white/5 px-1 py-0.5",
+                    "flex cursor-pointer flex-col overflow-hidden border-b border-r border-white/5 px-1 py-0.5",
                     faded && "opacity-30",
                     key === draft.date && "bg-white/5",
                   )}
@@ -200,8 +176,10 @@ export default function CalendarWidget() {
                     {dayEvents.map((ev) => (
                       <button
                         key={ev.id}
-                        onClick={() => selectEvent(ev)}
-                        onDoubleClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectEvent(ev);
+                        }}
                         title={ev.title}
                         className={cn(
                           "flex h-4 w-4 items-center justify-center rounded-[4px] text-[8px] font-semibold uppercase leading-none",
@@ -219,87 +197,16 @@ export default function CalendarWidget() {
           </div>
         </div>
 
-        {/* Sidebar — always present: actions on top, details form below */}
-        <div className="flex w-[150px] shrink-0 flex-col gap-1.5 border-l border-white/10 px-2.5 py-2 text-[10px]">
-          <div className="flex items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-5 w-5 p-0 opacity-60 hover:opacity-100"
-              title="New event"
-              onClick={() => startNew(draft.date || format(anchor, "yyyy-MM-dd"))}
-            >
-              <Plus size={12} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-5 w-5 p-0 text-red-400/70 hover:text-red-400 disabled:opacity-20"
-              title="Delete event"
-              disabled={!selected}
-              onClick={deleteSelected}
-            >
-              <Trash2 size={12} />
-            </Button>
-            <span className="ml-auto text-[9px] opacity-30">{selected ? "edit" : "new"}</span>
-          </div>
-
-          <Field label="title">
-            <input
-              value={draft.title}
-              placeholder="Event title"
-              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="date">
-            <input
-              type="date"
-              value={draft.date}
-              onChange={(e) => setDraft({ ...draft, date: e.target.value })}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="time">
-            <input
-              type="time"
-              value={draft.time}
-              onChange={(e) => setDraft({ ...draft, time: e.target.value })}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="notes">
-            <textarea
-              value={draft.description}
-              rows={3}
-              onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-              className={cn(inputCls, "resize-none")}
-            />
-          </Field>
-
-          <Button
-            variant="outline"
-            size="xs"
-            className="mt-auto h-6 w-full text-[10px]"
-            disabled={!canSave}
-            onClick={save}
-          >
-            save
-          </Button>
-        </div>
+        <Sidebar
+          draft={draft}
+          setDraft={setDraft}
+          canSave={canSave}
+          canDelete={!!selected}
+          onSave={save}
+          onDelete={deleteSelected}
+          onNew={() => startNew(draft.date || format(anchor, "yyyy-MM-dd"))}
+        />
       </div>
     </Widget>
-  );
-}
-
-const inputCls =
-  "w-full rounded border border-white/10 bg-white/5 px-1 py-0.5 text-[10px] outline-none focus:border-white/30";
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-0.5">
-      <span className="text-[8px] uppercase tracking-widest opacity-30">{label}</span>
-      {children}
-    </label>
   );
 }

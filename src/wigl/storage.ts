@@ -5,7 +5,7 @@
 // real CLI over Rust commands). External changes are picked up by polling.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Command } from "@tauri-apps/plugin-shell";
-import { homeDir } from "@tauri-apps/api/path";
+import { homeDir, join } from "@tauri-apps/api/path";
 
 export const DB_RELATIVE_TO_HOME = "Library/Application Support/wigl/wigl.db";
 const POLL_MS = 3000;
@@ -16,7 +16,8 @@ const KEY_RE = /^[a-zA-Z0-9_-]+$/;
 let dbPathPromise: Promise<string> | null = null;
 async function dbPath(): Promise<string> {
   dbPathPromise ??= (async () => {
-    const path = `${await homeDir()}${DB_RELATIVE_TO_HOME}`;
+    // join(), not string concat — homeDir() has no trailing slash.
+    const path = await join(await homeDir(), DB_RELATIVE_TO_HOME);
     // sqlite3 won't create the parent directory; the table is created here
     // too so every later call is a plain read/write.
     await Command.create("sh", [
