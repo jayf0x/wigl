@@ -41,7 +41,7 @@ To verify windows actually exist without a screenshot: `swift scripts/winlist.sw
 
 Tauri's `core:default` capability is narrower than it looks — window position read/write, for example, is *not* included and must be added explicitly to `src-tauri/capabilities/default.json` (see `docs/architecture.md`'s permissions section). A missing permission on plugin APIs (window, shell, fs, ...) generally does not throw a catchable JS error from `await` — check the unified log (`log show`, above) for "not allowed"/"denied" rather than assuming your JS logic is wrong.
 
-New shell binary calls need a matching `name`/`cmd` entry under `shell:allow-execute` in the same capabilities file — forgetting this is the most common way a new shell-backed feature "just doesn't work."
+`shell:allow-execute` only registers `sh` and `sqlite3` (see `docs/architecture.md`'s permissions section) — run new shell-backed features as `sh -c "..."` rather than adding a new binary's `name`/`cmd` entry.
 
 ## DMG bundling can fail in sandboxed/headless environments
 

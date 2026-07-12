@@ -9,7 +9,8 @@
 // freezes the card ("detached") and broadcasts a preview; the target monitor
 // renders the ghost and reflows a phantom. On drop the target adopts the
 // widget in one atomic commit; until then only the drag session mutates.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Component, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { availableMonitors } from "@tauri-apps/api/window";
@@ -64,6 +65,37 @@ interface DropMsg {
   h: number;
   gx: number;
   gy: number;
+}
+
+/** Broadcast whenever a monitor persists `widget_layout`, so every other
+ * monitor's in-memory `saved` updates immediately instead of waiting up to
+ * POLL_MS for the next poll — the window in which two monitors persisting
+ * within the same poll interval could otherwise stomp each other's write. */
+interface LayoutMsg {
+  from: number;
+  saved: SavedPositions;
+}
+
+// All widgets on a monitor share one React root now, so an uncaught render
+// throw in one would otherwise take down every widget on that screen.
+class WidgetErrorBoundary extends Component<{ id: string; children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error(`[wigl] widget "${this.props.id}" crashed`, error, info.componentStack);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 12, fontSize: 11, color: "#fca5a5", overflow: "auto" }}>
+          widget "{this.props.id}" crashed: {this.state.error.message}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, WidgetModule>; monitorIndex: number }) {
@@ -246,10 +278,12 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
   };
 
   const persist = (items: GridItem[]) => {
-    setSaved({
+    const merged = {
       ...savedRef.current,
       ...Object.fromEntries(items.map((it) => [it.id, { x: it.x, y: it.y, m: monitorIndex }])),
-    });
+    };
+    emit("wigl-layout", { from: monitorIndex, saved: merged } satisfies LayoutMsg).catch(console.error);
+    setSaved(merged);
   };
 
   // --- incoming cross-monitor previews / drops ---------------------------------
@@ -282,6 +316,11 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
       setLayout(next.filter((i) => i.id !== p.id));
     });
 
+    const unLayout = listen<LayoutMsg>("wigl-layout", ({ payload: p }) => {
+      if (p.from === monitorIndex) return; // our own broadcast, already applied locally
+      setSaved(p.saved);
+    });
+
     const unDrop = listen<DropMsg>("wigl-drop", ({ payload: p }) => {
       if (p.to !== monitorIndex) {
         clearForeign();
@@ -303,6 +342,7 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
 
     return () => {
       unPreview.then((u) => u());
+      unLayout.then((u) => u());
       unDrop.then((u) => u());
     };
   }, [monitorIndex]);
@@ -468,7 +508,9 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
             style={{ width: spanToPx(it.w), height: spanToPx(it.h) }}
             onPointerDown={(e) => onPointerDown(e, it.id)}
           >
-            <Widget />
+            <WidgetErrorBoundary id={it.id}>
+              <Widget />
+            </WidgetErrorBoundary>
           </div>
         );
       })}

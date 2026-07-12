@@ -10,18 +10,12 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { DB_RELATIVE_TO_HOME } from "../src/wigl/storage";
+import { EVENTS_STORAGE_KEY, type CalendarEvent } from "../src/widgets/calendar/calendar.utils";
 
-const DB_PATH = `${process.env.HOME}/Library/Application Support/wigl/wigl.db`;
+const DB_PATH = `${process.env.HOME}/${DB_RELATIVE_TO_HOME}`;
 mkdirSync(dirname(DB_PATH), { recursive: true });
-const KEY = "calendar_events"; // EVENTS_STORAGE_KEY in src/widgets/calendar/calendar.utils.ts
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  date: string;
-  time?: string;
-  description?: string;
-}
+const KEY = EVENTS_STORAGE_KEY;
 
 const db = new Database(DB_PATH, { create: true });
 db.run("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)");

@@ -50,16 +50,23 @@ export function useStorage<T>(key: string, initialValue: T) {
   if (!KEY_RE.test(key)) throw new Error(`useStorage key must match ${KEY_RE}: "${key}"`);
   const [value, setValue] = useState<T>(initialValue);
   const [loading, setLoading] = useState(true);
-  // Last JSON we read or wrote — poll results matching it are no-ops, and it
-  // guards against a stale in-flight poll reverting a fresh local write.
+  // Last JSON we read or wrote — poll results matching it are no-ops.
   const lastJson = useRef<string | null>(null);
+  // Bumped on every local write. A poll started before a write resolving
+  // after it is stale — even if its JSON differs from lastJson — so a read
+  // captures the seq at start and discards its result if a write beat it home.
+  const writeSeq = useRef(0);
+  // Chains writes so two rapid set() calls commit in call order instead of
+  // racing as independent fire-and-forget sqlite3 spawns.
+  const writeChain = useRef<Promise<unknown>>(Promise.resolve());
 
   useEffect(() => {
     let cancelled = false;
     const read = async () => {
+      const seq = writeSeq.current;
       try {
         const raw = (await sql(`SELECT value FROM kv WHERE key=${q(key)}`)).trim();
-        if (cancelled || !raw || raw === lastJson.current) return;
+        if (cancelled || !raw || raw === lastJson.current || writeSeq.current !== seq) return;
         lastJson.current = raw;
         setValue(JSON.parse(raw));
       } catch (e) {
@@ -79,10 +86,13 @@ export function useStorage<T>(key: string, initialValue: T) {
   const set = useCallback(
     (next: T) => {
       const json = JSON.stringify(next);
+      writeSeq.current++;
       lastJson.current = json;
       setValue(next);
-      sql(`INSERT INTO kv (key, value) VALUES (${q(key)}, ${q(json)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).catch(
-        (e) => console.error(`[wigl] useStorage("${key}") write failed`, e),
+      writeChain.current = writeChain.current.then(() =>
+        sql(`INSERT INTO kv (key, value) VALUES (${q(key)}, ${q(json)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).catch(
+          (e) => console.error(`[wigl] useStorage("${key}") write failed`, e),
+        ),
       );
     },
     [key],

@@ -15,14 +15,7 @@
       "identifier": "shell:allow-execute",
       "allow": [
         { "name": "sh", "cmd": "sh", "args": true },
-        { "name": "sqlite3", "cmd": "sqlite3", "args": true },
-        { "name": "open", "cmd": "open", "args": true },
-        {
-          "name": "code",
-          "cmd": "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
-          "args": true
-        },
-        { "name": "github", "cmd": "/usr/local/bin/github", "args": true }
+        { "name": "sqlite3", "cmd": "sqlite3", "args": true }
       ]
     }
   ]

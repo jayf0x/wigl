@@ -48,9 +48,13 @@ No query library, no cache layer, no IPC-based Rust commands for data — shell 
 
 Tauri's `core:default` capability does **not** include window position read/write, despite feeling like a basic window operation. Every new native capability a widget needs (new shell binaries, new window APIs, filesystem access, etc.) requires an explicit entry in `src-tauri/capabilities/default.json`. If you add a Tauri API call and it silently does nothing (no thrown error, no log line), permissions are the first thing to check — see `docs/debugging.md`.
 
-Shell commands are scoped by name+binary, not just "shell access": each command you want to run (`git`, `sh`, `open`, ...) needs its own entry under the `shell:allow-execute` permission's `allow` array in `default.json`. Adding a new shell-backed feature almost always means adding a new entry there. (Whether this per-binary ceremony should be collapsed is an open decision — see `backlog.md`.)
+`shell:allow-execute` only registers two binaries — `sh` and `sqlite3` — since `{ "name": "sh", "args": true }` already grants arbitrary execution, making a per-binary allowlist (`open`, `code`, `github`, ...) decorative. Everything shells out through one of those two: run a command as `sh -c "..."` rather than adding a new `name`/`cmd` entry. This is a real boundary only in the "local, trusted machine" sense — it does not sandbox what the app can execute.
 
 `default.json`'s `windows` field is `["*"]` (a glob, matched against window labels), not an explicit per-window list — so a new widget's window label needs no capability edit. Only touch `default.json` when a widget needs a new *permission* (a new shell binary, a new window/fs API), never just because it's a new window.
+
+## Dependency placement
+
+`tailwindcss` and `@tailwindcss/vite` are build-only tools that sit in `dependencies` rather than `devDependencies`, while `vite` itself is a devDependency — an inconsistent split, not a deliberate one; `bun install` here always installs both groups before building, so it isn't a live bug. `shadcn` being in `dependencies` looks like the same mistake but isn't: `src/App.css` imports `shadcn/tailwind.css` at runtime, so it's a genuine runtime dependency, not a stray CLI tool.
 
 ## Extending this app
 

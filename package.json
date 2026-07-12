@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "verify": "sh scripts/verify.sh",
     "kill": "pkill -x wigl || true",
     "calendar:add": "bun scripts/calendar.ts add",
@@ -38,6 +40,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "prettier": "^3.9.5",
     "react-scan": "^0.5.7",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"

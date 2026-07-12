@@ -85,16 +85,16 @@ Ceiling to know about: last-writer-wins on the whole blob — two writers mutati
 
 ## Running shell commands from a widget
 
-Use `Command.create(name, args)` from `@tauri-apps/plugin-shell`, e.g.:
+`src-tauri/capabilities/default.json`'s `shell:allow-execute` only registers `sh` and `sqlite3` — `{ "name": "sh", "args": true }` already grants arbitrary execution, so a per-binary allowlist would be decorative. Run everything through `sh -c`:
 
 ```ts
 import { Command } from "@tauri-apps/plugin-shell";
-const output = await Command.create("git", ["status"]).execute();
+const output = await Command.create("sh", ["-c", "git status"]).execute();
 ```
 
-The `name` here (`"git"`) must match a `name` entry under `shell:allow-execute` in `src-tauri/capabilities/default.json`, which maps it to an actual binary (`cmd`) and an args policy. **New binary → new capability entry**, or the call fails silently or with a permission error at runtime (check via `log show`, not visually — see `docs/debugging.md`). If you need a whole pipeline (multiple commands, conditionals), it's usually simpler to write one `sh -c "..."` script string than to orchestrate multiple `Command.create` calls from JS — several existing hooks do exactly this.
+No capability edit needed for a new binary — `sh -c` reaches anything already on `PATH`. Quote your own arguments (`'${s.replace(/'/g, "'\\''")}'`) since `sh -c` takes one string, not an args array — see `revealInFinder`/`openInEditor` in `src/widgets/repos/useReposWidget.ts` for the pattern, including the fixed absolute path a bundled app's CLI (e.g. VS Code's) usually needs: GUI-launched shells often have a minimal `PATH` that doesn't include user-installed tools. `Command.create("sh", [...]).execute()` resolves even when the inner command fails — check `out.code !== 0`, don't rely on the promise rejecting.
 
-`cmd` can be a fixed absolute path, not just a bare binary name — useful for CLI tools inside app bundles, since GUI apps launched outside a shell often have a minimal `PATH` that doesn't include user-installed tools. Prefer passing args as an array (`Command.create("open", ["-a", "X", path])`) over interpolating a path into a shell string — it sidesteps shell-quoting/injection entirely for the common case; only reach for `sh -c` when you genuinely need shell features (pipes, conditionals, `||` fallback chains).
+Only add a new `name`/`cmd` entry under `shell:allow-execute` if you have a concrete reason to scope a specific binary tighter than the blanket `sh` grant — check via `log show` if a call still fails silently (see `docs/debugging.md`).
 
 ## Icons
 

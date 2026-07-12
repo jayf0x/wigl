@@ -1,7 +1,5 @@
-# Tauri + React + Typescript
+# wigl
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+A macOS desktop-widget app: small always-on-bottom panels (clock, repos, calendar, ...) tiled on a per-monitor grid, backed by Tauri 2 + React 19 + TypeScript. Data comes from shelling out to real CLI tools (`git`, `sqlite3`, ...), not custom Rust — see `docs/architecture.md`.
 
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+Start with `AGENTS.md` for the contracts and hard rules, then `docs/` for the reasoning behind them (`docs/widgets.md` for adding a widget, `docs/architecture.md` for how windows/data flow work, `docs/debugging.md` for verification). Open defects and decisions live in `backlog.md`.
