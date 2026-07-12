@@ -168,6 +168,15 @@ body,
   cursor: grabbing;
   filter: drop-shadow(0 24px 40px rgb(0 0 0 / 0.5));
 }
+/* Mid-drag, cursor on another monitor: the card freezes here, slightly
+   dimmed, until the cursor returns or the drop commits elsewhere. */
+.wigl-widget.lifted.detached {
+  transition:
+    opacity 0.2s ease,
+    filter 0.2s ease;
+  opacity: 0.7;
+  filter: drop-shadow(0 12px 24px rgb(0 0 0 / 0.35)) blur(0.5px);
+}
 
 /* Drop-target preview: four corner brackets only ("this widget belongs
    here" without drawing the whole box). */

@@ -1,9 +1,18 @@
-// The desktop compositor: one fullscreen transparent window rendering every
-// widget on a tiling grid. Owns dragging (pointer events + CSS transforms —
-// no native window moves), collision reflow, the drag-time anchor field,
-// layout persistence, and hit-rect reporting for the Rust click-through poller.
+// The desktop compositor: one instance per monitor, each a fullscreen
+// transparent window rendering the widgets that live on that monitor. Owns
+// dragging (pointer events + CSS transforms — no native window moves),
+// collision reflow, the drag-time anchor field, layout persistence, and
+// hit-rect reporting for the Rust click-through poller.
+//
+// Cross-monitor drags follow a transaction model: the widget never changes
+// ownership until drop. While the cursor is on a foreign monitor the source
+// freezes the card ("detached") and broadcasts a preview; the target monitor
+// renders the ghost and reflows a phantom. On drop the target adopts the
+// widget in one atomic commit; until then only the drag session mutates.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { emit, listen } from "@tauri-apps/api/event";
+import { availableMonitors } from "@tauri-apps/api/window";
 import type { WidgetModule } from "./types";
 import { TILING } from "./tiling.config";
 import { type GridItem, autoPlace, colToPx, colsForWidth, pxToCol, pxToRow, reflow, rowToPx, spanToPx, springEasing } from "./grid";
@@ -14,7 +23,14 @@ const INTERACTIVE = "button, a, input, select, textarea, [data-no-drag]";
 
 const ACCENT = { r: 110, g: 231, b: 199 }; // keep in sync with --wigl-accent
 
-type SavedPositions = Record<string, { x: number; y: number }>;
+type SavedPositions = Record<string, { x: number; y: number; m?: number }>;
+
+interface MonitorRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} // logical px, global (same space as e.screenX/screenY)
 
 interface DragState {
   id: string;
@@ -22,9 +38,35 @@ interface DragState {
   offX: number;
   offY: number;
   snapshot: GridItem[];
+  target: { mon: number; gx: number; gy: number };
+  frozen: boolean;
 }
 
-export function Desktop({ widgets }: { widgets: Record<string, WidgetModule> }) {
+/** Broadcast on every drag move while the cursor is on a foreign monitor
+ * (and once, with `to: source`, when it returns — which clears everyone). */
+interface PreviewMsg {
+  id: string;
+  to: number;
+  w: number;
+  h: number;
+  gx: number;
+  gy: number;
+  cx: number;
+  cy: number;
+}
+
+/** Broadcast on drop. The `to` monitor adopts the widget; everyone else
+ * discards any preview state. */
+interface DropMsg {
+  id: string;
+  to: number;
+  w: number;
+  h: number;
+  gx: number;
+  gy: number;
+}
+
+export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, WidgetModule>; monitorIndex: number }) {
   const [saved, setSaved, { loading }] = useStorage<SavedPositions>("widget_layout", {});
   const [layout, setLayout] = useState<GridItem[] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -36,6 +78,18 @@ export function Desktop({ widgets }: { widgets: Record<string, WidgetModule> }) 
   const cursor = useRef({ x: -1e4, y: -1e4 });
   const ghostCell = useRef<GridItem | null>(null);
   const field = useRef({ alpha: 0, target: 0, raf: 0 });
+  const monitors = useRef<MonitorRect[] | null>(null);
+  // Incoming cross-monitor preview: snapshot of our layout from before the
+  // phantom started pushing things around, restored if the drag leaves.
+  const foreign = useRef<{ id: string; w: number; h: number; snapshot: GridItem[] } | null>(null);
+  const layoutRef = useRef<GridItem[] | null>(null);
+  const savedRef = useRef<SavedPositions>({});
+  useEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
+  useEffect(() => {
+    savedRef.current = saved;
+  }, [saved]);
 
   // Bake the configured spring into a CSS easing once (WKWebView supports
   // linear(); the stylesheet carries a cubic-bezier fallback).
@@ -48,13 +102,32 @@ export function Desktop({ widgets }: { widgets: Record<string, WidgetModule> }) 
     }
   }, []);
 
-  // Build the layout once storage has answered: sizes always from code
+  // Every window derives the same ordered monitor list (left-to-right), so a
+  // monitor's index is a shared, persistent id.
+  useEffect(() => {
+    availableMonitors()
+      .then((ms) => {
+        monitors.current = ms
+          .sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y)
+          .map((m) => ({
+            x: m.position.x / m.scaleFactor,
+            y: m.position.y / m.scaleFactor,
+            width: m.size.width / m.scaleFactor,
+            height: m.size.height / m.scaleFactor,
+          }));
+      })
+      .catch(console.error);
+  }, []);
+
+  // Build the layout once storage has answered: this monitor's widgets only
+  // (unassigned widgets land on monitor 0). Sizes always from code
   // (gridConfig), positions from storage, else gridConfig, else first fit.
   useEffect(() => {
     if (loading || layout) return;
     const cols = colsForWidth(window.innerWidth);
     const items: GridItem[] = [];
     for (const [id, mod] of Object.entries(widgets)) {
+      if ((saved[id]?.m ?? 0) !== monitorIndex) continue;
       const cfg = mod.gridConfig ?? {};
       const w = cfg.w ?? 3;
       const h = cfg.h ?? 4;
@@ -64,7 +137,7 @@ export function Desktop({ widgets }: { widgets: Record<string, WidgetModule> }) 
     // Saved/default positions can conflict after code changes — settle them.
     for (const it of items) reflow(items, it);
     setLayout(items);
-  }, [loading, layout, saved, widgets]);
+  }, [loading, layout, saved, widgets, monitorIndex]);
 
   // Positions are applied imperatively so the dragged card's per-frame inline
   // transform never fights React. CSS transitions animate everyone else.
@@ -77,21 +150,19 @@ export function Desktop({ widgets }: { widgets: Record<string, WidgetModule> }) 
     }
   }, [layout, dragId]);
 
-  // Tell the Rust cursor poller where the widgets are. While dragging, the
-  // whole screen is interactive so a fast drag can't outrun the poller.
+  // Tell the Rust cursor poller where our widgets are. During a drag the
+  // poller is paused entirely (set_drag_active), so no fullscreen rect games.
   useEffect(() => {
     if (!layout) return;
     const s = window.devicePixelRatio;
-    const rects = dragId
-      ? [{ x: 0, y: 0, w: window.innerWidth * s, h: window.innerHeight * s }]
-      : layout.map((it) => ({
-          x: colToPx(it.x) * s,
-          y: rowToPx(it.y) * s,
-          w: spanToPx(it.w) * s,
-          h: spanToPx(it.h) * s,
-        }));
+    const rects = layout.map((it) => ({
+      x: colToPx(it.x) * s,
+      y: rowToPx(it.y) * s,
+      w: spanToPx(it.w) * s,
+      h: spanToPx(it.h) * s,
+    }));
     invoke("set_hit_rects", { rects }).catch(console.error);
-  }, [layout, dragId]);
+  }, [layout]);
 
   // --- anchor field ------------------------------------------------------------
   // Cross marks on every cell corner (centered in the gaps). Idle they're
@@ -163,6 +234,79 @@ export function Desktop({ widgets }: { widgets: Record<string, WidgetModule> }) 
     return () => cancelAnimationFrame(field.current.raf);
   }, []);
 
+  const showGhost = (x: number, y: number, w: number, h: number) => {
+    const g = ghost.current!;
+    g.style.width = `${spanToPx(w)}px`;
+    g.style.height = `${spanToPx(h)}px`;
+    g.style.transform = `translate(${colToPx(x)}px, ${rowToPx(y)}px)`;
+    g.style.opacity = "1";
+  };
+  const hideGhost = () => {
+    ghost.current!.style.opacity = "0";
+  };
+
+  const persist = (items: GridItem[]) => {
+    setSaved({
+      ...savedRef.current,
+      ...Object.fromEntries(items.map((it) => [it.id, { x: it.x, y: it.y, m: monitorIndex }])),
+    });
+  };
+
+  // --- incoming cross-monitor previews / drops ---------------------------------
+  useEffect(() => {
+    const clearForeign = () => {
+      if (!foreign.current) return;
+      setLayout(foreign.current.snapshot.map((i) => ({ ...i })));
+      foreign.current = null;
+      ghostCell.current = null;
+      hideGhost();
+      wakeField(false);
+    };
+
+    const unPreview = listen<PreviewMsg>("wigl-preview", ({ payload: p }) => {
+      if (drag.current?.id === p.id) return; // our own broadcast
+      if (p.to !== monitorIndex) {
+        clearForeign();
+        return;
+      }
+      if (!foreign.current) {
+        foreign.current = { id: p.id, w: p.w, h: p.h, snapshot: (layoutRef.current ?? []).map((i) => ({ ...i })) };
+        wakeField(true);
+      }
+      cursor.current = { x: p.cx, y: p.cy };
+      const phantom: GridItem = { id: p.id, x: p.gx, y: p.gy, w: p.w, h: p.h };
+      ghostCell.current = phantom;
+      const next = [...foreign.current.snapshot.map((i) => ({ ...i })), phantom];
+      reflow(next, phantom);
+      showGhost(p.gx, p.gy, p.w, p.h);
+      setLayout(next.filter((i) => i.id !== p.id));
+    });
+
+    const unDrop = listen<DropMsg>("wigl-drop", ({ payload: p }) => {
+      if (p.to !== monitorIndex) {
+        clearForeign();
+        return;
+      }
+      if (layoutRef.current?.some((i) => i.id === p.id)) return; // our own local drop
+      // Adopt: commit the transaction atomically on our surface.
+      const base = (foreign.current?.snapshot ?? layoutRef.current ?? []).map((i) => ({ ...i }));
+      const item: GridItem = { id: p.id, x: p.gx, y: p.gy, w: p.w, h: p.h };
+      const next = [...base, item];
+      reflow(next, item);
+      foreign.current = null;
+      ghostCell.current = null;
+      hideGhost();
+      wakeField(false);
+      setLayout(next);
+      persist(next);
+    });
+
+    return () => {
+      unPreview.then((u) => u());
+      unDrop.then((u) => u());
+    };
+  }, [monitorIndex]);
+
   // --- drag ------------------------------------------------------------------
   const onPointerDown = (e: React.PointerEvent, id: string) => {
     if (e.button !== 0 || !layout) return;
@@ -177,31 +321,87 @@ export function Desktop({ widgets }: { widgets: Record<string, WidgetModule> }) 
       offX: e.clientX - colToPx(item.x),
       offY: e.clientY - rowToPx(item.y),
       snapshot: layout.map((i) => ({ ...i })),
+      target: { mon: monitorIndex, gx: item.x, gy: item.y },
+      frozen: false,
     };
     setDragId(id);
     ghostCell.current = { ...item };
     cursor.current = { x: e.clientX, y: e.clientY };
-    const g = ghost.current!;
-    g.style.width = `${spanToPx(item.w)}px`;
-    g.style.height = `${spanToPx(item.h)}px`;
-    g.style.transform = `translate(${colToPx(item.x)}px, ${rowToPx(item.y)}px)`;
-    g.style.opacity = "1";
+    showGhost(item.x, item.y, item.w, item.h);
     wakeField(true);
+    // Pause the click-through poller: flipping ignore_cursor_events mid-drag
+    // would sever the pointer capture.
+    invoke("set_drag_active", { active: true }).catch(console.error);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d || !layout) return;
+    const item = layout.find((i) => i.id === d.id)!;
+
+    // Which monitor is the cursor on? screenX/Y and the monitor rects share
+    // the same global logical space.
+    const ms = monitors.current;
+    const sx = e.screenX;
+    const sy = e.screenY;
+    let tgt = monitorIndex;
+    if (ms) {
+      const hit = ms.findIndex((m) => sx >= m.x && sx < m.x + m.width && sy >= m.y && sy < m.y + m.height);
+      if (hit >= 0) tgt = hit;
+    }
+
+    if (tgt !== monitorIndex) {
+      // Foreign monitor: freeze the card where it is (detached), hand the
+      // preview over to the target surface.
+      if (!d.frozen) {
+        d.frozen = true;
+        d.el.classList.add("detached");
+        ghostCell.current = null;
+        hideGhost();
+        wakeField(false);
+        setLayout(d.snapshot.map((i) => ({ ...i }))); // undo our local pushes
+      }
+      const m = ms![tgt];
+      const fx = sx - m.x - d.offX;
+      const fy = sy - m.y - d.offY;
+      const cols = colsForWidth(m.width);
+      const gx = Math.max(0, Math.min(cols - item.w, pxToCol(fx)));
+      let gy = Math.max(0, pxToRow(fy));
+      if (TILING.rows != null) gy = Math.min(gy, Math.max(0, TILING.rows - item.h));
+      d.target = { mon: tgt, gx, gy };
+      emit("wigl-preview", {
+        id: d.id,
+        to: tgt,
+        w: item.w,
+        h: item.h,
+        gx,
+        gy,
+        cx: sx - m.x,
+        cy: sy - m.y,
+      } satisfies PreviewMsg).catch(console.error);
+      return;
+    }
+
+    // Home monitor: today's behavior (and a spring back if we were detached).
+    if (d.frozen) {
+      d.frozen = false;
+      d.el.classList.remove("detached");
+      wakeField(true);
+      showGhost(item.x, item.y, item.w, item.h);
+      ghostCell.current = { ...item };
+      // Tells whichever monitor was previewing to clear.
+      emit("wigl-preview", { id: d.id, to: monitorIndex, w: item.w, h: item.h, gx: item.x, gy: item.y, cx: 0, cy: 0 } satisfies PreviewMsg).catch(console.error);
+    }
     cursor.current = { x: e.clientX, y: e.clientY };
     const fx = e.clientX - d.offX;
     const fy = e.clientY - d.offY;
     d.el.style.transform = `translate(${fx}px, ${fy}px) scale(${TILING.liftScale})`;
-    const item = layout.find((i) => i.id === d.id)!;
 
     const cols = colsForWidth(window.innerWidth);
     const gx = Math.max(0, Math.min(cols - item.w, pxToCol(fx)));
     let gy = Math.max(0, pxToRow(fy));
     if (TILING.rows != null) gy = Math.min(gy, Math.max(0, TILING.rows - item.h));
+    d.target = { mon: monitorIndex, gx, gy };
     if (gx === item.x && gy === item.y) return;
 
     // Recompute from the drag-start snapshot each move so cards never drift.
@@ -218,12 +418,31 @@ export function Desktop({ widgets }: { widgets: Record<string, WidgetModule> }) 
   const endDrag = () => {
     const d = drag.current;
     if (!d || !layout) return;
+    const item = layout.find((i) => i.id === d.id)!;
     drag.current = null;
     ghostCell.current = null;
     setDragId(null); // re-enables the transition; layout effect springs it home
-    ghost.current!.style.opacity = "0";
+    hideGhost();
     wakeField(false);
-    setSaved(Object.fromEntries(layout.map((it) => [it.id, { x: it.x, y: it.y }])));
+    invoke("set_drag_active", { active: false }).catch(console.error);
+
+    if (d.target.mon !== monitorIndex) {
+      // Commit the transfer: the target surface adopts the widget and writes
+      // storage; we only let go of it.
+      emit("wigl-drop", {
+        id: d.id,
+        to: d.target.mon,
+        w: item.w,
+        h: item.h,
+        gx: d.target.gx,
+        gy: d.target.gy,
+      } satisfies DropMsg).catch(console.error);
+      d.el.classList.remove("detached");
+      setLayout(layout.filter((i) => i.id !== d.id));
+      return;
+    }
+    emit("wigl-drop", { id: d.id, to: monitorIndex, w: item.w, h: item.h, gx: item.x, gy: item.y } satisfies DropMsg).catch(console.error);
+    persist(layout);
   };
 
   if (!layout) return null;
