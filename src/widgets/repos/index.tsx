@@ -7,7 +7,7 @@ import {
   revealInFinder,
   useReposWidget,
 } from "./useReposWidget";
-import { Widget, WidgetHeader, useRelativeTime, useStorage, type WidgetGridConfig } from "@/wigl";
+import { Widget, WidgetHeader, useRelativeTime, useStorage } from "@/wigl";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 
@@ -59,16 +59,13 @@ function RelativeTime({ epochSeconds }: { epochSeconds: number }) {
   return <>{useRelativeTime(epochSeconds)}</>;
 }
 
-// Cells, not px: 5×5 cells ≈ the old 400×400 at the default cell size.
-export const gridConfig: WidgetGridConfig = { w: 5, h: 5, x: 0, y: 0 };
-
-export default function ReposWidget() {
+function ReposWidget() {
   const { projects, loading, refresh } = useReposWidget();
   const [sortBy, setSortBy] = useStorage<SortKey>("repos_sort_by", "time");
   const sorted = [...projects].sort(SORTERS[sortBy]);
 
   return (
-    <Widget>
+    <Widget w={5} h={5} col={0} row={0}>
       <WidgetHeader>
         <span className="px-1 text-[10px] tracking-widest opacity-40">REPOS</span>
         <div className="ml-auto flex items-center gap-0.5">
@@ -150,3 +147,5 @@ export default function ReposWidget() {
     </Widget>
   );
 }
+
+export default ReposWidget;

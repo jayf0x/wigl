@@ -5,8 +5,8 @@ import { TILING } from "./tiling.config";
 
 export interface GridItem {
   id: string;
-  x: number;
-  y: number;
+  col: number;
+  row: number;
   w: number;
   h: number;
 }
@@ -28,7 +28,7 @@ export const colsForWidth = (width: number) =>
   Math.max(1, Math.floor((width - TILING.padding.left - TILING.padding.right + TILING.gap) / pitch()));
 
 export const collides = (a: GridItem, b: GridItem) =>
-  a !== b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  a !== b && a.col < b.col + b.w && b.col < a.col + a.w && a.row < b.row + b.h && b.row < a.row + a.h;
 
 /** Push everything colliding with `moved` downward, then gravity-compact all
  * other items back up. Mutates `items`. */
@@ -38,17 +38,17 @@ export function reflow(items: GridItem[], moved: GridItem) {
     const m = queue.shift()!;
     for (const it of items) {
       if (it === moved || !collides(it, m)) continue;
-      it.y = m.y + m.h;
+      it.row = m.row + m.h;
       queue.push(it);
     }
   }
-  const sorted = [...items].sort((a, b) => a.y - b.y || a.x - b.x);
+  const sorted = [...items].sort((a, b) => a.row - b.row || a.col - b.col);
   for (const it of sorted) {
     if (it === moved) continue;
-    while (it.y > 0) {
-      it.y--;
+    while (it.row > 0) {
+      it.row--;
       if (sorted.some((o) => collides(o, it))) {
-        it.y++;
+        it.row++;
         break;
       }
     }
@@ -57,10 +57,10 @@ export function reflow(items: GridItem[], moved: GridItem) {
 
 /** First open slot scanning left-to-right, top-to-bottom. */
 export function autoPlace(placed: GridItem[], w: number, h: number, cols: number) {
-  for (let y = 0; ; y++) {
-    for (let x = 0; x <= Math.max(0, cols - w); x++) {
-      const probe = { id: "", x, y, w, h };
-      if (!placed.some((it) => collides(it, probe))) return { x, y };
+  for (let row = 0; ; row++) {
+    for (let col = 0; col <= Math.max(0, cols - w); col++) {
+      const probe = { id: "", col, row, w, h };
+      if (!placed.some((it) => collides(it, probe))) return { col, row };
     }
   }
 }

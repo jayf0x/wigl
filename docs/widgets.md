@@ -12,8 +12,7 @@ The contract, typed by `WidgetModule` in `src/wigl/types.ts`:
 
 ```
 src/widgets/<name>/
-  index.tsx        ← default-exports the component (required)
-                     optionally exports `windowConfig` (size / first-launch x,y / title)
+  index.tsx        ← exactly one export: the default-exported component
   use<Name>.ts     ← only if it fetches external data (see below)
   <name>.config.ts ← only if it has tunable constants
   anything else    ← the widget's own business: sub-components, utils, whatever
@@ -25,13 +24,11 @@ src/widgets/<name>/
 
 ```tsx
 // src/widgets/clock/index.tsx — a complete, working widget
-import { Widget, WidgetHeader, type WidgetWindowConfig } from "@/wigl";
-
-export const windowConfig: WidgetWindowConfig = { width: 200, height: 90, x: 640, y: 40 };
+import { Widget, WidgetHeader } from "@/wigl";
 
 export default function ClockWidget() {
   return (
-    <Widget>
+    <Widget w={3} h={2} col={8} row={0}>
       <WidgetHeader>
         <span className="px-1 text-[10px] tracking-widest opacity-40">CLOCK</span>
       </WidgetHeader>
@@ -41,7 +38,7 @@ export default function ClockWidget() {
 }
 ```
 
-`windowConfig` is optional — omit it and you get 260×320 at an auto-offset position. **Spell it exactly `windowConfig` and spell `default` export as an actual default export** — the glob does no validation, so a typo'd export name or a named-only component export fails silently (default window / blank window). `x`/`y` are only the first-launch position; `tauri-plugin-window-state` persists wherever the user drags the window after that. Pick defaults that don't overlap other widgets' (check their `windowConfig`s). Standard window chrome (transparent, undecorated, always-on-bottom, skip-taskbar, non-resizable) is applied by the spawner in `App.tsx`, not per widget — a widget that needs *different* chrome is no longer "just another widget" and is worth a second thought.
+Grid size/position are plain props on `<Widget>` — `w`/`h` in cells (default 3×4), `col`/`row` as a first-launch cell position (omit them and you get the first open slot). There's no separate config export sitting next to `default`: one export means nothing to typo, and grid props are ordinary JSX so TypeScript already catches a mistyped one (App.tsx still warns if it finds a leftover top-level `gridConfig` export, which means a widget predates this and needs its config moved onto `<Widget>`). `col`/`row` only matter the first time a widget is ever seen — the tiling desktop persists wherever the user drags it after that. Pick defaults that don't overlap other widgets' (check their `<Widget>` props in `src/widgets/*/index.tsx`). Standard window chrome (transparent, undecorated, always-on-bottom, skip-taskbar, non-resizable) is applied by the spawner in `App.tsx`, not per widget — a widget that needs *different* chrome is no longer "just another widget" and is worth a second thought.
 
 No capability edit needed either — `src-tauri/capabilities/default.json`'s `windows` field is a `["*"]` glob, so new window labels are covered automatically. You only touch that file for new *permissions* (see "Running shell commands" below).
 

@@ -11,7 +11,7 @@ import {
   startOfWeek,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Widget, WidgetHeader, useStorage, type WidgetGridConfig } from "@/wigl";
+import { Widget, WidgetHeader, useStorage } from "@/wigl";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "./Sidebar";
@@ -26,10 +26,7 @@ import {
   type Draft,
 } from "./calendar.utils";
 
-// Cells, not px: 6×5 cells ≈ the old 470×380 at the default cell size.
-export const gridConfig: WidgetGridConfig = { w: 6, h: 5, x: 8, y: 0 };
-
-export default function CalendarWidget() {
+function CalendarWidget() {
   const [events, setEvents] = useStorage<CalendarEvent[]>(EVENTS_STORAGE_KEY, []);
   const [view, setView] = useState<"month" | "week">("month");
   const [anchor, setAnchor] = useState(() => new Date());
@@ -93,7 +90,7 @@ export default function CalendarWidget() {
   };
 
   return (
-    <Widget>
+    <Widget w={6} h={5} col={8} row={0}>
       <WidgetHeader>
         <span className="px-1 text-[10px] tracking-widest opacity-40">CALENDAR</span>
         <div className="ml-auto flex items-center gap-0.5">
@@ -211,6 +208,8 @@ export default function CalendarWidget() {
     </Widget>
   );
 }
+
+export default CalendarWidget;
 
 // Month/year label: double-click either part to type a target ("january",
 // "jan", "1" for month; a number for year); blur or Enter navigates.

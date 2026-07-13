@@ -1,9 +1,46 @@
-import type { ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { TILING } from "./tiling.config";
+
+/** All values are grid cells. `col`/`row` are only a first-launch hint —
+ * ignored once the tiling desktop has a saved position (dragging always wins). */
+export interface WidgetGridProps {
+  w?: number;
+  h?: number;
+  col?: number;
+  row?: number;
+}
+
+export interface WidgetGridReport {
+  w: number;
+  h: number;
+  col?: number;
+  row?: number;
+}
+
+/** Desktop.tsx provides one of these per widget instance so <Widget> can
+ * report its own grid size/position — the layout engine needs it before it
+ * can arrange widgets, but a widget's size is only knowable once it renders. */
+const WidgetSlotContext = createContext<((report: WidgetGridReport) => void) | null>(null);
+export const WidgetSlotProvider = WidgetSlotContext.Provider;
 
 // The `dark` class is required: coss ui components read colors from CSS
 // variables scoped to :root/.dark in App.css.
-export function Widget({ className, children }: { className?: string; children: ReactNode }) {
+export function Widget({
+  className,
+  children,
+  w = TILING.defaultSize.w,
+  h = TILING.defaultSize.h,
+  col,
+  row,
+}: { className?: string; children: ReactNode } & WidgetGridProps) {
+  const report = useContext(WidgetSlotContext);
+  // Layout effect, not a plain effect: this must resolve (and Desktop must
+  // reflow) before the browser paints, or the placeholder size flashes.
+  useLayoutEffect(() => {
+    report?.({ w, h, col, row });
+  }, [report, w, h, col, row]);
+
   return (
     <div
       className={cn(

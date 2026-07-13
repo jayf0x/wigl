@@ -37,6 +37,30 @@ To verify windows actually exist without a screenshot: `swift scripts/winlist.sw
 
 `tauri-plugin-window-state` persists per *label* in `~/Library/Application Support/com.wigl.desktop/.window-state.json`, and restores whatever it finds — including entries written by older builds with different window layouts. Symptom actually hit here: a stale `main` entry from the single-window era restored the hidden bootstrap window to a visible 270×400 rectangle. `main` is therefore denylisted from the plugin in `src-tauri/src/lib.rs`; if a *widget* window shows up somewhere bizarre after renaming/reshuffling folders, delete its entry from that JSON (or the whole file) and relaunch. Note the plugin only writes the file on graceful exit — `kill`/`pkill` in a test loop won't persist positions, which is expected, not a bug.
 
+## Renaming a `useStorage` shape doesn't migrate rows already on disk
+
+`useStorage` (and anything that persists through it, e.g. `widget_layout`)
+round-trips a JSON blob with no schema/version and no validation on read —
+renaming or restructuring a field in code changes what *new* writes look
+like, but any row written before that change keeps its old shape in
+`~/Library/Application Support/wigl/wigl.db` forever, until something writes
+that key again. Reading an old shape with new field names silently produces
+`undefined`/`NaN` rather than an error, which then propagates: `NaN` in a
+grid position collapses widget layout to one corner and breaks the Rust
+click-through hit-testing (the whole window falls back to click-through
+everywhere — looks exactly like the app being stuck/unresponsive, not like a
+data bug). Symptom actually hit here: renaming `SavedPositions`'s `x`/`y` to
+`col`/`row` left an existing `widget_layout` row with the old field names.
+
+Check first: `sqlite3 ~/Library/Application\ Support/wigl/wigl.db "SELECT value FROM kv WHERE key='<key>'"`
+— if the JSON shape doesn't match what the current code reads, that's the
+bug, not your layout/rendering logic. Fix by rewriting that one row with
+`UPDATE kv SET value = '...' WHERE key='<key>'` (this is dev-machine data,
+not a versioned external contract, so a direct one-time edit is the right
+fix — not a permanent legacy-shape fallback in app code). See `TODO.md`'s
+on-load sanity pass for the actual prevention: validate a stored shape
+before trusting it, fall back to a fresh default when it doesn't look right.
+
 ## "It does nothing" often means a missing permission
 
 Tauri's `core:default` capability is narrower than it looks — window position read/write, for example, is *not* included and must be added explicitly to `src-tauri/capabilities/default.json` (see `docs/architecture.md`'s permissions section). A missing permission on plugin APIs (window, shell, fs, ...) generally does not throw a catchable JS error from `await` — check the unified log (`log show`, above) for "not allowed"/"denied" rather than assuming your JS logic is wrong.

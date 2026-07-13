@@ -11,15 +11,14 @@ const modules = import.meta.glob<WidgetModule>("./widgets/*/index.tsx", { eager:
 const widgets: Record<string, WidgetModule> = {};
 // The glob does no validation of what a widget exports, so a typo silently
 // fails (blank widget / default size) — warn instead.
-const KNOWN_EXPORTS = new Set(["default", "gridConfig"]);
 for (const [path, mod] of Object.entries(modules)) {
   const id = path.split("/")[2];
   if (!mod.default) {
     console.error(`[wigl] widget "${id}" has no default export — index.tsx must default-export its component`);
     continue;
   }
-  for (const key of Object.keys(mod)) {
-    if (!KNOWN_EXPORTS.has(key)) console.warn(`[wigl] widget "${id}" exports unrecognized "${key}" — typo for "gridConfig"?`);
+  if ("gridConfig" in mod) {
+    console.warn(`[wigl] widget "${id}" exports a top-level "gridConfig" — ignored. Pass size/position as props instead: <Widget w={3} h={4}>`);
   }
   widgets[id] = mod;
 }
