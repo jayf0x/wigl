@@ -8,7 +8,7 @@ Everything here is unbuilt and unapproved — a list of things that came up duri
 
 - Backlog-item counts per project (would require parsing project-internal files).
 - Any parsing of project-internal files beyond git state.
-- Settings UI (source directory is currently a hardcoded constant in `reposWidget.config.ts`).
+- Settings UI (source directory is currently a hardcoded constant in the repos widget's `config.ts`).
 - The npm:deploy-gated three-state badge from the original Übersicht widget (deliberately dropped in favor of a simpler always-checked two-real-state + error scheme).
 
 ~~Sorting / multiple header actions~~ and ~~a VS Code open action~~ from the reference widget are now built (2026-07-10) — see the repos widget folder.

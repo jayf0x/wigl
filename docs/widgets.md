@@ -14,11 +14,13 @@ The contract, typed by `WidgetModule` in `src/wigl/types.ts`:
 src/widgets/<name>/
   index.tsx        ← exactly one export: the default-exported component
   use<Name>.ts     ← only if it fetches external data (see below)
-  <name>.config.ts ← only if it has tunable constants
+  config.ts        ← only if it has tunable constants
   anything else    ← the widget's own business: sub-components, utils, whatever
                      keeps index.tsx readable. Private to the folder — never
                      imported by another widget.
 ```
+
+Sibling files take plain names (`types.ts`, `commands.ts`, `sort.ts`, a `Row.tsx` component) — the folder itself is already the namespace, so don't prefix filenames with the widget's own name. `use<Name>.ts` is the one deliberate exception: that prefix is the hook-naming convention (see below), not a namespacing habit.
 
 `src/App.tsx` discovers folders with `import.meta.glob("./widgets/*/index.tsx")` at build time and opens one OS window per folder at launch — the folder name becomes the window label (so don't name a folder `main` — that's the hidden bootstrap window — or `wigl`, the app's name). **Adding a widget = creating the folder. Deleting it = removing the folder. No registration, no config edits, nothing else.**
 
@@ -46,7 +48,7 @@ No capability edit needed either — `src-tauri/capabilities/default.json`'s `wi
 
 The shape, in dependency order (any widget in `src/widgets/` with a hook is the reference in action):
 
-1. **A config module** (`<name>.config.ts`) — plain exported constants for anything you might want to tweak (poll interval, source paths). No env vars, no settings UI, no runtime config loading.
+1. **A config module** (`config.ts`) — plain exported constants for anything you might want to tweak (poll interval, source paths). No env vars, no settings UI, no runtime config loading.
 2. **A data hook** (`use<Name>.ts`) — owns the `setInterval` + shell-command + `useState` cycle described in `docs/architecture.md`. One hook per widget; don't share it across widgets, don't generalize it into a "data fetching framework." Don't add a hook or config until there's actually external data to fetch or a constant to tune — a static widget is just `index.tsx`.
 3. **The component** (`index.tsx`) — consumes the hook, renders rows/state, wires up interactions. Wrapped in the shared panel chrome (below). When it grows past comfortable reading length, split sub-components/utils into sibling files in the same folder — that's expected, not a smell.
 4. **Import with the `@/` alias**, not relative paths, for anything outside the widget's own folder (`@/wigl`, `@/components/ui/...`). Within a widget's own folder, relative imports are fine.
@@ -80,6 +82,22 @@ External tools can write the same data: any script in `scripts/` that talks to t
 
 Ceiling to know about: last-writer-wins on the whole blob — two writers mutating the same key within one poll window can drop a write. Fine for single-user widget data; if that ever bites, move that key to its own table with row-level writes.
 
+## Caching expensive calls (`useQuery`)
+
+`useStorage` is for state a widget *owns and writes* (persisted, shared across windows). `useQuery` is the other half: caching the *result of an expensive read* — mainly a shell command you don't want to re-run on every poll tick, especially one with its own rate limit (a GitHub API call via `gh`, say).
+
+```ts
+import { useQuery, hours } from "@/wigl";
+const [data, loading, { refresh }] = useQuery({
+  key: "<widget>_archived",
+  fn: loadArchivedRepoNames,
+  stale: hours(24),
+  useSql: true, // persist across restarts; omit for in-memory-only (resets on relaunch)
+});
+```
+
+Cached by `key` (prefix it with the widget's folder name, same rule as `useStorage` keys), deduped across concurrent callers, and re-run only once `stale` ms have passed since the last successful fetch — `refresh()` forces it early. `useSql: true` persists the result in the same kv table `useStorage` uses (`query_<key>`, `updatedAt` embedded in the stored blob — no separate invalidation table). It's deliberately not a TanStack Query clone: no retries, no background refetch-on-focus, no error state — if `fn()` throws, the caller sees the rejection, same as calling it directly.
+
 ## Running shell commands from a widget
 
 `src-tauri/capabilities/default.json`'s `shell:allow-execute` only registers `sh` and `sqlite3` — `{ "name": "sh", "args": true }` already grants arbitrary execution, so a per-binary allowlist would be decorative. Run everything through `sh -c`:
@@ -89,9 +107,13 @@ import { Command } from "@tauri-apps/plugin-shell";
 const output = await Command.create("sh", ["-c", "git status"]).execute();
 ```
 
-No capability edit needed for a new binary — `sh -c` reaches anything already on `PATH`. Quote your own arguments (`'${s.replace(/'/g, "'\\''")}'`) since `sh -c` takes one string, not an args array — see `revealInFinder`/`openInEditor` in `src/widgets/repos/useReposWidget.ts` for the pattern, including the fixed absolute path a bundled app's CLI (e.g. VS Code's) usually needs: GUI-launched shells often have a minimal `PATH` that doesn't include user-installed tools. `Command.create("sh", [...]).execute()` resolves even when the inner command fails — check `out.code !== 0`, don't rely on the promise rejecting.
+No capability edit needed for a new binary — `sh -c` reaches anything already on `PATH`. Quote your own arguments (`'${s.replace(/'/g, "'\\''")}'`) since `sh -c` takes one string, not an args array — see `revealInFinder`/`openInEditor` in `src/widgets/repos/commands.ts` for the pattern. `Command.create("sh", [...]).execute()` resolves even when the inner command fails — check `out.code !== 0`, don't rely on the promise rejecting.
+
+**GUI-launched shells have a minimal `PATH`** — it doesn't source `.zshrc`/`.bash_profile`, so Homebrew (`/opt/homebrew/bin`), `nvm`/`bun`-style installers, and per-app "install CLI" steps (VS Code's, GitHub Desktop's) are all typically missing. Anything you shell out to that isn't a macOS system binary needs its absolute install path tried first, with the bare command as a PATH fallback for machines where it *does* resolve — see the same `commands.ts` for the pattern (a small `for (const candidate of [absolute, bare]) { ... if success return }` loop), repeated for every one of these binaries so far (VS Code, GitHub Desktop, `gh`, `bun`).
 
 Only add a new `name`/`cmd` entry under `shell:allow-execute` if you have a concrete reason to scope a specific binary tighter than the blanket `sh` grant — check via `log show` if a call still fails silently (see `docs/debugging.md`).
+
+**A shell command that's grown past a few lines is easier to keep as a real script than an embedded string.** Put it in `scripts/<name>.ts` (bun, plain functions — no shell-string escaping to get wrong), give it a `bun run <name>` entry so it's runnable and debuggable standalone, and have the widget's hook shell out to it (`sh -c "bun <absolute path to the script> <args>"`, same PATH caveat as above applies to `bun` itself). Share types between the script and the widget by defining them in the widget's folder and importing into the script — not the other way around, since the script uses Node/bun-only APIs that the root `tsconfig.json` (`"include": ["src"]`) doesn't have types for; importing *from* `scripts/` into `src/` would pull an unchecked file into the typechecked program.
 
 ## Icons
 
