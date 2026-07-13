@@ -22,7 +22,7 @@ src/widgets/<name>/
 
 Sibling files take plain names (`types.ts`, `commands.ts`, `sort.ts`, a `Row.tsx` component) — the folder itself is already the namespace, so don't prefix filenames with the widget's own name. `use<Name>.ts` is the one deliberate exception: that prefix is the hook-naming convention (see below), not a namespacing habit.
 
-`src/App.tsx` discovers folders with `import.meta.glob("./widgets/*/index.tsx")` at build time and opens one OS window per folder at launch — the folder name becomes the window label (so don't name a folder `main` — that's the hidden bootstrap window — or `wigl`, the app's name). **Adding a widget = creating the folder. Deleting it = removing the folder. No registration, no config edits, nothing else.**
+`src/App.tsx` discovers folders with `import.meta.glob("./widgets/*/index.tsx")` at build time; the folder name becomes the widget's id (used as its grid-layout key and its `useStorage`/`useQuery` key prefix), not a window label — a widget renders as a grid item inside whichever monitor's window it's assigned to, it doesn't get its own OS window (see `docs/architecture.md`). Don't name a folder `main` (the hidden bootstrap window) or `wigl` (the app's name). **Adding a widget = creating the folder. Deleting it = removing the folder. No registration, no config edits, nothing else.**
 
 ```tsx
 // src/widgets/clock/index.tsx — a complete, working widget
@@ -40,9 +40,9 @@ export default function ClockWidget() {
 }
 ```
 
-Grid size/position are plain props on `<Widget>` — `w`/`h` in cells (default 3×4), `col`/`row` as a first-launch cell position (omit them and you get the first open slot). There's no separate config export sitting next to `default`: one export means nothing to typo, and grid props are ordinary JSX so TypeScript already catches a mistyped one (App.tsx still warns if it finds a leftover top-level `gridConfig` export, which means a widget predates this and needs its config moved onto `<Widget>`). `col`/`row` only matter the first time a widget is ever seen — the tiling desktop persists wherever the user drags it after that. Pick defaults that don't overlap other widgets' (check their `<Widget>` props in `src/widgets/*/index.tsx`). Standard window chrome (transparent, undecorated, always-on-bottom, skip-taskbar, non-resizable) is applied by the spawner in `App.tsx`, not per widget — a widget that needs *different* chrome is no longer "just another widget" and is worth a second thought.
+Grid size/position are plain props on `<Widget>` — `w`/`h` in cells (default 3×4), `col`/`row` as a first-launch cell position (omit them and you get the first open slot). There's no separate config export sitting next to `default`: one export means nothing to typo, and grid props are ordinary JSX so TypeScript already catches a mistyped one (App.tsx still warns if it finds a leftover top-level `gridConfig` export, which means a widget predates this and needs its config moved onto `<Widget>`). `col`/`row` only matter the first time a widget is ever seen — the tiling desktop persists wherever the user drags it after that. Pick defaults that don't overlap other widgets' (check their `<Widget>` props in `src/widgets/*/index.tsx`). Window chrome (transparent, undecorated, always-on-bottom, skip-taskbar, non-resizable) is set once per monitor in Rust, not per widget — see "Window chrome" below — so there's no per-widget chrome to configure at all.
 
-No capability edit needed either — `src-tauri/capabilities/default.json`'s `windows` field is a `["*"]` glob, so new window labels are covered automatically. You only touch that file for new *permissions* (see "Running shell commands" below).
+No capability or window edit needed either — a new widget adds no window (see above), and `src-tauri/capabilities/default.json`'s `windows` field is a `["*"]` glob regardless. You only touch that file for new *permissions* (see "Running shell commands" below).
 
 ## What a real-data widget needs
 
@@ -137,8 +137,8 @@ Init already ran once (`components.json`, `@/*` path alias in `tsconfig.json` + 
 
 ## Window chrome
 
-The standard flags (transparent, undecorated, no shadow, always-on-bottom, skip-taskbar, non-resizable) live in one place: the spawner in `src/App.tsx`. `src-tauri/tauri.conf.json` only declares the hidden `main` bootstrap window. App-level prerequisites, set once: `macOSPrivateApi: true` in `tauri.conf.json` (required for transparency) and the matching `macos-private-api` Cargo feature in `src-tauri/Cargo.toml`.
+A widget never sets its own window chrome — it isn't a window (see `docs/architecture.md`). The standard flags (transparent, undecorated, no shadow, always-on-bottom, skip-taskbar, non-resizable) are set once per monitor window in `src-tauri/src/lib.rs`'s `setup()`. `tauri.conf.json` only declares the hidden `main` bootstrap window. App-level prerequisites, set once: `macOSPrivateApi: true` in `tauri.conf.json` (required for transparency) and the matching `macos-private-api` Cargo feature in `src-tauri/Cargo.toml`.
 
 ## Checking a widget's own re-renders
 
-`bun run tauri dev` runs `src/main.tsx`'s dev-only `react-scan` overlay inside every widget's WebView (see `docs/architecture.md`'s "Render isolation" — this is for spotting waste inside *one* widget's own render tree; there is no cross-widget re-render leakage to check for, since each widget is a separate JS realm by construction). It's gated behind `import.meta.env.DEV`, so it's entirely absent from `bun run build`/`bun run tauri build` output — no prod bundle-size cost, nothing to remember to strip out.
+`bun run tauri dev` runs `src/main.tsx`'s dev-only `react-scan` overlay inside every monitor window (see `docs/architecture.md`'s "Render isolation is per-monitor, not per-widget" — widgets sharing a monitor share one render tree, so a re-render caused by one widget can show up on its neighbors' overlay too; that's expected, not a bug to chase). It's gated behind `import.meta.env.DEV`, so it's entirely absent from `bun run build`/`bun run tauri build` output — no prod bundle-size cost, nothing to remember to strip out.

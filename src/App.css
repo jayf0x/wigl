@@ -217,3 +217,35 @@ body,
     transition: none;
   }
 }
+
+/* Scroll "focus" effect: items sharpen and grow to full size as they pass
+   the vertical center of their scroll container, receding toward its edges.
+   `--focus` (0..1) is written per-item by `useScrollFocus`
+   (src/components/ui/scroll-focus.ts) — WKWebView has no CSS scroll-driven
+   animations, so JS supplies the one number and CSS does all the styling.
+   Reusable: put the hook's ref on any container (tbody, ul, listbox) and
+   `scroll-focus` on its direct children. Values are continuous, so no
+   transitions are needed — motion is exactly as smooth as scrolling. */
+.scroll-focus {
+  --focus: 1;
+  opacity: calc(0.45 + 0.55 * var(--focus));
+  filter: saturate(calc(75% + 25% * var(--focus)))
+    brightness(calc(96% + 4% * var(--focus)));
+}
+/* transform is a no-op on <tr> (table layout model) — scale the cells for
+   rows, the element itself for everything else. Kept subtle: cells scale
+   around their own centers, so large factors would open gaps between them. */
+.scroll-focus:not(tr),
+tr.scroll-focus > * {
+  transform: scale(calc(0.94 + 0.06 * var(--focus)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-focus,
+  .scroll-focus:not(tr),
+  tr.scroll-focus > * {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}

@@ -23,19 +23,17 @@ Fix: after any frontend edit, do a full `bun run build` (regenerates `dist/`) be
 
 Both are required; either alone fails (the second one fails the Cargo build outright with a clear "does not match the allowlist" error, so that half is hard to miss — the first half fails silently at runtime).
 
-## Widget window doesn't appear
+## Widget doesn't appear / isn't clickable
 
-Widget windows are spawned dynamically by the hidden `main` bootstrap window (`src/App.tsx`), so "the app runs but a widget is missing" has its own checklist:
+Widgets aren't windows (see `docs/architecture.md`) — they're grid items rendered by whichever monitor's `<Desktop>` owns them, so "the app runs but a widget is missing or dead" has its own checklist:
 
-1. **Folder contract**: the widget must be `src/widgets/<name>/index.tsx` with a **default** export — a named-only export or a differently-named file silently won't match the `import.meta.glob` pattern. Check the folder name isn't `main` (reserved).
-2. **Spawn errors**: `WebviewWindow` creation failures fire `tauri://error`, logged to the widget console as `[wigl] failed to open widget window "<name>"` — in a debug build, open devtools on any surviving window, or check `log show` for permission denials (`core:webview:allow-create-webview-window` must be in `capabilities/default.json`).
-3. **Relaunch, don't just look**: `open` on the `.app` focuses an already-running instance instead of launching your fresh build — `bun run kill` first, or just use `bun run verify` which handles it.
+1. **Folder contract**: the widget must be `src/widgets/<name>/index.tsx` with a **default** export — a named-only export or a differently-named file silently won't match the `import.meta.glob` pattern (`src/App.tsx` logs `[wigl] widget "<id>" has no default export` when this happens). Check the folder name isn't `main` (reserved).
+2. **A render crash is caught, but check for it**: each widget mounts inside its own error boundary (`WidgetErrorBoundary` in `Desktop.tsx`) — an uncaught throw shows as an inline "widget crashed" message in that grid cell (not a blank app) and logs `[wigl] widget "<id>" crashed` with the stack. Check devtools/`log show` for that line before assuming a layout bug.
+3. **Looks unclickable / whole screen looks stuck**: this is almost always the click-through hit-testing, not the widget itself — `src-tauri/src/lib.rs`'s cursor poller toggles native click-through based on hit-rects each `<Desktop>` reports via `set_hit_rects`. A widget with a `NaN`/garbage position reports a hit-rect that never matches the cursor, so the whole window falls back to click-through everywhere (see "Renaming a `useStorage` shape..." below — this is the most common cause).
+4. **Monitor-window permission denials**: check `log show` for denials on `core:window:allow-available-monitors` / `core:window:allow-show` (`capabilities/default.json`) — see `docs/architecture.md`'s permissions section.
+5. **Relaunch, don't just look**: `open` on the `.app` focuses an already-running instance instead of launching your fresh build — `bun run kill` first, or just use `bun run verify` which handles it.
 
-To verify windows actually exist without a screenshot: `swift scripts/winlist.swift` (uses `CGWindowListCopyWindowInfo` — no Accessibility permission needed for bounds/count, only window *names* are gated). Trust bounds + count; the `onscreen` flag flip-flops with Space/display focus. `bun run verify` runs the whole build → relaunch → winlist → log-grep loop in one command.
-
-## Stale window-state can resurrect or misplace windows
-
-`tauri-plugin-window-state` persists per *label* in `~/Library/Application Support/com.wigl.desktop/.window-state.json`, and restores whatever it finds — including entries written by older builds with different window layouts. Symptom actually hit here: a stale `main` entry from the single-window era restored the hidden bootstrap window to a visible 270×400 rectangle. `main` is therefore denylisted from the plugin in `src-tauri/src/lib.rs`; if a *widget* window shows up somewhere bizarre after renaming/reshuffling folders, delete its entry from that JSON (or the whole file) and relaunch. Note the plugin only writes the file on graceful exit — `kill`/`pkill` in a test loop won't persist positions, which is expected, not a bug.
+To verify monitor windows actually exist without a screenshot: `swift scripts/winlist.swift` (uses `CGWindowListCopyWindowInfo` — no Accessibility permission needed for bounds/count, only window *names* are gated). Trust bounds + count; the `onscreen` flag flip-flops with Space/display focus. `bun run verify` runs the whole build → relaunch → winlist → log-grep loop in one command. Note this only confirms the per-monitor `screen-<i>` windows exist — it can't tell you which widgets are rendered inside them.
 
 ## Renaming a `useStorage` shape doesn't migrate rows already on disk
 
