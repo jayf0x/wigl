@@ -4,6 +4,22 @@ import { ProjectStatus } from "./types";
 // single string.
 export const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
+// gh has its own API rate limit — callers should cache this (see useQuery in
+// useReposWidget.ts), it's not meant to be called on every poll.
+// Homebrew's /opt/homebrew/bin isn't on a GUI-launched shell's minimal PATH
+// (same problem as the VS Code CLI below) — try the Homebrew path first,
+// fall back to whatever `gh` resolves to on PATH.
+export async function loadArchivedRepoNames(): Promise<string[]> {
+  for (const gh of ["/opt/homebrew/bin/gh", "gh"]) {
+    const out = await Command.create("sh", [
+      "-c",
+      `${shQuote(gh)} repo list --archived --limit 1000 --json name --jq '.[].name'`,
+    ]).execute();
+    if (out.code === 0) return out.stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 // Every binary here runs through `sh -c`, per capabilities: only `sh` and
 // `sqlite3` are registered under shell:allow-execute (see backlog's
 // "Capabilities posture" decision) — one real boundary instead of a

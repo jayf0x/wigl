@@ -29,13 +29,15 @@ async function dbPath(): Promise<string> {
   return dbPathPromise;
 }
 
-async function sql(query: string): Promise<string> {
+// Exported for query.ts's SQL-backed cache — same kv table, same "shell out
+// to sqlite3" rule, no reason for a second DB helper.
+export async function sql(query: string): Promise<string> {
   const out = await Command.create("sqlite3", [await dbPath(), query]).execute();
   if (out.code !== 0) throw new Error(`sqlite3 failed: ${out.stderr}`);
   return out.stdout;
 }
 
-const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
+export const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
 
 /**
  * Like useState, but persisted in the shared wigl SQLite database.

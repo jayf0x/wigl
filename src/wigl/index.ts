@@ -4,6 +4,7 @@
 export { Widget, WidgetHeader } from "./widget";
 export { Desktop } from "./Desktop";
 export { useStorage } from "./storage";
+export { useQuery, hours, type UseQueryOptions } from "./query";
 export { relativeTime, useRelativeTime } from "./relativeTime";
 export { TILING } from "./tiling.config";
 export type { WidgetModule } from "./types";

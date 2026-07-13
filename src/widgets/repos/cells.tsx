@@ -1,9 +1,9 @@
-import { ChevronDown, ChevronUp, Circle, TriangleAlert } from "lucide-react";
+import { ChevronDown, ChevronUp, Circle, TriangleAlert, type LucideIcon } from "lucide-react";
 import { TableHead } from "@/components/ui/table";
 import { useRelativeTime } from "@/wigl";
 import { cn } from "@/lib/utils";
-import type { ProjectStatus } from "./useReposWidget";
-import type { SortDir, SortKey } from "./repos.sort";
+import type { ProjectStatus } from "./types";
+import type { SortDir, SortKey } from "./sort";
 
 // npm release status, web3-flavored: nothing to show = invisible, pending
 // changes = glowing cyan pulse, released & settled = dimmed violet.
@@ -32,15 +32,21 @@ export function RelativeTime({ epochSeconds }: { epochSeconds: number }) {
   return <>{useRelativeTime(epochSeconds)}</>;
 }
 
+// `label` is text (name column); `icon` + `title` swaps in an icon-only
+// header with the word in a tooltip — keeps narrow columns narrow.
 export function SortableHead({
   label,
+  icon: Icon,
+  title,
   sortKey,
   sortBy,
   sortDir,
   onSort,
   className,
 }: {
-  label: string;
+  label?: string;
+  icon?: LucideIcon;
+  title?: string;
   sortKey: SortKey;
   sortBy: SortKey;
   sortDir: SortDir;
@@ -51,15 +57,16 @@ export function SortableHead({
   const Arrow = sortDir === "asc" ? ChevronUp : ChevronDown;
   return (
     <TableHead
+      title={title}
       onClick={() => onSort(sortKey)}
       className={cn(
-        "h-7 cursor-pointer select-none whitespace-nowrap py-1 text-[10px] tracking-wide opacity-45 hover:opacity-80",
+        "h-7 cursor-pointer select-none whitespace-nowrap px-1.5 py-1 text-[10px] tracking-wide opacity-45 hover:opacity-80",
         active && "opacity-90",
         className,
       )}
     >
       <span className="inline-flex items-center gap-0.5">
-        {label}
+        {Icon ? <Icon className="size-3" /> : label}
         {active && <Arrow className="size-2.5" />}
       </span>
     </TableHead>

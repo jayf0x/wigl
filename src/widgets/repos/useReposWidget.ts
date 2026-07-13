@@ -1,8 +1,9 @@
 import { homeDir, join } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import { useCallback, useEffect, useState } from "react";
-import { shQuote } from "./commands";
-import { POLL_INTERVAL_MS, REPO_ROOT_RELATIVE_TO_HOME, SOURCE_DIR_RELATIVE_TO_HOME } from "./reposWidget.config";
+import { hours, useQuery } from "@/wigl";
+import { loadArchivedRepoNames, shQuote } from "./commands";
+import { POLL_INTERVAL_MS, REPO_ROOT_RELATIVE_TO_HOME, SOURCE_DIR_RELATIVE_TO_HOME } from "./config";
 import type { ProjectStatus, RepoScanRow } from "./types";
 
 // GUI-launched shells often lack ~/.bun/bin on PATH (it's added by shell rc
@@ -24,6 +25,9 @@ async function runBunScan(scriptPath: string, sourceDir: string): Promise<RepoSc
 export function useReposWidget() {
   const [projects, setProjects] = useState<ProjectStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  // gh-backed, rarely changes and has its own rate limit — cached a day,
+  // persisted so a restart doesn't re-hit the API immediately.
+  const [archived] = useQuery({ key: "repos_archived", fn: loadArchivedRepoNames, stale: hours(24), useSql: true });
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -44,5 +48,8 @@ export function useReposWidget() {
     return () => clearInterval(id);
   }, [refresh]);
 
-  return { projects, loading, refresh };
+  const archivedNames = new Set(archived);
+  const visible = projects.filter((p) => !archivedNames.has(p.name));
+
+  return { projects: visible, loading, refresh };
 }

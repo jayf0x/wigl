@@ -1,8 +1,8 @@
-import { RefreshCw } from "lucide-react";
+import { Activity, Clock, RefreshCw, Tag } from "lucide-react";
 import { useReposWidget } from "./useReposWidget";
-import { DEFAULT_SORT_DIR, sortProjects, type SortDir, type SortKey } from "./repos.sort";
-import { SortableHead } from "./repos.cells";
-import { RepoRow } from "./RepoRow";
+import { DEFAULT_SORT_DIR, sortProjects, type SortDir, type SortKey } from "./sort";
+import { SortableHead } from "./cells";
+import { Row } from "./Row";
 import { Widget, WidgetHeader, useStorage } from "@/wigl";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ function ReposWidget() {
   const sorted = sortProjects(projects, sortBy, sortDir);
 
   return (
-    <Widget w={8} h={5} col={0} row={0}>
+    <Widget w={6} h={5} col={0} row={0}>
       <WidgetHeader>
         <Button
           variant="ghost"
@@ -43,10 +43,19 @@ function ReposWidget() {
           <Table className="text-[11.5px]">
             <TableHeader>
               <TableRow className="border-white/5 hover:bg-transparent">
-                <SortableHead label="" sortKey="status" sortBy={sortBy} sortDir={sortDir} onSort={onSort} className="w-px pr-0 pl-2.5" />
+                <SortableHead
+                  icon={Activity}
+                  title="status"
+                  sortKey="status"
+                  sortBy={sortBy}
+                  sortDir={sortDir}
+                  onSort={onSort}
+                  className="w-px pr-0 pl-2"
+                />
                 <SortableHead label="name" sortKey="name" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
                 <SortableHead
-                  label="updated"
+                  icon={Clock}
+                  title="updated"
                   sortKey="time"
                   sortBy={sortBy}
                   sortDir={sortDir}
@@ -54,7 +63,8 @@ function ReposWidget() {
                   className="w-px text-right"
                 />
                 <SortableHead
-                  label="last release"
+                  icon={Tag}
+                  title="last release"
                   sortKey="release"
                   sortBy={sortBy}
                   sortDir={sortDir}
@@ -66,7 +76,7 @@ function ReposWidget() {
             </TableHeader>
             <TableBody>
               {sorted.map((p) => (
-                <RepoRow key={p.name} p={p} />
+                <Row key={p.name} p={p} />
               ))}
             </TableBody>
           </Table>

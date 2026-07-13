@@ -1,22 +1,21 @@
+import { Code2, FolderOpen, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { Code2, FolderOpen, GitBranch } from "lucide-react";
-
 import { openInEditor, openInGithubDesktop, revealInFinder } from "./commands";
-import { RelativeTime, StatusIcon, statusTitle } from "./repos.cells";
+import { RelativeTime, StatusIcon, statusTitle } from "./cells";
 import { ProjectStatus } from "./types";
 
-export const RepoRow = ({ p }: { p: ProjectStatus }) => (
+export const Row = ({ p }: { p: ProjectStatus }) => (
   <TableRow title={statusTitle(p)} className="group border-white/5">
-    <TableCell className="w-px py-1.5 pr-0 pl-2.5">
+    <TableCell className="w-px py-1 pr-0 pl-2">
       <StatusIcon p={p} />
     </TableCell>
-    <TableCell className="overflow-hidden text-ellipsis whitespace-nowrap py-1.5">{p.name}</TableCell>
-    <TableCell className="w-px py-1.5 text-right text-[10px] opacity-35">
+    <TableCell className="overflow-hidden px-1.5 py-1 text-ellipsis whitespace-nowrap">{p.name}</TableCell>
+    <TableCell className="w-px px-1.5 py-1 text-right text-[10px] opacity-35">
       <RelativeTime epochSeconds={p.lastCommit} />
     </TableCell>
-    <TableCell className={cn("w-px py-1.5 text-right text-[10px]", p.lastRelease ? releaseScoreClass(p) : null)}>
+    <TableCell className={cn("w-px px-1.5 py-1 text-right text-[10px]", p.lastRelease ? releaseScoreClass(p) : null)}>
       {p.lastRelease ? compactAge(p.lastRelease) : ""}
     </TableCell>
     <TableCell className="w-px py-1 pr-1.5">

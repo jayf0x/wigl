@@ -1,4 +1,4 @@
-import type { ProjectStatus } from "./useReposWidget";
+import type { ProjectStatus } from "./types";
 
 export type SortKey = "status" | "name" | "time" | "release";
 export type SortDir = "asc" | "desc";
