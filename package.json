@@ -15,7 +15,8 @@
     "kill": "pkill -x wigl || true",
     "calendar:add": "bun scripts/calendar.ts add",
     "calendar:list": "bun scripts/calendar.ts list",
-    "calendar:rm": "bun scripts/calendar.ts rm"
+    "calendar:rm": "bun scripts/calendar.ts rm",
+    "repos:scan": "bun scripts/repos-scan.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

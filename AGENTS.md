@@ -34,6 +34,10 @@ Use bun (`bun install`, `bun run tauri dev`), never npm/yarn/pnpm.
 
 Quick: `bun run typecheck`, then `bun run build`. Full app: `bun run verify` — builds the debug `.app`, kills any stale instance, relaunches, lists the actual OS windows (`scripts/winlist.swift`), and greps the unified log for errors. `bun run kill` stops the app. Screenshots are unreliable here; `docs/debugging.md` has the full verification playbook, including the stale-bundle trap after mid-build edits.
 
+**After finishing any feature-sized request** (new/changed widget behavior, not a one-line tweak): end the turn by running `bun run verify` yourself, not just typecheck/build. The owner needs a freshly built, freshly relaunched app to visually QA — leaving a stale build running is the same as not finishing the task. Don't wait to be asked.
+
+New debug/CLI scripts (widget data scanners, seed scripts, anything you'd otherwise inline as a big shell string) go in `scripts/` and get a one-line `package.json` entry, same shape as `calendar:add`/`calendar:list`/`calendar:rm` and `repos:scan` — keeps `package.json` a thin index instead of growing embedded logic.
+
 ## History
 
 The original build spec lives at `.idea/INIT.md` (fulfilled, kept for rationale); `.idea/full-conversation.md` is early exploration describing a rejected platform-scale design — don't build toward it. `.idea/` is the owner's gitignored backup/reference folder, not code — the docs must (and do) stand alone without it.
