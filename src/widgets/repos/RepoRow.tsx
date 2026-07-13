@@ -5,7 +5,7 @@ import { Code2, FolderOpen, GitBranch } from "lucide-react";
 
 import { openInEditor, openInGithubDesktop, revealInFinder } from "./commands";
 import { RelativeTime, StatusIcon, statusTitle } from "./repos.cells";
-import { ProjectStatus } from "./repos.types";
+import { ProjectStatus } from "./types";
 
 export const RepoRow = ({ p }: { p: ProjectStatus }) => (
   <TableRow title={statusTitle(p)} className="group border-white/5">

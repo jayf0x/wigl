@@ -1,5 +1,5 @@
 import { Command } from "@tauri-apps/plugin-shell";
-import { ProjectStatus } from "./repos.types";
+import { ProjectStatus } from "./types";
 
 // single string.
 export const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;

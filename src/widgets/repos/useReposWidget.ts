@@ -2,8 +2,8 @@ import { homeDir, join } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import { useCallback, useEffect, useState } from "react";
 import { shQuote } from "./commands";
-import type { ProjectStatus, RepoScanRow } from "./repos.types";
 import { POLL_INTERVAL_MS, REPO_ROOT_RELATIVE_TO_HOME, SOURCE_DIR_RELATIVE_TO_HOME } from "./reposWidget.config";
+import type { ProjectStatus, RepoScanRow } from "./types";
 
 // GUI-launched shells often lack ~/.bun/bin on PATH (it's added by shell rc
 // files, which a WebView-spawned `sh -c` doesn't source) — same problem as
