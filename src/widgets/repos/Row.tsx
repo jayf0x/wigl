@@ -2,7 +2,7 @@ import { Code2, FolderOpen, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { openInEditor, openInGithubDesktop, revealInFinder } from "./commands";
+import { openInEditor, openInGithubDesktop, revealInFileManager } from "./commands";
 import { RelativeTime, StatusIcon, statusTitle } from "./cells";
 import { ProjectStatus } from "./types";
 
@@ -23,7 +23,7 @@ export const Row = ({ p }: { p: ProjectStatus }) => (
         <Button variant="ghost" size="icon-xs" title="Open in VS Code" onClick={() => openInEditor(p)}>
           <Code2 className="size-3" />
         </Button>
-        <Button variant="ghost" size="icon-xs" title="Reveal in Finder" onClick={() => revealInFinder(p)}>
+        <Button variant="ghost" size="icon-xs" title="Reveal in file manager" onClick={() => revealInFileManager(p)}>
           <FolderOpen className="size-3" />
         </Button>
         <Button variant="ghost" size="icon-xs" title="Open in GitHub Desktop" onClick={() => openInGithubDesktop(p)}>
