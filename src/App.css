@@ -15,6 +15,18 @@ body,
   width: 100%;
 }
 
+/* Windowed mode (Wayland's single normal-window flow, see lib.rs's
+   windowed_mode / App.tsx): a real decorated window has no desktop wallpaper
+   showing through, so it needs its own opaque page background instead of
+   the overlay flow's transparent one. The window is resizable, so grow it
+   to see widgets placed outside the initial 1100x750 — .wigl-desktop is
+   `position: fixed`, so it doesn't participate in document scrolling. */
+html.wigl-windowed,
+html.wigl-windowed body,
+html.wigl-windowed #root {
+  background: #0b0b0c;
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', sans-serif;

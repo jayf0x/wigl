@@ -99,7 +99,19 @@ class WidgetErrorBoundary extends Component<{ id: string; children: ReactNode },
   }
 }
 
-export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, WidgetModule>; monitorIndex: number }) {
+export function Desktop({
+  widgets,
+  monitorIndex,
+  windowed = false,
+}: {
+  widgets: Record<string, WidgetModule>;
+  monitorIndex: number;
+  // True on Wayland's single-window flow (see lib.rs's windowed_mode): no
+  // sibling monitor windows exist to hand a drag off to, and no click-through
+  // poller is reading hit-rects, so both are skipped rather than firing IPC
+  // calls nothing listens to.
+  windowed?: boolean;
+}) {
   const [saved, setSaved, { loading }] = useStorage<SavedPositions>("widget_layout", {});
   const [layout, setLayout] = useState<GridItem[] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -218,8 +230,10 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
 
   // Tell the Rust cursor poller where our widgets are. During a drag the
   // poller is paused entirely (set_drag_active), so no fullscreen rect games.
+  // Windowed mode has no poller (the whole window is already a normal,
+  // always-interactive surface), so skip the IPC call entirely.
   useEffect(() => {
-    if (!layout) return;
+    if (!layout || windowed) return;
     const s = window.devicePixelRatio;
     const rects = layout.map((it) => ({
       x: colToPx(it.col) * s,
@@ -228,7 +242,7 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
       h: spanToPx(it.h) * s,
     }));
     invoke("set_hit_rects", { rects }).catch(console.error);
-  }, [layout]);
+  }, [layout, windowed]);
 
   // --- anchor field ------------------------------------------------------------
   // Cross marks on every cell corner (centered in the gaps). Idle they're
@@ -404,8 +418,8 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
     showGhost(item.col, item.row, item.w, item.h);
     wakeField(true);
     // Pause the click-through poller: flipping ignore_cursor_events mid-drag
-    // would sever the pointer capture.
-    invoke("set_drag_active", { active: true }).catch(console.error);
+    // would sever the pointer capture. No poller exists in windowed mode.
+    if (!windowed) invoke("set_drag_active", { active: true }).catch(console.error);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -419,7 +433,7 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
     const sx = e.screenX;
     const sy = e.screenY;
     let tgt = monitorIndex;
-    if (ms) {
+    if (ms && !windowed) {
       const hit = ms.findIndex((m) => sx >= m.x && sx < m.x + m.width && sy >= m.y && sy < m.y + m.height);
       if (hit >= 0) tgt = hit;
     }
@@ -498,7 +512,7 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
     setDragId(null); // re-enables the transition; layout effect springs it home
     hideGhost();
     wakeField(false);
-    invoke("set_drag_active", { active: false }).catch(console.error);
+    if (!windowed) invoke("set_drag_active", { active: false }).catch(console.error);
 
     if (d.target.mon !== monitorIndex) {
       // Commit the transfer: the target surface adopts the widget and writes

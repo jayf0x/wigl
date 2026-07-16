@@ -37,4 +37,4 @@ Everything here is unbuilt and unapproved — a list of things that came up duri
 - A published/shared hook package.
 - A plugin ecosystem or marketplace.
 - Cloud sync of any kind.
-- Cross-platform support beyond macOS (the window behavior is macOS-only by design; the original spec is explicit about this).
+- Windows support. macOS + Linux (Ubuntu primarily) is the supported range — see `docs/architecture.md`'s overlay/windowed split for how Linux is handled. (This reverses the original spec's macOS-only stance, decided 2026-07-16.)

@@ -1,5 +1,7 @@
 # Debugging, gotchas, and how to verify changes
 
+Most of this file is macOS-specific tooling (`log show`, `swift scripts/winlist.swift`, DMG bundling) because that flow has the most moving parts to go wrong (transparency, click-through, per-monitor windows). See "Verifying on Linux" near the end for the windowed flow's much shorter checklist — it's a normal window, so most of what follows below doesn't apply to it.
+
 ## You often can't take a screenshot
 
 This window is `alwaysOnBottom` + `skipTaskbar` + undecorated, running in environments that may be headless/sandboxed agent shells with no real interactive display. Screenshots are frequently unreliable here (can capture unrelated screensaver/lock-screen content instead of the app) and mouse-drag gestures can't be scripted without accessibility permissions this environment usually doesn't have. Default to verifying through logs and process state instead:
@@ -72,3 +74,23 @@ Tauri's `core:default` capability is narrower than it looks — window position 
 ## Bundle identifier
 
 Don't end `identifier` in `tauri.conf.json` with `.app` (e.g. `com.foo.app`) — Tauri warns because it collides with the macOS `.app` bundle extension. Use something like `com.foo.desktop` instead.
+
+## Verifying on Linux
+
+Building this app's Rust side on Linux needs the usual Tauri prerequisites (a Rust toolchain, `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `build-essential`, `pkg-config`) — none of that is macOS-specific to this repo, it's Tauri's standard Linux build dependency list.
+
+Which of the two window flows you get (`docs/architecture.md`'s overlay vs. windowed) depends on the session, not the code: `echo $XDG_SESSION_TYPE` — `wayland` gets the windowed flow (the common case on stock Ubuntu/GNOME), `x11` gets the same desktop-overlay flow macOS uses. Force either one with `WIGL_MODE=windowed` / `WIGL_MODE=overlay` when you need to test the other deliberately.
+
+Checking the app is actually up, without a reliable screenshot or window-listing tool (Wayland has no cross-desktop equivalent of macOS's `CGWindowListCopyWindowInfo` trick, and X11's `wmctrl`/`xdotool` aren't installed by default on Ubuntu) — `bun run verify` does this for you (see `scripts/verify.sh`'s Linux branch): launches the built debug binary directly (`src-tauri/target/debug/wigl`, redirecting stdout/stderr to a temp log since there's no `log show` equivalent to query after the fact), then checks `pgrep -x wigl` for liveness and greps that log for `denied`/`error`/`panic`/`failed`. In windowed mode this is close to sufficient on its own — it's a normal window, so if the process is alive and the log is clean, the window is almost certainly showing (unlike the overlay flow, where a live process with zero visible windows is a real failure mode worth extra checking).
+
+`sqlite3` isn't guaranteed present on a fresh Ubuntu install the way it is on macOS — `useStorage`-backed widgets (see `docs/widgets.md`) will log read/write errors, not crash, until it's installed (`apt install sqlite3`, then relaunch — no other fix needed). If a widget looks stuck on its initial/empty state on Linux, check for that log line before assuming a code bug.
+
+Every launch prints two diagnostic lines to stderr — `[wigl] mode: windowed (WIGL_MODE=..., XDG_SESSION_TYPE=..., WAYLAND_DISPLAY=..., WEBKIT_DISABLE_DMABUF_RENDERER=...)` and `[wigl] page load: Started/Finished <url>` (`src-tauri/src/lib.rs`'s `setup()`) — check these first whenever the window that comes up doesn't match what you expected, or nothing comes up at all. If `page load: Finished` never prints, the break is in webview/content loading itself (asset path, `frontendDist`, GPU-init blocking load), not in window show/mapping.
+
+### Process runs, no error, but no window ever appears
+
+The windowed flow's `WebviewWindowBuilder` calls `.visible(true)`/`.show()` directly in Rust right after `build()` (`lib.rs`) rather than waiting on the webview's JS to mount and call `getCurrentWindow().show()` over IPC — a real bug that used to live here: on some WebKitGTK/Wayland combinations that JS round-trip never completed, leaving the window created but permanently unmapped (`xwininfo` showed `Map State: IsUnMapped`, `10x10` placeholder geometry) while the process stayed alive with a clean log — every symptom of "no window" with nothing to grep for. If you hit this again despite the direct-show fix, `GDK_BACKEND=x11 <binary>` plus `xwininfo -root -tree -display :0 | grep -i wigl` (then `xwininfo -id <id>` on the match) is how to check the window's actual map state and geometry directly, since Wayland-native surfaces are otherwise invisible to X11 tooling.
+
+If the window now maps/shows but stays blank/white, that's a different failure mode: WebKitGTK's DMA-BUF renderer (the default since 2.42) can silently fail to present anything on certain GPU/driver combinations, most commonly hybrid-GPU laptops, dual-discrete-GPU desktops, and **external-display/docking-station setups** under Wayland. `lib.rs`'s `run()` sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` by default on Linux to work around exactly this (visible in the mode line above); it only does so if you haven't already set that env var yourself, so `WEBKIT_DISABLE_DMABUF_RENDERER= bun run qa` (forcing it unset) is how to confirm whether that's actually the cause on a machine where the workaround still isn't enough. `WEBKIT_DISABLE_COMPOSITING_MODE=1` is a blunter fallback (disables WebKit's compositor entirely) if DMA-BUF alone doesn't resolve it.
+
+If the window is still invisible with that workaround in place, next things to try, in order: `WEBKIT_DISABLE_COMPOSITING_MODE=1` (a blunter, older fallback that disables WebKit's compositor entirely), unplugging the external display to test on the laptop's own panel (isolates whether it's specifically the external-display/docking path), and `journalctl --user -b 0 | grep -i webkit` for a GPU/driver-level crash the app's own stderr wouldn't surface.

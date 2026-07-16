@@ -1,13 +1,21 @@
 // useStorage — SQLite-backed persistent state, shared across widget windows
 // and external writers (e.g. `bun run calendar:add`). Storage is a single kv
-// table of JSON blobs in ~/Library/Application Support/wigl/wigl.db, accessed
-// by shelling out to macOS's built-in `sqlite3` CLI (per docs/architecture.md:
-// real CLI over Rust commands). External changes are picked up by polling.
+// table of JSON blobs in wigl.db under the OS's app-data dir (macOS:
+// ~/Library/Application Support/<id>, Linux: ~/.local/share/<id> — Tauri's
+// appDataDir() resolves this per platform), accessed by shelling out to the
+// system's `sqlite3` CLI (per docs/architecture.md: real CLI over Rust
+// commands). sqlite3 isn't bundled, so it's an optional dependency: widgets
+// that don't use storage work with none installed; ones that do log a
+// read/write error until it is (see docs/debugging.md). External changes are
+// picked up by polling.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Command } from "@tauri-apps/plugin-shell";
-import { homeDir, join } from "@tauri-apps/api/path";
+import { appDataDir, join } from "@tauri-apps/api/path";
 
-export const DB_RELATIVE_TO_HOME = "Library/Application Support/wigl/wigl.db";
+// Must match tauri.conf.json's `identifier` — Tauri derives appDataDir()
+// from it, and scripts/calendar.ts (no Tauri runtime, so no appDataDir()
+// call available) reconstructs the same path by hand from this constant.
+export const APP_IDENTIFIER = "com.wigl.desktop";
 const POLL_MS = 3000;
 
 // Keys are baked into SQL strings, so restrict them instead of escaping them.
@@ -16,8 +24,7 @@ const KEY_RE = /^[a-zA-Z0-9_-]+$/;
 let dbPathPromise: Promise<string> | null = null;
 async function dbPath(): Promise<string> {
   dbPathPromise ??= (async () => {
-    // join(), not string concat — homeDir() has no trailing slash.
-    const path = await join(await homeDir(), DB_RELATIVE_TO_HOME);
+    const path = await join(await appDataDir(), "wigl.db");
     // sqlite3 won't create the parent directory; the table is created here
     // too so every later call is a plain read/write.
     await Command.create("sh", [
@@ -33,7 +40,7 @@ async function dbPath(): Promise<string> {
 // to sqlite3" rule, no reason for a second DB helper.
 export async function sql(query: string): Promise<string> {
   const out = await Command.create("sqlite3", [await dbPath(), query]).execute();
-  if (out.code !== 0) throw new Error(`sqlite3 failed: ${out.stderr}`);
+  if (out.code !== 0) throw new Error(`sqlite3 failed: ${out.stderr} (is sqlite3 installed? e.g. "apt install sqlite3")`);
   return out.stdout;
 }
 

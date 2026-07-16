@@ -9,12 +9,19 @@
 // Dates also accepted as DD/MM/YYYY or MM/DD/YYYY-ambiguous "12/12/2027".
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import { DB_RELATIVE_TO_HOME } from "../src/wigl/storage";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { APP_IDENTIFIER } from "../src/wigl/storage";
 import { EVENTS_STORAGE_KEY, type CalendarEvent } from "../src/widgets/calendar/calendar.utils";
 
-const DB_PATH = `${process.env.HOME}/${DB_RELATIVE_TO_HOME}`;
-mkdirSync(dirname(DB_PATH), { recursive: true });
+// No Tauri runtime here, so no appDataDir() call — reconstruct the same path
+// Tauri resolves at runtime, by hand, per OS.
+const appDataDir =
+  process.platform === "darwin"
+    ? join(homedir(), "Library", "Application Support", APP_IDENTIFIER)
+    : join(process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"), APP_IDENTIFIER);
+const DB_PATH = join(appDataDir, "wigl.db");
+mkdirSync(appDataDir, { recursive: true });
 const KEY = EVENTS_STORAGE_KEY;
 
 const db = new Database(DB_PATH, { create: true });
