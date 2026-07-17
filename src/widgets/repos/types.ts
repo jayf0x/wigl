@@ -12,6 +12,7 @@ export interface RepoScanRow {
   lastCommit: number; // epoch seconds, 0 if unknown
   firstCommit: number; // epoch seconds of the repo's oldest commit, 0 if unknown
   lastRelease: number; // epoch seconds of the most recent tagged commit, 0 if never released
+  hasUncommittedChanges: boolean; // `git status --porcelain` is non-empty
   error?: string;
 }
 

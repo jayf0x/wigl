@@ -30,6 +30,7 @@ function scanRepo(dir: string, name: string): RepoScanRow {
       lastCommit: 0,
       firstCommit: 0,
       lastRelease: 0,
+      hasUncommittedChanges: false,
       error: "not a git repository",
     };
   }
@@ -38,19 +39,19 @@ function scanRepo(dir: string, name: string): RepoScanRow {
   const firstCommit = Number(git(dir, ["log", "--reverse", "--format=%ct"]).split("\n")[0]) || 0;
   const tag = git(dir, ["describe", "--tags", "--abbrev=0"]);
   const lastRelease = tag ? Number(git(dir, ["log", "-1", "--format=%ct", tag])) || 0 : 0;
+  const hasUncommittedChanges = Boolean(git(dir, ["status", "--porcelain"]));
 
   let hasNpmRelease = false;
   let npmUnreleased = false;
   if (existsSync(`${dir}/package.json`) && readFileSync(`${dir}/package.json`, "utf8").includes('"npm:deploy"')) {
     hasNpmRelease = true;
     if (tag) {
-      const dirty = git(dir, ["status", "--porcelain"]);
       const ahead = Number(git(dir, ["rev-list", `${tag}..HEAD`, "--count"])) || 0;
-      npmUnreleased = Boolean(dirty) || ahead !== 0;
+      npmUnreleased = hasUncommittedChanges || ahead !== 0;
     }
   }
 
-  return { name, isGitRepo: true, hasNpmRelease, npmUnreleased, lastCommit, firstCommit, lastRelease };
+  return { name, isGitRepo: true, hasNpmRelease, npmUnreleased, hasUncommittedChanges, lastCommit, firstCommit, lastRelease };
 }
 
 export function scanSourceDir(sourceDir: string): RepoScanRow[] {

@@ -31,6 +31,14 @@ async function run(cmd: string) {
   if (out.code !== 0) throw new Error(out.stderr || `command failed: ${cmd}`);
 }
 
+// Stages everything and commits in one go — this widget doesn't do partial/
+// selective staging, just the common "commit all my changes" case. Throws on
+// failure (e.g. a failing pre-commit hook) so the caller can leave the
+// message box open instead of silently discarding what the user typed.
+export async function commitAllChanges({ path }: ProjectStatus, message: string) {
+  await run(`git -C ${shQuote(path)} add -A && git -C ${shQuote(path)} commit -m ${shQuote(message)}`);
+}
+
 // macOS: `open -R` reveals+selects the path in Finder. Linux has no
 // cross-desktop equivalent of "reveal and select" — `xdg-open` on the repo
 // dir itself (opens it in whatever file manager is registered) is the

@@ -76,7 +76,7 @@ function ReposWidget() {
             </TableHeader>
             <TableBody>
               {sorted.map((p) => (
-                <Row key={p.name} p={p} />
+                <Row key={p.name} p={p} onChanged={refresh} />
               ))}
             </TableBody>
           </Table>
