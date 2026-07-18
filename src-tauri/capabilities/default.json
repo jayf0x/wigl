@@ -17,6 +17,10 @@
         { "name": "sh", "cmd": "sh", "args": true },
         { "name": "sqlite3", "cmd": "sqlite3", "args": true }
       ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [{ "name": "sh", "cmd": "sh", "args": true }]
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Circle, TriangleAlert, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronUp, Circle, CloudDownload, TriangleAlert, type LucideIcon } from "lucide-react";
 import { TableHead } from "@/components/ui/table";
 import { useRelativeTime } from "@/wigl";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ import type { SortDir, SortKey } from "./sort";
 // npm release status, web3-flavored: nothing to show = invisible, pending
 // changes = glowing cyan pulse, released & settled = dimmed violet.
 export function StatusIcon({ p }: { p: ProjectStatus }) {
+  if (p.downloaded === false) return <CloudDownload className="size-2.5 opacity-30" />;
   if (!p.isGitRepo) return <TriangleAlert className="size-3 text-amber-400" />;
   if (!p.hasNpmRelease) return <Circle className="size-2.5 opacity-0" />;
   if (p.npmUnreleased) {
@@ -22,6 +23,7 @@ export function StatusIcon({ p }: { p: ProjectStatus }) {
 }
 
 export function statusTitle(p: ProjectStatus) {
+  if (p.downloaded === false) return "not downloaded — click to clone";
   if (!p.isGitRepo) return p.error ?? "not a git repository";
   if (!p.hasNpmRelease) return "no npm:deploy script";
   if (p.npmUnreleased) return "unreleased changes since last npm release";

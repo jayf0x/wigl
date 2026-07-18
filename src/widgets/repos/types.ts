@@ -18,6 +18,14 @@ export interface RepoScanRow {
 
 export interface ProjectStatus extends RepoScanRow {
   path: string;
+  // Absent (undefined) for every row that came off disk via repos-scan.ts —
+  // only rows synthesized from a RemoteRepo (see remoteRow.ts) set this to
+  // false, so `p.downloaded !== false` is the "is this a real local repo"
+  // check used throughout Row/cells/sort.
+  downloaded?: boolean;
+  // Set only on synthesized not-yet-downloaded rows — carries the clone URL
+  // the download action needs, since RepoScanRow has no such field.
+  remote?: RemoteRepo;
 }
 
 // One repo owned by the authenticated `gh` user — fetched from GitHub, not

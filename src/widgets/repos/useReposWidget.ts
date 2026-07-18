@@ -24,9 +24,19 @@ async function ownExePath(): Promise<string> {
   return exePath;
 }
 
-async function scanScriptPath(): Promise<string> {
-  const repoRoot = await join(await ownExePath(), "..", "..", "..", "..");
-  return join(repoRoot, "scripts", "repos-scan.ts");
+// The running binary's location can't change mid-session, so this is worth
+// resolving once and reusing — without caching, `refresh()` (every poll
+// tick, every manual click, forever) would spawn a `ps`/`readlink` process
+// just to re-derive the same path.
+let scanScriptPathCache: Promise<string> | null = null;
+function scanScriptPath(): Promise<string> {
+  if (!scanScriptPathCache) {
+    scanScriptPathCache = (async () => {
+      const repoRoot = await join(await ownExePath(), "..", "..", "..", "..");
+      return join(repoRoot, "scripts", "repos-scan.ts");
+    })();
+  }
+  return scanScriptPathCache;
 }
 
 // GUI-launched shells often lack ~/.bun/bin on PATH (it's added by shell rc
@@ -36,17 +46,27 @@ async function scanScriptPath(): Promise<string> {
 // the last attempt's stderr on total failure rather than swallowing it —
 // this used to return `[]` silently, which is indistinguishable in the UI
 // from "the folder is just empty".
+// Whichever candidate works is remembered for the rest of the session, so a
+// machine where the absolute path doesn't resolve (or does) doesn't pay for
+// a failed spawn attempt on every single poll tick.
+let workingBunBin: string | null = null;
+
 async function runBunScan(scriptPath: string, sourceDir: string): Promise<RepoScanRow[]> {
   const bunAbsolute = await join(await homeDir(), ".bun/bin/bun");
+  const candidates = workingBunBin ? [workingBunBin] : [bunAbsolute, "bun"];
   let lastErr = "";
-  for (const bun of [bunAbsolute, "bun"]) {
+  for (const bun of candidates) {
     const out = await Command.create("sh", [
       "-c",
       `${shQuote(bun)} ${shQuote(scriptPath)} ${shQuote(sourceDir)}`,
     ]).execute();
-    if (out.code === 0) return JSON.parse(out.stdout || "[]");
+    if (out.code === 0) {
+      workingBunBin = bun;
+      return JSON.parse(out.stdout || "[]");
+    }
     lastErr = out.stderr || `exit code ${out.code}`;
   }
+  workingBunBin = null;
   throw new Error(`scan failed: ${lastErr}`);
 }
 

@@ -3,8 +3,11 @@ import type { ProjectStatus } from "./types";
 export type SortKey = "status" | "name" | "time" | "release";
 export type SortDir = "asc" | "desc";
 
-// lower = more urgent, surfaced first when sorting by status
+// lower = more urgent, surfaced first when sorting by status. Not-yet-
+// downloaded rows have no git status to rank — -1 per the "missing value"
+// convention used across every sortable column here.
 function statusRank(p: ProjectStatus) {
+  if (p.downloaded === false) return -1;
   if (!p.isGitRepo) return 1;
   if (p.npmUnreleased) return 0;
   return 2;
