@@ -19,3 +19,14 @@ export interface RepoScanRow {
 export interface ProjectStatus extends RepoScanRow {
   path: string;
 }
+
+// One repo owned by the authenticated `gh` user — fetched from GitHub, not
+// scanned off disk. Field names are already camelCase via the `gh api --jq`
+// projection in commands.ts, so this doesn't mirror GitHub's REST shape.
+export interface RemoteRepo {
+  name: string;
+  fullName: string;
+  cloneUrl: string;
+  private: boolean;
+  updatedAt: string; // ISO 8601
+}

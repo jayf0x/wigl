@@ -1,25 +1,67 @@
 import { Command } from "@tauri-apps/plugin-shell";
 import { isMacos } from "@/wigl";
-import { ProjectStatus } from "./types";
+import { ProjectStatus, RemoteRepo } from "./types";
 
 // single string.
 export const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
-// gh has its own API rate limit — callers should cache this (see useQuery in
-// useReposWidget.ts), it's not meant to be called on every poll.
-// Homebrew's /opt/homebrew/bin isn't on a GUI-launched shell's minimal PATH
-// (same problem as the editor CLI below) — try the Homebrew path first on
-// macOS, fall back to whatever `gh` resolves to on PATH everywhere else.
-export async function loadArchivedRepoNames(): Promise<string[]> {
+// gh has its own API rate limit — callers should cache calls through this
+// (see useQuery in useReposWidget.ts/useRemoteRepos.ts), not call it on every
+// poll. Homebrew's /opt/homebrew/bin isn't on a GUI-launched shell's minimal
+// PATH (same problem as the editor CLI below) — try the Homebrew path first
+// on macOS, fall back to whatever `gh` resolves to on PATH everywhere else.
+async function runGh(argsString: string) {
   const candidates = (await isMacos()) ? ["/opt/homebrew/bin/gh", "gh"] : ["gh"];
+  let last: { code: number | null; stdout: string; stderr: string } = { code: 1, stdout: "", stderr: "" };
   for (const gh of candidates) {
-    const out = await Command.create("sh", [
-      "-c",
-      `${shQuote(gh)} repo list --archived --limit 1000 --json name --jq '.[].name'`,
-    ]).execute();
-    if (out.code === 0) return out.stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+    const out = await Command.create("sh", ["-c", `${shQuote(gh)} ${argsString}`]).execute();
+    if (out.code === 0) return out;
+    last = out;
   }
-  return [];
+  return last;
+}
+
+export async function loadArchivedRepoNames(): Promise<string[]> {
+  const out = await runGh("repo list --archived --limit 1000 --json name --jq '.[].name'");
+  if (out.code !== 0) return [];
+  return out.stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+}
+
+// `gh api --paginate` walks every page of the REST list (100 at a time via
+// `per_page`, following the response's Link header) and concatenates each
+// page's --jq output, so this returns every repo the user owns in one call
+// — the pagination the task asks for is `gh`'s, not hand-rolled here.
+// `--method GET` is required: `gh api` defaults to POST once a `-F`/`-f` flag
+// is present.
+export async function loadRemoteRepos(): Promise<RemoteRepo[]> {
+  const jq = ".[] | {name, fullName: .full_name, cloneUrl: .clone_url, private: .private, updatedAt: .updated_at}";
+  const out = await runGh(
+    `api --method GET --paginate -F per_page=100 '/user/repos?affiliation=owner&sort=updated' --jq ${shQuote(jq)}`,
+  );
+  if (out.code !== 0) throw new Error(out.stderr || "gh api failed");
+  return out.stdout
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as RemoteRepo);
+}
+
+// Clones into `destDir`, reporting each progress line (git writes them with
+// `\r` between updates, not `\n` — the shell plugin's Rust side splits on
+// either, so `onProgress` still fires once per update, see docs/debugging.md
+// if this ever stops behaving that way). `2>&1` merges stderr (where
+// `--progress` writes) into the one stream we listen on.
+export async function cloneRepo(repo: RemoteRepo, destDir: string, onProgress: (line: string) => void): Promise<void> {
+  const cmd = Command.create("sh", ["-c", `git clone --progress ${shQuote(repo.cloneUrl)} ${shQuote(destDir)} 2>&1`]);
+  return new Promise((resolve, reject) => {
+    cmd.stdout.on("data", (line) => onProgress(line.replace(/[\r\n]+$/, "")));
+    cmd.on("error", (err) => reject(new Error(err)));
+    cmd.on("close", (data) => {
+      if (data.code === 0) resolve();
+      else reject(new Error(`git clone exited with code ${data.code}`));
+    });
+    cmd.spawn().catch(reject);
+  });
 }
 
 // Every binary here runs through `sh -c`, per capabilities: only `sh` and

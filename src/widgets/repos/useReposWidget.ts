@@ -24,6 +24,7 @@ async function runBunScan(scriptPath: string, sourceDir: string): Promise<RepoSc
 
 export function useReposWidget() {
   const [projects, setProjects] = useState<ProjectStatus[]>([]);
+  const [sourceDir, setSourceDir] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   // gh-backed, rarely changes and has its own rate limit — cached a day,
   // persisted so a restart doesn't re-hit the API immediately.
@@ -33,10 +34,11 @@ export function useReposWidget() {
     setLoading(true);
     try {
       const home = await homeDir();
-      const sourceDir = await join(home, SOURCE_DIR_RELATIVE_TO_HOME);
+      const dir = await join(home, SOURCE_DIR_RELATIVE_TO_HOME);
       const scriptPath = await join(home, REPO_ROOT_RELATIVE_TO_HOME, "scripts/repos-scan.ts");
-      const rows = await runBunScan(scriptPath, sourceDir);
-      setProjects(rows.map((row) => ({ ...row, path: `${sourceDir}/${row.name}` })));
+      const rows = await runBunScan(scriptPath, dir);
+      setSourceDir(dir);
+      setProjects(rows.map((row) => ({ ...row, path: `${dir}/${row.name}` })));
     } finally {
       setLoading(false);
     }
@@ -50,6 +52,10 @@ export function useReposWidget() {
 
   const archivedNames = new Set(archived);
   const visible = projects.filter((p) => !archivedNames.has(p.name));
+  // Raw scan result, unfiltered by archived status — "is this repo already
+  // downloaded" cares about what's on disk, not whether it's shown in the
+  // main (archived-filtered) list.
+  const localNames = new Set(projects.map((p) => p.name));
 
-  return { projects: visible, loading, refresh };
+  return { projects: visible, localNames, sourceDir, loading, refresh };
 }
