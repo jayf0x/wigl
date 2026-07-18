@@ -134,10 +134,17 @@ pub fn run() {
                 std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER"),
             );
             if windowed {
-                // Single normal window: decorated, resizable, opaque, in the
-                // taskbar — a regular app, not a desktop overlay. Same
-                // widgets/grid, rendered as "screen-0" so the frontend's
-                // existing monitorIndex parsing needs no special case.
+                // Single normal window: decorated, resizable, in the taskbar
+                // — a regular app, not a desktop overlay. Transparent like
+                // the overlay flow's per-monitor windows (Wayland compositors
+                // support alpha-blended client surfaces fine — it's only
+                // absolute positioning/always-below/click-through-by-region
+                // that they refuse — so this isn't the same tradeoff as the
+                // other overlay-only hints). Decorations (title bar, window
+                // border) stay opaque; only the content area shows through
+                // where no widget covers it. Same widgets/grid, rendered as
+                // "screen-0" so the frontend's existing monitorIndex parsing
+                // needs no special case.
                 let win = tauri::WebviewWindowBuilder::new(
                     app,
                     "screen-0",
@@ -147,6 +154,7 @@ pub fn run() {
                 .inner_size(1100.0, 750.0)
                 .visible(true)
                 .resizable(true)
+                .transparent(true)
                 .on_page_load(|_window, payload| {
                     eprintln!("[wigl] page load: {:?} {}", payload.event(), payload.url());
                 })
