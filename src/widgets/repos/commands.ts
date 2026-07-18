@@ -1,9 +1,27 @@
+import { homeDir } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import { isMacos } from "@/wigl";
 import { ProjectStatus, RemoteRepo } from "./types";
 
 // single string.
 export const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+// `~` isn't expanded by anything downstream: `shQuote` single-quotes it
+// before it reaches a shell (which disables tilde expansion anyway), and
+// Node's `existsSync` (in scripts/repos-scan.ts) never expands it either —
+// so a path typed as "~/code" silently scanned nothing. Resolve `~` here,
+// once, before the path is stored or used.
+export async function resolveSourceDir(input: string): Promise<string> {
+  const trimmed = input.trim();
+  if (trimmed === "~") return homeDir();
+  if (trimmed.startsWith("~/")) return `${(await homeDir()).replace(/\/$/, "")}${trimmed.slice(1)}`;
+  return trimmed;
+}
+
+export async function sourceDirExists(path: string): Promise<boolean> {
+  const out = await Command.create("sh", ["-c", `[ -d ${shQuote(path)} ] && echo yes`]).execute();
+  return out.stdout.trim() === "yes";
+}
 
 // gh has its own API rate limit — callers should cache calls through this
 // (see useQuery in useReposWidget.ts/useRemoteRepos.ts), not call it on every

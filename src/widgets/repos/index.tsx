@@ -6,13 +6,14 @@ import { DEFAULT_SORT_DIR, sortProjects, type SortDir, type SortKey } from "./so
 import { SortableHead } from "./cells";
 import { Row } from "./Row";
 import { UndownloadedRow } from "./UndownloadedRow";
+import { Settings } from "./Settings";
 import { Widget, WidgetHeader, useStorage } from "@/wigl";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 function ReposWidget() {
-  const { projects, localNames, sourceDir, loading, refresh } = useReposWidget();
+  const { projects, localNames, sourceDir, setSourceDirOverride, scanError, loading, refresh } = useReposWidget();
   const { repos: remoteRepos, loading: remoteLoading, refresh: refreshRemote } = useRemoteRepos();
   const [sortBy, setSortBy] = useStorage<SortKey>("repos_sort_by", "time");
   const [sortDir, setSortDir] = useStorage<SortDir>("repos_sort_dir", "desc");
@@ -55,6 +56,7 @@ function ReposWidget() {
         >
           <RefreshCw className={`size-3 ${(showUndownloaded ? remoteLoading : loading) ? "animate-spin" : ""}`} />
         </Button>
+        {sourceDir && <Settings sourceDir={sourceDir} onSave={setSourceDirOverride} />}
       </WidgetHeader>
       <div className="flex-1 overflow-y-auto">
         {showUndownloaded ? (
@@ -90,7 +92,9 @@ function ReposWidget() {
         ) : (
           <>
             {!loading && projects.length === 0 && (
-              <div className="px-3 py-2 text-[11px] opacity-40">no projects found</div>
+              <div className={cn("px-3 py-2 text-[11px]", scanError ? "text-red-400/80" : "opacity-40")}>
+                {scanError ?? "no projects found"}
+              </div>
             )}
             {sorted.length > 0 && (
               <Table className="text-[11.5px]">

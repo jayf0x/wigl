@@ -1,9 +1,7 @@
-// Adjust if your local projects live somewhere else.
+// Default source dir, used until the user sets one via the widget's settings
+// panel (Settings.tsx, persisted as "repos_source_dir" — see
+// useReposWidget.ts). Per-machine paths belong in that override, not here.
 export const SOURCE_DIR_RELATIVE_TO_HOME = "Documents/GitHub";
-
-// wigl itself — this is a personal, always-run-from-checkout app, so the
-// scan script is located relative to home rather than bundled as a resource.
-export const REPO_ROOT_RELATIVE_TO_HOME = "Documents/GitHub/wigl";
 
 export const POLL_INTERVAL_MS = 5 * 60 * 1000;
 
