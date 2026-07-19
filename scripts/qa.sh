@@ -45,7 +45,14 @@ if [ "$OS" = "Darwin" ]; then
   BIN="src-tauri/target/debug/bundle/macos/wigl.app/Contents/MacOS/wigl"
 else
   echo "[qa] building Linux binary..."
-  (cd src-tauri && cargo build)
+  # `bun run tauri build` (the Darwin branch above, and verify.sh) always
+  # enables Tauri's `custom-protocol` cargo feature under the hood, which is
+  # what decides "embed frontendDist" vs. "proxy to devUrl" — a bare `cargo
+  # build` doesn't opt into it on its own, so the resulting binary defaults
+  # to devUrl (http://localhost:1420) and fails with "Connection refused"
+  # since nothing here runs a vite dev server. Pass it explicitly to get the
+  # same embedded-bundle behavior without the packaging step.
+  (cd src-tauri && cargo build --features tauri/custom-protocol)
   BIN="src-tauri/target/debug/wigl"
 fi
 
