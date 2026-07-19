@@ -8,5 +8,6 @@ export { useQuery, hours, type UseQueryOptions } from "./query";
 export { relativeTime, useRelativeTime } from "./relativeTime";
 export { TILING } from "./tiling.config";
 export { isMacos } from "./platform";
+export { DESKTOP_ACTIONS, type DesktopAction, type DesktopActionCtx } from "./actions";
 export type { WidgetModule } from "./types";
 export type { WidgetGridProps } from "./widget";

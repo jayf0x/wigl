@@ -55,6 +55,12 @@ export function reflow(items: GridItem[], moved: GridItem) {
   }
 }
 
+/** Settle all items so no two overlap — the reusable cleanup pass run on
+ * boot and after a layout reset. Mutates `items`. */
+export function settle(items: GridItem[]) {
+  for (const it of [...items].sort((a, b) => a.row - b.row || a.col - b.col)) reflow(items, it);
+}
+
 /** First open slot scanning left-to-right, top-to-bottom. */
 export function autoPlace(placed: GridItem[], w: number, h: number, cols: number) {
   for (let row = 0; ; row++) {
