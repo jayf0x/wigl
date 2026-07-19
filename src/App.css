@@ -202,6 +202,38 @@ body,
 .wigl-ghost i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; border-bottom-left-radius: 10px; }
 .wigl-ghost i:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 10px; }
 
+/* Right-click menu of global actions (Desktop.tsx + src/wigl/actions.ts).
+   The overlay eats the click that dismisses it. */
+.wigl-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+.wigl-menu {
+  position: absolute;
+  min-width: 140px;
+  padding: 4px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.85);
+  backdrop-filter: blur(24px);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: rgb(255 255 255 / 0.85);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+}
+.wigl-menu button {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 6px;
+  text-align: left;
+}
+.wigl-menu button:hover {
+  background: color-mix(in srgb, var(--wigl-accent) 18%, transparent);
+  color: #fff;
+}
+
 /* The anchor-field canvas (crosses on cell corners, drawn in Desktop.tsx). */
 .wigl-field {
   position: absolute;

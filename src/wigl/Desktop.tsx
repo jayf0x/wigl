@@ -16,8 +16,9 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { availableMonitors } from "@tauri-apps/api/window";
 import type { WidgetModule } from "./types";
 import { TILING } from "./tiling.config";
-import { type GridItem, autoPlace, colToPx, colsForWidth, pxToCol, pxToRow, reflow, rowToPx, spanToPx, springEasing } from "./grid";
+import { type GridItem, autoPlace, colToPx, colsForWidth, pxToCol, pxToRow, reflow, rowToPx, settle, spanToPx, springEasing } from "./grid";
 import { useStorage } from "./storage";
+import { DESKTOP_ACTIONS, type DesktopActionCtx } from "./actions";
 import { WidgetSlotProvider, type WidgetGridReport } from "./widget";
 
 // Clicks on these inside a drag handle stay clicks; everything else drags.
@@ -103,6 +104,8 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
   const [saved, setSaved, { loading }] = useStorage<SavedPositions>("widget_layout", {});
   const [layout, setLayout] = useState<GridItem[] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  // Right-click menu of global actions (see actions.ts), page-px position.
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   const els = useRef<Record<string, HTMLDivElement | null>>({});
   const ghost = useRef<HTMLDivElement>(null);
@@ -162,13 +165,19 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
     const cols = colsForWidth(window.innerWidth);
     const items: GridItem[] = [];
     for (const id of Object.keys(widgets)) {
-      if ((saved[id]?.m ?? 0) !== monitorIndex) continue;
+      const s = saved[id];
+      // Never trust storage blindly: a stale schema or unplugged monitor
+      // must degrade to "no saved position", not NaN positions or an
+      // orphaned widget (see TODO.md's layout-sanity incident).
+      const validPos = s != null && Number.isFinite(s.col) && Number.isFinite(s.row);
+      const mon = s != null && Number.isFinite(s.m) && s.m! < (monitors.current?.length ?? Infinity) ? s.m! : 0;
+      if (mon !== monitorIndex) continue;
       const { w, h } = TILING.defaultSize;
-      const pos = saved[id] ?? autoPlace(items, w, h, cols);
+      const pos = validPos ? s : autoPlace(items, w, h, cols);
       items.push({ id, w, h, col: Math.max(0, Math.min(pos.col, cols - w)), row: Math.max(0, pos.row) });
     }
     // Saved/default positions can conflict after code changes — settle them.
-    for (const it of items) reflow(items, it);
+    settle(items);
     setLayout(items);
   }, [loading, layout, saved, widgets, monitorIndex]);
 
@@ -320,6 +329,32 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
     setSaved(merged);
   };
 
+  // --- global actions (right-click menu on any widget) -------------------------
+  // The menu can extend past the widget's hit-rects, so the click-through
+  // poller is paused while it's open (same trick as dragging).
+  const openMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY });
+    invoke("set_drag_active", { active: true }).catch(console.error);
+  };
+  const closeMenu = () => {
+    setMenu(null);
+    invoke("set_drag_active", { active: false }).catch(console.error);
+  };
+
+  // Reset = wipe all saved positions and rebootstrap every monitor: widgets
+  // fall back to monitor 0 + autoPlace + settle, exactly like a first boot.
+  const doReset = () => {
+    setSaved({});
+    setLayout(null);
+  };
+  const actionCtx: DesktopActionCtx = {
+    resetLayout: () => {
+      emit("wigl-reset", { from: monitorIndex }).catch(console.error);
+      doReset();
+    },
+  };
+
   // --- incoming cross-monitor previews / drops ---------------------------------
   useEffect(() => {
     const clearForeign = () => {
@@ -355,6 +390,12 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
       setSaved(p.saved);
     });
 
+    const unReset = listen<{ from: number }>("wigl-reset", ({ payload: p }) => {
+      if (p.from === monitorIndex) return; // our own broadcast, already applied
+      setSaved({});
+      setLayout(null);
+    });
+
     const unDrop = listen<DropMsg>("wigl-drop", ({ payload: p }) => {
       if (p.to !== monitorIndex) {
         clearForeign();
@@ -377,6 +418,7 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
     return () => {
       unPreview.then((u) => u());
       unLayout.then((u) => u());
+      unReset.then((u) => u());
       unDrop.then((u) => u());
     };
   }, [monitorIndex]);
@@ -541,6 +583,7 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
             className={`wigl-widget${dragId === it.id ? " lifted" : ""}`}
             style={{ width: spanToPx(it.w), height: spanToPx(it.h) }}
             onPointerDown={(e) => onPointerDown(e, it.id)}
+            onContextMenu={openMenu}
           >
             <WidgetErrorBoundary id={it.id}>
               <WidgetSlotProvider value={getSlot(it.id)}>
@@ -550,6 +593,29 @@ export function Desktop({ widgets, monitorIndex }: { widgets: Record<string, Wid
           </div>
         );
       })}
+      {menu && (
+        <div
+          className="wigl-menu-overlay"
+          onPointerDown={(e) => {
+            if (e.target === e.currentTarget) closeMenu();
+          }}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <div className="wigl-menu" style={{ left: menu.x, top: menu.y }}>
+            {DESKTOP_ACTIONS.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => {
+                  closeMenu();
+                  a.run(actionCtx);
+                }}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,10 +2,33 @@
 
 Working notes for whoever (agent or human) picks this up next. Read
 `backlog.md` for the full task list (Features / Bugs / Improvements) — this
-file is the two things to start with, plus context that doesn't belong in a
+file is the few things to start with, plus context that doesn't belong in a
 backlog entry.
 
-## Highest priority: on-load layout sanity pass
+## DONE: global "reset layout" action + on-load sanity pass
+
+Both shipped together (right-click any widget → "Reset layout"). What
+landed, for whoever touches this next:
+
+- `src/wigl/actions.ts` — the global-action registry (`DESKTOP_ACTIONS`);
+  adding the next action is one `{ id, label, run(ctx) }` entry.
+- `settle()` in `src/wigl/grid.ts` — the reusable no-overlap pass, run on
+  every bootstrap.
+- `Desktop.tsx` bootstrap now validates stored positions (non-finite
+  `col`/`row`/`m` → treated as unsaved, `m` beyond the monitor list → back
+  to monitor 0) instead of trusting `widget_layout` blindly, so the NaN
+  incident below can't repeat.
+- Reset broadcasts `wigl-reset`; every monitor wipes `widget_layout` and
+  rebootstraps, which lands everything on monitor 0 via `autoPlace` +
+  `settle`.
+- The click-through poller pauses while the menu is open (same
+  `set_drag_active` trick as dragging) — menu can extend past hit-rects.
+
+Not done: re-running `settle` after a cross-monitor drop adoption (the
+drop handler's per-item `reflow` already resolves its collisions, so this
+only matters if a bad state gets in some other way).
+
+## Original incident context: on-load layout sanity pass
 
 Triggered by a real incident: renaming `SavedPositions`'s fields (`x`/`y` →
 `col`/`row`, done this session) left the on-disk `widget_layout` row with the
