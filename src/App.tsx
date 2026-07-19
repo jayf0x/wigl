@@ -29,8 +29,9 @@ for (const [path, mod] of Object.entries(modules)) {
 // "main" (tauri.conf.json) is just the bootstrap webview and renders nothing.
 // On Wayland (GNOME's default compositor), Rust instead spawns a single
 // normal "screen-0" window — desktop-overlay hints (positioning, always-
-// below, click-through) aren't grantable there — so the frontend asks Rust
-// which mode it's in rather than guessing from window flags.
+// below, always-on-top, click-through) aren't grantable/worth relying on
+// there — so the frontend asks Rust which mode it's in rather than guessing
+// from window flags.
 function App() {
   const label = getCurrentWindow().label;
   // Starts false (overlay's default) rather than null-until-resolved: if the

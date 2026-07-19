@@ -16,12 +16,17 @@ body,
 }
 
 /* Windowed mode (Wayland's single normal-window flow, see lib.rs's
-   windowed_mode / App.tsx) shares the transparent html/body/#root background
-   above — the window itself is transparent(true) in lib.rs, so empty grid
-   space shows the desktop through, same as the overlay flow. The window is
-   resizable, so grow it to see widgets placed outside the initial
-   1100x750 — .wigl-desktop is `position: fixed`, so it doesn't participate
-   in document scrolling. */
+   windowed_mode / App.tsx): fully transparent read as confusing rather than
+   desktop-like once click-through was reverted (see lib.rs). A CSS custom
+   property, not a bare value, so a future settings UI can swap in a user's
+   own background (image, solid color, whatever) by just overriding this
+   var. Default: a faint dark radial gradient fading to transparent. */
+:root {
+  --wigl-windowed-bg: radial-gradient(ellipse at center, rgb(11 11 12 / 0.55) 0%, rgb(11 11 12 / 0) 100%);
+}
+html.wigl-windowed #root {
+  background: var(--wigl-windowed-bg);
+}
 
 @theme inline {
   --font-heading: var(--font-sans);

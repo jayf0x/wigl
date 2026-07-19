@@ -109,8 +109,8 @@ export function Desktop({
   monitorIndex: number;
   // True on Wayland's single-window flow (see lib.rs's windowed_mode): no
   // sibling monitor windows exist to hand a drag off to, and no click-through
-  // poller is reading hit-rects, so both are skipped rather than firing IPC
-  // calls nothing listens to.
+  // poller is reading hit-rects (tried it, reverted — see lib.rs), so both
+  // are skipped rather than firing IPC calls nothing listens to.
   windowed?: boolean;
 }) {
   const [saved, setSaved, { loading }] = useStorage<SavedPositions>("widget_layout", {});

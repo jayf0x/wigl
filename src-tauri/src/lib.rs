@@ -42,12 +42,18 @@ fn set_drag_active(state: tauri::State<DragActive>, active: bool) {
 
 // Desktop-overlay mode (fullscreen, transparent, always-on-bottom,
 // click-through) leans on window-manager hints that macOS/AppKit and X11
-// honor but GNOME's Wayland compositor mostly refuses to grant a client
-// (no absolute positioning, no always-below, no click-through-by-region).
-// Rather than fight that, Wayland sessions get a normal single app window
-// instead — same widgets, same grid/drag engine, just not glued to the
-// desktop. `WIGL_MODE=windowed`/`overlay` overrides the auto-detection for
-// anyone who wants the windowed flow on macOS or X11 too.
+// honor but GNOME's Wayland compositor refuses to grant a client: no
+// absolute positioning, no always-below (and always-on-top is the same
+// compositor-policy refusal, not worth asking for either). Click-through was
+// tried and reverted: it technically worked (Wayland does support
+// per-surface cursor regions), but without always-below/always-on-top to
+// keep this window out of the way, a click passing through empty grid space
+// just focused whatever was stacked underneath — not the desktop — which
+// made the app feel broken rather than widget-like. Rather than fight any of
+// this, Wayland sessions get a normal single app window instead — same
+// widgets, same grid/drag engine, just not glued to the desktop.
+// `WIGL_MODE=windowed`/`overlay` overrides the auto-detection for anyone who
+// wants the windowed flow on macOS or X11 too.
 #[tauri::command]
 fn is_windowed_mode() -> bool {
     windowed_mode()
@@ -135,16 +141,20 @@ pub fn run() {
             );
             if windowed {
                 // Single normal window: decorated, resizable, in the taskbar
-                // — a regular app, not a desktop overlay. Transparent like
-                // the overlay flow's per-monitor windows (Wayland compositors
-                // support alpha-blended client surfaces fine — it's only
-                // absolute positioning/always-below/click-through-by-region
-                // that they refuse — so this isn't the same tradeoff as the
-                // other overlay-only hints). Decorations (title bar, window
-                // border) stay opaque; only the content area shows through
-                // where no widget covers it. Same widgets/grid, rendered as
-                // "screen-0" so the frontend's existing monitorIndex parsing
-                // needs no special case.
+                // — a regular app, not a desktop overlay. Kept lightly
+                // transparent (see App.css's windowed-mode radial gradient)
+                // purely as a soft visual touch, not to fake the overlay
+                // flow's see-through-to-desktop look — that read as confusing
+                // once click-through (see above) turned out not to be worth
+                // keeping, since a transparent-looking area you can't click
+                // through is worse than an honestly opaque one. Not setting
+                // always_on_top either: same compositor-policy refusal as
+                // always-below under GNOME/Wayland (not a client request
+                // Mutter honors), and with no click-through to pair it with
+                // there's nothing here that would benefit from it even where
+                // it does work. Same widgets/grid, rendered as "screen-0" so
+                // the frontend's existing monitorIndex parsing needs no
+                // special case.
                 let win = tauri::WebviewWindowBuilder::new(
                     app,
                     "screen-0",
