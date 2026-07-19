@@ -1,41 +1,24 @@
-import { homeDir, join } from "@tauri-apps/api/path";
+import { homeDir, join, resolveResource } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import { useCallback, useEffect, useState } from "react";
-import { hours, isMacos, useQuery, useStorage } from "@/wigl";
+import { hours, useQuery, useStorage } from "@/wigl";
 import { loadArchivedRepoNames, shQuote } from "./commands";
 import { POLL_INTERVAL_MS, SOURCE_DIR_RELATIVE_TO_HOME } from "./config";
 import type { ProjectStatus, RepoScanRow } from "./types";
 
-// Locates scripts/repos-scan.ts without assuming where this checkout lives
-// on disk. `bun run verify`/`tauri dev` always run the binary in place at
-// <repo>/src-tauri/target/debug/wigl, so the repo root is a fixed 4
-// directories up from the running binary itself. Tauri's `executableDir()`
-// looks like the right API for "where is the binary" but isn't — on Linux
-// it resolves to the XDG user-executable dir (`~/.local/bin`), unrelated to
-// where this binary actually runs from; confirmed by the earlier version of
-// this function producing "/home/scripts/repos-scan.ts". `/proc/$PPID/exe`
-// resolves the *actual* running binary instead — `$PPID` inside `sh -c` is
-// wigl's own pid, since tauri-plugin-shell spawns it as a direct child.
-async function ownExePath(): Promise<string> {
-  const cmd = (await isMacos()) ? "ps -o comm= -p $PPID" : "readlink -f /proc/$PPID/exe";
-  const out = await Command.create("sh", ["-c", cmd]).execute();
-  const exePath = out.stdout.trim();
-  if (out.code !== 0 || !exePath) throw new Error(out.stderr || "could not resolve wigl's own executable path");
-  return exePath;
-}
-
-// The running binary's location can't change mid-session, so this is worth
-// resolving once and reusing — without caching, `refresh()` (every poll
-// tick, every manual click, forever) would spawn a `ps`/`readlink` process
-// just to re-derive the same path.
+// Locates scripts/repos-scan.ts via Tauri's own resource resolution
+// (declared in tauri.conf.json's bundle.resources) instead of hand-deriving
+// it from the running binary's path. That's the actual failure mode this
+// replaced: a previous version counted a fixed number of ".." hops up from
+// the binary, which broke the moment the binary ran from somewhere the hop
+// count didn't expect (a packaged macOS .app nests it several directories
+// deeper than a plain `cargo build` binary does). `resolveResource` is
+// Tauri's designed-for-this primitive — it already knows the difference
+// between dev and every bundled target, so this can't drift out of sync
+// with packaging again.
 let scanScriptPathCache: Promise<string> | null = null;
 function scanScriptPath(): Promise<string> {
-  if (!scanScriptPathCache) {
-    scanScriptPathCache = (async () => {
-      const repoRoot = await join(await ownExePath(), "..", "..", "..", "..");
-      return join(repoRoot, "scripts", "repos-scan.ts");
-    })();
-  }
+  if (!scanScriptPathCache) scanScriptPathCache = resolveResource("scripts/repos-scan.ts");
   return scanScriptPathCache;
 }
 
