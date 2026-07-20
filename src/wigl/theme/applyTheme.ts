@@ -1,4 +1,4 @@
-import { type ThemeColorKey, type ThemeColors, THEME_COLOR_KEYS } from "./types";
+import { THEME_COLOR_KEYS, type ThemeColorKey, type ThemeColors } from "./types";
 
 const COLOR_VAR: Record<ThemeColorKey, string> = {
   background: "--background",

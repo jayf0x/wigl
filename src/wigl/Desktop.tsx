@@ -30,8 +30,8 @@ import {
   springEasing,
 } from "./grid/math";
 import { useGlobalActions, useRegisterGlobalAction, useStorage, useTheme } from "./hooks";
-import { getWiglAccent } from "./theme/applyTheme";
 import { ThemeSettingsPopover } from "./ThemeSettingsPopover";
+import { getWiglAccent } from "./theme/applyTheme";
 import { type WidgetGridReport, WidgetSlotProvider } from "./widget";
 
 // Clicks on these inside a drag handle stay clicks; everything else drags.

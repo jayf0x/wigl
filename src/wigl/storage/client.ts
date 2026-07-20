@@ -7,7 +7,7 @@
 // work with none installed; ones that do log a read/write error until it is
 // (see docs/debugging.md).
 import { appDataDir, join } from "@tauri-apps/api/path";
-import { Command } from "@tauri-apps/plugin-shell";
+import { runCmd } from "../utils";
 
 let dbPathPromise: Promise<string> | null = null;
 const dbPath = (): Promise<string> => {
@@ -15,17 +15,17 @@ const dbPath = (): Promise<string> => {
     const path = await join(await appDataDir(), "wigl.db");
     // sqlite3 won't create the parent directory; the table is created here
     // too so every later call is a plain read/write.
-    await Command.create("sh", [
+    await runCmd("sh", [
       "-c",
       `mkdir -p "$(dirname "${path}")" && sqlite3 "${path}" "CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)"`,
-    ]).execute();
+    ]);
     return path;
   })();
   return dbPathPromise;
 };
 
 export const sql = async (query: string): Promise<string> => {
-  const out = await Command.create("sqlite3", [await dbPath(), query]).execute();
+  const out = await runCmd("sqlite3", [await dbPath(), query]);
   if (out.code !== 0)
     throw new Error(`sqlite3 failed: ${out.stderr} (is sqlite3 installed? e.g. "apt install sqlite3")`);
   return out.stdout;

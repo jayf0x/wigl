@@ -1,11 +1,6 @@
-import {
-  Popover,
-  PopoverContent,
-  PopoverHeader,
-  PopoverTitle,
-} from "@/components/ui/popover";
-import { cn } from "./utils";
+import { Popover, PopoverContent, PopoverHeader, PopoverTitle } from "@/components/ui/popover";
 import { PRESETS } from "./theme/presets";
+import { cn } from "./utils";
 
 interface ThemeSettingsPopoverProps {
   // Screen point the "Settings" menu entry was clicked at — wigl has no
@@ -31,12 +26,7 @@ export const ThemeSettingsPopover = ({ anchor, themeId, onSelect, onClose }: The
         if (!open) onClose();
       }}
     >
-      <PopoverContent
-        anchor={{ getBoundingClientRect: () => rect }}
-        side="right"
-        align="start"
-        data-no-drag
-      >
+      <PopoverContent anchor={{ getBoundingClientRect: () => rect }} side="right" align="start" data-no-drag>
         <PopoverHeader>
           <PopoverTitle>Theme</PopoverTitle>
         </PopoverHeader>
