@@ -3,7 +3,7 @@ import { TOKEN_GROUPS } from "./tokens";
 
 /** Every semantic token the active theme (or the parametric custom knobs)
  * can drive, as raw swatches — reads each value straight off the CSS var so
- * it repaints the instant useTheme's layout effect sets a new one on :root.
+ * it repaints the instant ThemeSettingsPopover's layout effect sets a new one on :root.
  * No JS re-render is needed for the color itself; only the `kind` badge is
  * static per-token metadata. */
 export const SemanticSwatches = () => (

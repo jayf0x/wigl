@@ -78,7 +78,7 @@ html.wigl-windowed #root {
    custom property Tailwind reads above (--background, --card, --primary,
    ...) is deliberately undefined until JS sets it: `src/wigl/theme/` is the
    single source of truth for their values (see `presets.ts`), applied via
-   `useTheme`'s layout effect before first paint — no `:root` color block
+   `ThemeSettingsPopover`'s layout effect before first paint — no `:root` color block
    to keep in sync with it, no `.dark` variant block to shadow it (a CSS
    var set directly on an element always wins over one inherited from an
    ancestor, which is exactly what a `.dark {...}` color block here used to

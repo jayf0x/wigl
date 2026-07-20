@@ -29,7 +29,7 @@ import {
   spanToPx,
   springEasing,
 } from "./grid/math";
-import { useGlobalActions, useRegisterGlobalAction, useStorage, useTheme } from "./hooks";
+import { useGlobalActions, useRegisterGlobalAction, useStorage } from "./hooks";
 import { ThemeSettingsPopover } from "./ThemeSettingsPopover";
 import { getWiglAccent } from "./theme/applyTheme";
 import { type WidgetGridReport, WidgetSlotProvider } from "./widget";
@@ -134,7 +134,6 @@ export const Desktop = ({
   // (closeMenu) by the time the popover would read it.
   const menuPos = useRef({ x: 0, y: 0 });
   const [settingsAt, setSettingsAt] = useState<{ x: number; y: number } | null>(null);
-  const [themeId, setThemeId, themeKnobs, setThemeKnobs] = useTheme();
 
   const els = useRef<Record<string, HTMLDivElement | null>>({});
   const ghost = useRef<HTMLDivElement>(null);
@@ -395,7 +394,9 @@ export const Desktop = ({
   );
   useRegisterGlobalAction(resetLayoutAction);
   // The central settings entry (Theming part 2) — opens the theme picker
-  // anchored at this same right-click point, via useTheme's persisted id.
+  // anchored at this same right-click point. ThemeSettingsPopover owns its
+  // own persisted state and applies it to :root itself, unconditionally
+  // (see that file) — Desktop only needs to hand it a screen point.
   const settingsAction = useMemo(
     () => ({
       id: "settings",
@@ -686,14 +687,7 @@ export const Desktop = ({
           </div>
         </div>
       )}
-      <ThemeSettingsPopover
-        anchor={settingsAt}
-        themeId={themeId}
-        onSelect={setThemeId}
-        knobs={themeKnobs}
-        onKnobsChange={setThemeKnobs}
-        onClose={() => setSettingsAt(null)}
-      />
+      <ThemeSettingsPopover anchor={settingsAt} onClose={() => setSettingsAt(null)} />
     </div>
   );
 };

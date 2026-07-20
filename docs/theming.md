@@ -11,7 +11,8 @@ ThemeColors (types.ts)
 PRESETS (presets.ts)            generateParametricColors (parametric.ts)
     \                                  /
      \                                /
-        useTheme (hooks/useTheme.ts)
+        ThemeSettingsPopover.tsx
+        (owns persisted theme id/knobs, applies on every render)
                     ↓
         applyTheme (theme/applyTheme.ts)
                     ↓
@@ -31,25 +32,34 @@ Two ways to produce a `ThemeColors`:
 
 - **Presets** (`presets.ts`): a literal object per theme, hand-picked colors.
   Adding one is copy an existing entry, change the values, done.
-- **Parametric** (`parametric.ts`): 3 opaque colors (`a`/`b`/`c`, no semantic
-  names) plus 3 numeric elevation sliders (`cardElevation`,
-  `surfaceElevation`, `accentElevation`) run through OKLCH formulas to derive
-  all ~18 tokens. Knob `a`'s own lightness decides light-vs-dark for the
-  whole set — every formula reads `background`'s lightness and flips
-  direction accordingly (see `isDarkBg` in that file), so dragging `a` toward
-  white doesn't strand one pale rectangle in an otherwise-dark theme.
-  The elevation sliders exist because hand-written presets don't agree on
-  sign: Nord/Gruvbox step `card` *lighter* than `background`, Dracula/
-  Catppuccin step it *darker* — a hardcoded fraction can't fit both, so the
-  step itself (and its sign) is a knob. `primaryForeground` is derived as
-  `background`/`foreground` directly (not a flat gray), matching what every
-  hand-written preset already does.
+- **Parametric** (`parametric.ts`): a photo-filter mental model, not a CSS-var
+  editor. 3 hue dials (`hueBackground`/`huePrimary`/`hueAccent`, degrees
+  0-360) pick which color family each *role* reads as — dragging `huePrimary`
+  only ever changes primary/ring/wiglAccent's hue, nothing else, because
+  every role's lightness and chroma come from a fixed formula, never a value
+  the knob sets directly. 3 global filters (`brightness`/`contrast`/
+  `saturation`) then nudge those formulas for every token at once:
+  `brightness` is where `background`'s own lightness sits (0 darkest, 1
+  lightest — every formula that reads "the gap between foreground and
+  background" flips direction with it, see `isDarkBg`), `contrast` scales
+  how far foreground and every elevated surface separate from background,
+  `saturation` scales chroma for `primary`/`accent` only — background/card/
+  secondary stay near-gray regardless, matching how a hand-written theme
+  keeps its neutrals neutral. `primaryForeground` picks whichever of
+  `background`/`foreground` contrasts harder against `primary`'s own
+  lightness (not "background if primary's light" — that assumes background
+  is the dark one, which inverts on a light theme).
 
-`useTheme` picks between them based on the persisted theme id
-(`CUSTOM_THEME_ID` → parametric + persisted knobs, anything else → a
-`PRESETS` lookup) and calls `applyTheme`. `ThemeSettingsPopover` is the only
-UI: preset list + the 3 knob color pickers + the 3 elevation sliders, shown
-when `Custom` is selected.
+`ThemeSettingsPopover` (`ThemeSettingsPopover.tsx`) is both the only UI and
+the sole owner of theme state: it calls `useStorage` directly for the
+persisted theme id/knobs and applies them via a `useLayoutEffect` that runs
+on every render — Desktop.tsx mounts it unconditionally and only ever varies
+the `anchor` prop (screen point, or `null` when closed), so the applied
+theme stays correct on load and on every change whether or not the popover
+UI itself happens to be open. Picking a preset or `Custom` reads from
+`PRESETS`/`generateParametricColors` respectively; hue dials render over
+their own rainbow gradient track instead of the default fill-style
+indicator (a fill reads as "amount", which a hue isn't).
 
 ## The one hard rule for widgets
 
@@ -57,7 +67,7 @@ when `Custom` is selected.
 `text-red-400` — always the semantic Tailwind token that maps to a
 `ThemeColors` key (`bg-accent`, `border-border`, `text-destructive`,
 `ring-ring`, `bg-primary text-primary-foreground`, ...). This is the entire
-point of the theme system: swap a preset or drag a knob, and *every* widget
+point of the theme system: swap a preset or drag a dial, and *every* widget
 updates together, including hover states and scrim overlays — not just
 whatever literally says `background`. Some existing widgets already follow
 this; skim one before adding a new color class. A raw white/black opacity
@@ -78,11 +88,17 @@ the constraint, not styling preference.
   changes.
 - **New derived token in the parametric engine**: extend
   `generateParametricColors` — the `ThemeColors` return type forces you to
-  keep supplying every existing key too.
-- **New root knob** (a 4th input, or a different color model): change
-  `ParametricKnobs` and the formulas in `parametric.ts`; `useTheme`,
-  `applyTheme`, and every widget are untouched, since they only ever see the
-  resulting `ThemeColors`.
+  keep supplying every existing key too. Prefer deriving it from the
+  existing hue dials/filters over adding a new knob — the whole point is
+  staying at "a couple of controls that reshape everything", not growing
+  back toward one knob per var.
+- **New root knob** (a 4th dial, a different filter, a different color
+  model): change `ParametricKnobs` and the formulas in `parametric.ts`;
+  `ThemeSettingsPopover`'s persistence/apply plumbing, `applyTheme`, and
+  every widget are untouched, since they only ever see the resulting
+  `ThemeColors`. `ThemeSettingsPopover` does need a new slider row to expose
+  it, same as the existing `HUE_FIELDS`/`FILTER_FIELDS` entries.
 - **Verifying a change**: switch themes live in the settings popover and
-  drag the custom knobs across the full lightness range — a hardcoded color
-  anywhere only becomes visible this way, not from reading the diff.
+  drag brightness/contrast across their full range, including past the
+  midpoint into a light theme — a hardcoded color anywhere only becomes
+  visible this way, not from reading the diff.

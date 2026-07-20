@@ -11,7 +11,7 @@ const SHADE_ORDER = ["50", "100", "200", "300", "400", "500", "600", "700", "800
 
 /** The raw Tailwind v4 palette (every `--color-*` in tailwindcss/theme.css)
  * for reference only — these are inert oklch literals, not theme tokens;
- * nothing here reacts to useTheme. Useful when picking which shade a
+ * nothing here reacts to the active theme. Useful when picking which shade a
  * parametric formula should land on, not for QA-ing the live theme itself
  * (see SemanticSwatches for that). */
 export const PalettePanel = () => (

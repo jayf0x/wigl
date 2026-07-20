@@ -1,6 +1,6 @@
-import { Separator as SeparatorPrimitive } from "@base-ui/react/separator";
 import type React from "react";
 import { cn } from "@/wigl/utils/index";
+import { Separator as SeparatorPrimitive } from "@base-ui/react/separator";
 
 export function Separator({
   className,
