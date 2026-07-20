@@ -79,14 +79,14 @@ export const Row = ({ p, onChanged, onCloned }: { p: ProjectStatus; onChanged: (
       title={cloneError ?? statusTitle(p)}
       onClick={!downloaded ? startClone : undefined}
       className={cn(
-        "group border-white/5",
-        !downloaded && !cloned && !cloning && "cursor-pointer hover:bg-white/5",
+        "group border-border/50",
+        !downloaded && !cloned && !cloning && "cursor-pointer hover:bg-accent/40",
         cloning && "cursor-default animate-pulse",
       )}
       style={
         !downloaded && clonePercent > 0
           ? {
-              backgroundImage: `linear-gradient(to right, rgba(34,211,238,0.18) ${clonePercent}%, transparent ${clonePercent}%)`,
+              backgroundImage: `linear-gradient(to right, color-mix(in srgb, var(--primary) 18%, transparent) ${clonePercent}%, transparent ${clonePercent}%)`,
             }
           : undefined
       }
@@ -98,7 +98,7 @@ export const Row = ({ p, onChanged, onCloned }: { p: ProjectStatus; onChanged: (
         className={cn(
           "overflow-hidden px-1.5 py-1 text-ellipsis whitespace-nowrap",
           !downloaded && "opacity-60",
-          cloneError && "text-red-400/80",
+          cloneError && "text-destructive/80",
         )}
       >
         {p.name}
@@ -121,7 +121,7 @@ export const Row = ({ p, onChanged, onCloned }: { p: ProjectStatus; onChanged: (
               disabled={!p.hasUncommittedChanges}
               onClick={() => setCommitting(true)}
             >
-              <GitCommitHorizontal className={cn("size-3", p.hasUncommittedChanges && "text-cyan-400")} />
+              <GitCommitHorizontal className={cn("size-3", p.hasUncommittedChanges && "text-primary")} />
             </Button>
             <Button variant="ghost" size="icon-xs" title="Open in VS Code" onClick={() => openInEditor(p)}>
               <Code2 className="size-3" />
@@ -174,7 +174,7 @@ export const Row = ({ p, onChanged, onCloned }: { p: ProjectStatus; onChanged: (
               setMessage("");
             }}
             placeholder="commit message, Enter to commit"
-            className="absolute inset-y-0.5 right-0 z-10 w-44 rounded border border-white/10 bg-neutral-900 px-1.5 text-[10.5px] outline-none"
+            className="absolute inset-y-0.5 right-0 z-10 w-44 rounded border border-input bg-popover px-1.5 text-[10.5px] text-popover-foreground outline-none"
           />
         )}
       </TableCell>
@@ -206,7 +206,7 @@ const releaseScore = (p: ProjectStatus): number => {
 const releaseScoreClass = (p: ProjectStatus) => {
   if (!p.lastRelease) return null;
   const s = releaseScore(p);
-  if (s >= 2) return "text-red-400/80";
+  if (s >= 2) return "text-destructive/80";
   if (s < 0.5) return "text-emerald-400/80";
   if (s < 1) return "text-yellow-400/80";
   return "text-orange-400/80";

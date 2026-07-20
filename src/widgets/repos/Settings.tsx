@@ -51,8 +51,8 @@ export const Settings = ({ sourceDir, onSave }: { sourceDir: string; onSave: (di
         <Settings2 className="size-3" />
       </Button>
       {open && (
-        <div className="absolute top-full right-0 z-50 mt-1 w-64 rounded border border-white/10 bg-neutral-900 p-2 shadow-lg">
-          <label className="mb-1 block text-[10px] tracking-wide opacity-50">source directory</label>
+        <div className="absolute top-full right-0 z-50 mt-1 w-64 rounded border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+          <label className="mb-1 block text-[10px] tracking-wide text-muted-foreground">source directory</label>
           <div className="flex items-center gap-1">
             <input
               autoFocus
@@ -67,19 +67,19 @@ export const Settings = ({ sourceDir, onSave }: { sourceDir: string; onSave: (di
               }}
               placeholder="~/Documents/GitHub"
               className={cn(
-                "min-w-0 flex-1 rounded border bg-neutral-950 px-1.5 py-1 text-[11px] outline-none",
-                error ? "border-red-400/50" : "border-white/10",
+                "min-w-0 flex-1 rounded border bg-input/30 px-1.5 py-1 text-[11px] outline-none",
+                error ? "border-destructive/50" : "border-input",
               )}
             />
             <Button variant="ghost" size="icon-xs" title="cancel" onClick={close}>
               <X className="size-3" />
             </Button>
             <Button variant="ghost" size="icon-xs" title="save" disabled={checking} onClick={submit}>
-              {checking ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3 text-cyan-400" />}
+              {checking ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3 text-primary" />}
             </Button>
           </div>
           {error && (
-            <div className="mt-1 flex items-center gap-1 text-[10px] text-red-400/80">
+            <div className="mt-1 flex items-center gap-1 text-[10px] text-destructive/80">
               <TriangleAlert className="size-3 shrink-0" />
               {error}
             </div>

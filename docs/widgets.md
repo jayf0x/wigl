@@ -150,7 +150,9 @@ This drops a real `.tsx` file into `src/components/ui/`, which you own and can e
 
 Init already ran once (`components.json`, `@/*` path alias in `tsconfig.json` + `vite.config.ts`, `src/lib/utils.ts`, and the design-token theme in `src/App.css`) — you don't need to redo that, just run `add` for whatever component you need. Only pull in a component when a widget actually needs that primitive; don't pre-install the full set "just in case."
 
-`Widget` forces the `dark` class on its root wrapper since coss ui components read their colors from CSS variables scoped to `:root`/`.dark` in `App.css` — without it, coss components render with the light-theme palette regardless of the app's own dark styling. Widgets built via `Widget` get this for free; don't re-add `dark` on anything inside it.
+`Widget` forces the `dark` class on its root wrapper — `App.css` has one unconditional color palette now (see its top comment), so this no longer picks a different palette; it only activates coss ui's own `dark:`-prefixed variant tweaks (opacity/shadow-direction fine-tuning, not colors). Widgets built via `Widget` get this for free; don't re-add `dark` on anything inside it.
+
+Reach for semantic color tokens (`bg-card`, `border-border`, `text-muted-foreground`, `bg-popover`, `bg-input`, ...), never a literal Tailwind color (`bg-neutral-900`, `border-white/10`, `text-cyan-400` for anything but a genuinely fixed status/icon color) or an inline hex/rgba — a theme (`src/wigl/theme/`) rewrites the CSS vars those tokens read from, and a literal color silently opts a widget out of every future theme. Status-style icon colors that carry fixed meaning regardless of theme (a green "success" check, a red-vs-amber severity gradient) are the one legitimate exception — see `src/widgets/repos/Row.tsx`'s `releaseScoreClass` for the pattern.
 
 ## Window chrome
 

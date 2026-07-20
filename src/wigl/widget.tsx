@@ -44,7 +44,7 @@ export const Widget = ({
   return (
     <div
       className={cn(
-        "dark flex h-full w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-black/80 font-mono text-white/85 backdrop-blur-xl",
+        "dark flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-card/90 font-mono text-card-foreground backdrop-blur-xl",
         className,
       )}
     >
@@ -59,7 +59,7 @@ export const Widget = ({
 export const WidgetHeader = ({ className, children }: { className?: string; children?: ReactNode }) => (
   <div
     data-drag-handle
-    className={cn("flex cursor-grab items-center border-b border-white/10 px-2 py-1 active:cursor-grabbing", className)}
+    className={cn("flex cursor-grab items-center border-b border-border px-2 py-1 active:cursor-grabbing", className)}
   >
     {children}
   </div>

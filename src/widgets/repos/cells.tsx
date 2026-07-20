@@ -14,8 +14,8 @@ export const StatusIcon = ({ p }: { p: ProjectStatus }) => {
   if (p.npmUnreleased) {
     return (
       <span className="relative flex size-2.5">
-        <span className="absolute inline-flex size-full animate-ping rounded-full bg-cyan-400 opacity-75" />
-        <Circle className="relative size-2.5 fill-cyan-400 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.85)]" />
+        <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-75" />
+        <Circle className="relative size-2.5 fill-primary text-primary drop-shadow-[0_0_5px_var(--primary)]" />
       </span>
     );
   }
