@@ -29,13 +29,13 @@ import {
   spanToPx,
   springEasing,
 } from "./grid/math";
-import { useGlobalActions, useRegisterGlobalAction, useStorage } from "./hooks";
+import { useGlobalActions, useRegisterGlobalAction, useStorage, useTheme } from "./hooks";
+import { getWiglAccent } from "./theme/applyTheme";
+import { ThemeSettingsPopover } from "./ThemeSettingsPopover";
 import { type WidgetGridReport, WidgetSlotProvider } from "./widget";
 
 // Clicks on these inside a drag handle stay clicks; everything else drags.
 const INTERACTIVE = "button, a, input, select, textarea, [data-no-drag]";
-
-const ACCENT = { r: 110, g: 231, b: 199 }; // keep in sync with --wigl-accent
 
 type SavedPositions = Record<string, { col: number; row: number; m?: number }>;
 
@@ -129,6 +129,12 @@ export const Desktop = ({
   const [dragId, setDragId] = useState<string | null>(null);
   // Right-click menu of global actions (see actions.ts), page-px position.
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  // Where the "Settings" entry was clicked — the settings popover's virtual
+  // anchor. A ref, not state off `menu`, since `menu` itself is cleared
+  // (closeMenu) by the time the popover would read it.
+  const menuPos = useRef({ x: 0, y: 0 });
+  const [settingsAt, setSettingsAt] = useState<{ x: number; y: number } | null>(null);
+  const [themeId, setThemeId] = useTheme();
 
   const els = useRef<Record<string, HTMLDivElement | null>>({});
   const ghost = useRef<HTMLDivElement>(null);
@@ -287,6 +293,7 @@ export const Desktop = ({
     const half = TILING.gap / 2;
     const R = TILING.field.influence;
     const g = ghostCell.current;
+    const accent = getWiglAccent(); // mirrors the active theme's --wigl-accent
     ctx.save();
     ctx.scale(dpr, dpr);
     ctx.lineCap = "round";
@@ -302,10 +309,10 @@ export const Desktop = ({
         const a = f.alpha * (0.1 + t * 0.8);
         if (a < 0.01) continue;
         ctx.globalAlpha = Math.min(a, 1);
-        ctx.strokeStyle = t > 0.05 ? `rgb(${ACCENT.r} ${ACCENT.g} ${ACCENT.b})` : "rgb(255 255 255)";
+        ctx.strokeStyle = t > 0.05 ? accent : "rgb(255 255 255)";
         ctx.lineWidth = 1 + t * 0.5;
         ctx.shadowBlur = t * 6;
-        ctx.shadowColor = `rgb(${ACCENT.r} ${ACCENT.g} ${ACCENT.b} / 0.8)`;
+        ctx.shadowColor = accent;
         ctx.beginPath();
         ctx.moveTo(x - arm, y);
         ctx.lineTo(x + arm, y);
@@ -356,6 +363,7 @@ export const Desktop = ({
   // poller is paused while it's open (same trick as dragging).
   const openMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    menuPos.current = { x: e.clientX, y: e.clientY };
     setMenu({ x: e.clientX, y: e.clientY });
     invoke("set_drag_active", { active: true }).catch(console.error);
   };
@@ -386,6 +394,17 @@ export const Desktop = ({
     [monitorIndex, doReset],
   );
   useRegisterGlobalAction(resetLayoutAction);
+  // The central settings entry (Theming part 2) — opens the theme picker
+  // anchored at this same right-click point, via useTheme's persisted id.
+  const settingsAction = useMemo(
+    () => ({
+      id: "settings",
+      label: "Settings",
+      run: () => setSettingsAt({ ...menuPos.current }),
+    }),
+    [],
+  );
+  useRegisterGlobalAction(settingsAction);
   const globalActions = useGlobalActions();
 
   // --- incoming cross-monitor previews / drops ---------------------------------
@@ -667,6 +686,12 @@ export const Desktop = ({
           </div>
         </div>
       )}
+      <ThemeSettingsPopover
+        anchor={settingsAt}
+        themeId={themeId}
+        onSelect={setThemeId}
+        onClose={() => setSettingsAt(null)}
+      />
     </div>
   );
 };

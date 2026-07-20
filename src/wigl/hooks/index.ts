@@ -4,3 +4,4 @@ export { type GlobalAction, useGlobalActions, useRegisterGlobalAction } from "./
 export { hours, type UseQueryOptions, useQuery } from "./useQuery";
 export { useRelativeTime } from "./useRelativeTime";
 export { useStorage } from "./useStorage";
+export { useTheme } from "./useTheme";
