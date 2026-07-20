@@ -42,7 +42,10 @@ async function runGh(argsString: string) {
 export async function loadArchivedRepoNames(): Promise<string[]> {
   const out = await runGh("repo list --archived --limit 1000 --json name --jq '.[].name'");
   if (out.code !== 0) return [];
-  return out.stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+  return out.stdout
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 // `gh api --paginate` walks every page of the REST list (100 at a time via

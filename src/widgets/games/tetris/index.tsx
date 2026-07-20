@@ -12,13 +12,76 @@ type Cell = { x: number; y: number };
 
 // base shapes in a size×size box; rotations precomputed once at module load
 const BASE: { size: number; cells: Cell[]; color: string }[] = [
-  { size: 4, cells: [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 3, y: 1 }], color: "rgba(125,211,252,0.85)" }, // I
-  { size: 2, cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }], color: "rgba(253,224,71,0.85)" }, // O
-  { size: 3, cells: [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }], color: "rgba(216,180,254,0.85)" }, // T
-  { size: 3, cells: [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }], color: "rgba(134,239,172,0.85)" }, // S
-  { size: 3, cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }], color: "rgba(252,165,165,0.85)" }, // Z
-  { size: 3, cells: [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }], color: "rgba(147,197,253,0.85)" }, // J
-  { size: 3, cells: [{ x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }], color: "rgba(253,186,116,0.85)" }, // L
+  {
+    size: 4,
+    cells: [
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+      { x: 3, y: 1 },
+    ],
+    color: "rgba(125,211,252,0.85)",
+  }, // I
+  {
+    size: 2,
+    cells: [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+    ],
+    color: "rgba(253,224,71,0.85)",
+  }, // O
+  {
+    size: 3,
+    cells: [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ],
+    color: "rgba(216,180,254,0.85)",
+  }, // T
+  {
+    size: 3,
+    cells: [
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+    ],
+    color: "rgba(134,239,172,0.85)",
+  }, // S
+  {
+    size: 3,
+    cells: [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ],
+    color: "rgba(252,165,165,0.85)",
+  }, // Z
+  {
+    size: 3,
+    cells: [
+      { x: 0, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ],
+    color: "rgba(147,197,253,0.85)",
+  }, // J
+  {
+    size: 3,
+    cells: [
+      { x: 2, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ],
+    color: "rgba(253,186,116,0.85)",
+  }, // L
 ];
 
 const ROTATIONS: Cell[][][] = BASE.map(({ size, cells }) => {

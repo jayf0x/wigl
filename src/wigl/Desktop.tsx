@@ -15,7 +15,19 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { availableMonitors } from "@tauri-apps/api/window";
 import { TILING } from "./tiling.config";
-import { type GridItem, autoPlace, colToPx, colsForWidth, pxToCol, pxToRow, reflow, rowToPx, settle, spanToPx, springEasing } from "./grid";
+import {
+  type GridItem,
+  autoPlace,
+  colToPx,
+  colsForWidth,
+  pxToCol,
+  pxToRow,
+  reflow,
+  rowToPx,
+  settle,
+  spanToPx,
+  springEasing,
+} from "./grid";
 import { useStorage } from "./storage";
 import { DESKTOP_ACTIONS, type DesktopActionCtx } from "./actions";
 import { WidgetSlotProvider, type WidgetGridReport } from "./widget";
@@ -290,10 +302,7 @@ export function Desktop({
         const a = f.alpha * (0.1 + t * 0.8);
         if (a < 0.01) continue;
         ctx.globalAlpha = Math.min(a, 1);
-        ctx.strokeStyle =
-          t > 0.05
-            ? `rgb(${ACCENT.r} ${ACCENT.g} ${ACCENT.b})`
-            : "rgb(255 255 255)";
+        ctx.strokeStyle = t > 0.05 ? `rgb(${ACCENT.r} ${ACCENT.g} ${ACCENT.b})` : "rgb(255 255 255)";
         ctx.lineWidth = 1 + t * 0.5;
         ctx.shadowBlur = t * 6;
         ctx.shadowColor = `rgb(${ACCENT.r} ${ACCENT.g} ${ACCENT.b} / 0.8)`;
@@ -519,7 +528,16 @@ export function Desktop({
       showGhost(item.col, item.row, item.w, item.h);
       ghostCell.current = { ...item };
       // Tells whichever monitor was previewing to clear.
-      emit("wigl-preview", { id: d.id, to: monitorIndex, w: item.w, h: item.h, col: item.col, row: item.row, cx: 0, cy: 0 } satisfies PreviewMsg).catch(console.error);
+      emit("wigl-preview", {
+        id: d.id,
+        to: monitorIndex,
+        w: item.w,
+        h: item.h,
+        col: item.col,
+        row: item.row,
+        cx: 0,
+        cy: 0,
+      } satisfies PreviewMsg).catch(console.error);
     }
     cursor.current = { x: e.clientX, y: e.clientY };
     const fx = e.clientX - d.offX;
@@ -570,7 +588,14 @@ export function Desktop({
       setLayout(layout.filter((i) => i.id !== d.id));
       return;
     }
-    emit("wigl-drop", { id: d.id, to: monitorIndex, w: item.w, h: item.h, col: item.col, row: item.row } satisfies DropMsg).catch(console.error);
+    emit("wigl-drop", {
+      id: d.id,
+      to: monitorIndex,
+      w: item.w,
+      h: item.h,
+      col: item.col,
+      row: item.row,
+    } satisfies DropMsg).catch(console.error);
     persist(layout);
   };
 

@@ -65,7 +65,8 @@ export function useQuery<T>({ key, fn, stale, useSql = false }: UseQueryOptions<
         const result = await fnRef.current();
         const entry = { data: result, updatedAt: Date.now() };
         memoryCache.set(key, entry);
-        if (useSql) writeSqlCache(key, entry).catch((e) => console.error(`[wigl] useQuery("${key}") sql write failed`, e));
+        if (useSql)
+          writeSqlCache(key, entry).catch((e) => console.error(`[wigl] useQuery("${key}") sql write failed`, e));
         return result;
       })();
       inflight.set(key, promise);

@@ -104,5 +104,14 @@ export function useReposWidget() {
   // main (archived-filtered) list.
   const localNames = new Set(projects.map((p) => p.name));
 
-  return { projects: visible, localNames, sourceDir, sourceDirOverride, setSourceDirOverride, scanError, loading, refresh };
+  return {
+    projects: visible,
+    localNames,
+    sourceDir,
+    sourceDirOverride,
+    setSourceDirOverride,
+    scanError,
+    loading,
+    refresh,
+  };
 }

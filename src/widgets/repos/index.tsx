@@ -83,7 +83,9 @@ function ReposWidget() {
         <Button
           variant="ghost"
           size="icon-xs"
-          title={gitOnly ? "showing git folders only — click to show all" : "showing all folders — click to show git only"}
+          title={
+            gitOnly ? "showing git folders only — click to show all" : "showing all folders — click to show git only"
+          }
           onClick={() => setGitOnly(!gitOnly)}
           className={cn("ml-auto opacity-50 hover:opacity-90", gitOnly && "text-cyan-400 opacity-90")}
         >

@@ -24,8 +24,7 @@ export const pxToCol = (px: number) => Math.round((px - TILING.padding.left) / p
 export const pxToRow = (px: number) => Math.round((px - TILING.padding.top) / pitch());
 
 export const colsForWidth = (width: number) =>
-  TILING.cols ??
-  Math.max(1, Math.floor((width - TILING.padding.left - TILING.padding.right + TILING.gap) / pitch()));
+  TILING.cols ?? Math.max(1, Math.floor((width - TILING.padding.left - TILING.padding.right + TILING.gap) / pitch()));
 
 export const collides = (a: GridItem, b: GridItem) =>
   a !== b && a.col < b.col + b.w && b.col < a.col + a.w && a.row < b.row + b.h && b.row < a.row + a.h;

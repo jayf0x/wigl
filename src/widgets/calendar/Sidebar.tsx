@@ -78,7 +78,13 @@ export function Sidebar({
         />
       </Field>
 
-      <Button variant="outline" size="xs" className="mt-auto h-6 w-full text-[10px]" disabled={!canSave} onClick={onSave}>
+      <Button
+        variant="outline"
+        size="xs"
+        className="mt-auto h-6 w-full text-[10px]"
+        disabled={!canSave}
+        onClick={onSave}
+      >
         save
       </Button>
     </div>

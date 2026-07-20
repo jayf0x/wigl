@@ -1,9 +1,10 @@
 {
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.defaultFormatter": "biomejs.biome",
   "editor.codeActionsOnSave": {
-    // "source.fixAll": "always",
-    // "source.fixAll.eslint": "always",
-    "source.organizeImports": "always"
+    "source.organizeImports.biome": "always"
+  },
+  "[typescript][typescriptreact][javascript][javascriptreact][json]": {
+    "editor.defaultFormatter": "biomejs.biome"
   }
 }

@@ -74,8 +74,7 @@ export function GameChrome({
     if (phase === "running") boxRef.current?.focus();
   }, [phase]);
 
-  const btn =
-    "rounded border border-white/15 bg-white/5 px-3 py-1 text-[11px] tracking-widest hover:bg-white/10";
+  const btn = "rounded border border-white/15 bg-white/5 px-3 py-1 text-[11px] tracking-widest hover:bg-white/10";
 
   return (
     <div

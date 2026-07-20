@@ -244,14 +244,28 @@ function MonthYearLabel({ anchor, setAnchor }: { anchor: Date; setAnchor: (d: Da
   return (
     <span className="flex items-center gap-1 text-[11px] opacity-70">
       {editing === "month" ? (
-        <input autoFocus value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={onKeyDown} className={cn(inputCls, "w-16")} />
+        <input
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={onKeyDown}
+          className={cn(inputCls, "w-16")}
+        />
       ) : (
         <span onDoubleClick={() => edit("month")} title="Double-click to edit" className="cursor-text">
           {format(anchor, "MMMM")}
         </span>
       )}
       {editing === "year" ? (
-        <input autoFocus value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={onKeyDown} className={cn(inputCls, "w-10")} />
+        <input
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={onKeyDown}
+          className={cn(inputCls, "w-10")}
+        />
       ) : (
         <span onDoubleClick={() => edit("year")} title="Double-click to edit" className="cursor-text">
           {format(anchor, "yyyy")}

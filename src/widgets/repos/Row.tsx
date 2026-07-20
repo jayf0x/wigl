@@ -85,7 +85,9 @@ export const Row = ({ p, onChanged, onCloned }: { p: ProjectStatus; onChanged: (
       )}
       style={
         !downloaded && clonePercent > 0
-          ? { backgroundImage: `linear-gradient(to right, rgba(34,211,238,0.18) ${clonePercent}%, transparent ${clonePercent}%)` }
+          ? {
+              backgroundImage: `linear-gradient(to right, rgba(34,211,238,0.18) ${clonePercent}%, transparent ${clonePercent}%)`,
+            }
           : undefined
       }
     >
@@ -132,7 +134,12 @@ export const Row = ({ p, onChanged, onCloned }: { p: ProjectStatus; onChanged: (
             >
               <FolderOpen className="size-3" />
             </Button>
-            <Button variant="ghost" size="icon-xs" title="Open in GitHub Desktop" onClick={() => openInGithubDesktop(p)}>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              title="Open in GitHub Desktop"
+              onClick={() => openInGithubDesktop(p)}
+            >
               <GitBranch className="size-3" />
             </Button>
           </div>

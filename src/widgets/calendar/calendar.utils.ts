@@ -42,8 +42,18 @@ export const draftFrom = (ev: CalendarEvent): Draft => ({
 });
 
 const MONTHS = [
-  "january", "february", "march", "april", "may", "june",
-  "july", "august", "september", "october", "november", "december",
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
 ];
 
 /** "january", "jan", "1".."12" → month index 0–11, or null if unparseable. */

@@ -19,9 +19,7 @@ export default function GamesWidget() {
   return (
     <Widget w={4} h={4} col={0} row={6}>
       <WidgetHeader>
-        <span className="px-1 text-[10px] tracking-widest opacity-40">
-          GAMES{active ? ` · ${active.name}` : ""}
-        </span>
+        <span className="px-1 text-[10px] tracking-widest opacity-40">GAMES{active ? ` · ${active.name}` : ""}</span>
         {active && (
           <button
             data-no-drag

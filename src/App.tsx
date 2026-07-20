@@ -25,7 +25,9 @@ for (const [path, load] of Object.entries(loaders)) {
       return { default: () => null };
     }
     if ("gridConfig" in mod) {
-      console.warn(`[wigl] widget "${id}" exports a top-level "gridConfig" — ignored. Pass size/position as props instead: <Widget w={3} h={4}>`);
+      console.warn(
+        `[wigl] widget "${id}" exports a top-level "gridConfig" — ignored. Pass size/position as props instead: <Widget w={3} h={4}>`,
+      );
     }
     return { default: mod.default };
   });

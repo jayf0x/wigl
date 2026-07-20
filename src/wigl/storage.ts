@@ -40,7 +40,8 @@ async function dbPath(): Promise<string> {
 // to sqlite3" rule, no reason for a second DB helper.
 export async function sql(query: string): Promise<string> {
   const out = await Command.create("sqlite3", [await dbPath(), query]).execute();
-  if (out.code !== 0) throw new Error(`sqlite3 failed: ${out.stderr} (is sqlite3 installed? e.g. "apt install sqlite3")`);
+  if (out.code !== 0)
+    throw new Error(`sqlite3 failed: ${out.stderr} (is sqlite3 installed? e.g. "apt install sqlite3")`);
   return out.stdout;
 }
 
@@ -99,9 +100,9 @@ export function useStorage<T>(key: string, initialValue: T) {
       lastJson.current = json;
       setValue(next);
       writeChain.current = writeChain.current.then(() =>
-        sql(`INSERT INTO kv (key, value) VALUES (${q(key)}, ${q(json)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).catch(
-          (e) => console.error(`[wigl] useStorage("${key}") write failed`, e),
-        ),
+        sql(
+          `INSERT INTO kv (key, value) VALUES (${q(key)}, ${q(json)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+        ).catch((e) => console.error(`[wigl] useStorage("${key}") write failed`, e)),
       );
     },
     [key],
