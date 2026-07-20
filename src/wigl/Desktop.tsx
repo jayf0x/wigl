@@ -134,7 +134,7 @@ export const Desktop = ({
   // (closeMenu) by the time the popover would read it.
   const menuPos = useRef({ x: 0, y: 0 });
   const [settingsAt, setSettingsAt] = useState<{ x: number; y: number } | null>(null);
-  const [themeId, setThemeId] = useTheme();
+  const [themeId, setThemeId, themeKnobs, setThemeKnobs] = useTheme();
 
   const els = useRef<Record<string, HTMLDivElement | null>>({});
   const ghost = useRef<HTMLDivElement>(null);
@@ -690,6 +690,8 @@ export const Desktop = ({
         anchor={settingsAt}
         themeId={themeId}
         onSelect={setThemeId}
+        knobs={themeKnobs}
+        onKnobsChange={setThemeKnobs}
         onClose={() => setSettingsAt(null)}
       />
     </div>

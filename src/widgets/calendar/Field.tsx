@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 export const inputCls =
-  "w-full rounded border border-white/10 bg-white/5 px-1 py-0.5 text-[10px] outline-none focus:border-white/30";
+  "w-full rounded border border-border bg-accent/5 px-1 py-0.5 text-[10px] outline-none focus:border-ring";
 
 export const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <label className="flex flex-col gap-0.5">

@@ -37,3 +37,7 @@ export interface ThemePreset {
 }
 
 export const DEFAULT_THEME_ID = "default";
+
+// Selecting this id means the active colors come from generateParametricColors
+// + the persisted knobs (see useTheme), not a PRESETS lookup.
+export const CUSTOM_THEME_ID = "custom";

@@ -22,7 +22,7 @@ export const Sidebar = ({
   onNew: () => void;
 }) => {
   return (
-    <div className="flex w-[150px] shrink-0 flex-col gap-1.5 border-l border-white/10 px-2.5 py-2 text-[10px]">
+    <div className="flex w-[150px] shrink-0 flex-col gap-1.5 border-l border-border px-2.5 py-2 text-[10px]">
       <div className="flex items-center gap-0.5">
         <Button
           variant="ghost"
@@ -36,7 +36,7 @@ export const Sidebar = ({
         <Button
           variant="ghost"
           size="xs"
-          className="h-5 w-5 p-0 text-red-400/70 hover:text-red-400 disabled:opacity-20"
+          className="h-5 w-5 p-0 text-destructive/70 hover:text-destructive disabled:opacity-20"
           title="Delete event"
           disabled={!canDelete}
           onClick={onDelete}

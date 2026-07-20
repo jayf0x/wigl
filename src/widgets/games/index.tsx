@@ -24,7 +24,7 @@ const GamesWidget = () => {
           <button
             data-no-drag
             onClick={() => setActive(null)}
-            className="ml-auto rounded px-1.5 text-[10px] tracking-widest opacity-40 hover:bg-white/10 hover:opacity-80"
+            className="ml-auto rounded px-1.5 text-[10px] tracking-widest opacity-40 hover:bg-accent hover:opacity-80"
           >
             MENU
           </button>
@@ -39,7 +39,7 @@ const GamesWidget = () => {
               key={game.id}
               data-no-drag
               onClick={() => setActive(game)}
-              className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-left font-mono text-[11px] tracking-widest opacity-70 hover:bg-white/10 hover:opacity-100"
+              className="rounded-md border border-border bg-accent/10 px-3 py-2 text-left font-mono text-[11px] tracking-widest opacity-70 hover:bg-accent/25 hover:opacity-100"
             >
               {game.name}
             </button>

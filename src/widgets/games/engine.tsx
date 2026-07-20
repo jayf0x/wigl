@@ -74,7 +74,7 @@ export const GameChrome = ({
     if (phase === "running") boxRef.current?.focus();
   }, [phase]);
 
-  const btn = "rounded border border-white/15 bg-white/5 px-3 py-1 text-[11px] tracking-widest hover:bg-white/10";
+  const btn = "rounded border border-border bg-accent/10 px-3 py-1 text-[11px] tracking-widest hover:bg-accent/25";
 
   return (
     <div
@@ -89,14 +89,14 @@ export const GameChrome = ({
       }}
       onKeyUp={onKeyUp}
       onBlur={() => phase === "running" && setPhase("paused")}
-      className="relative m-2 mt-1 flex-1 overflow-hidden rounded-md bg-black/30 outline-none ring-white/20 focus:ring-1"
+      className="relative m-2 mt-1 flex-1 overflow-hidden rounded-md bg-foreground/5 outline-none ring-ring/40 focus:ring-1"
     >
       <canvas ref={canvasRef} width={width} height={height} className="h-full w-full" />
       <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[10px] tabular-nums opacity-50">
         {score}
       </span>
       {phase !== "running" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 font-mono backdrop-blur-[2px]">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/70 font-mono backdrop-blur-[2px]">
           {phase === "over" && (
             <span className="text-xs tracking-widest opacity-80">
               {overLabel} · {score}

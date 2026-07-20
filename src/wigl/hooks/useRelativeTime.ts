@@ -1,5 +1,5 @@
 import { useEffect, useReducer } from "react";
-import { relativeTime } from "../utils/time";
+import { relativeTime } from "../utils";
 
 // One shared 60s interval powers every consumer widget-wide — a widget with
 // a table of timestamps gets one timer, not one per row, and each row only

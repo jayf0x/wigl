@@ -134,7 +134,7 @@ const CalendarWidget = () => {
             </Button>
           </div>
 
-          <div className="grid grid-cols-7 border-b border-white/10 text-center text-[9px] opacity-30">
+          <div className="grid grid-cols-7 border-b border-border text-center text-[9px] opacity-30">
             {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
               <div key={i} className="pb-0.5">
                 {d}
@@ -154,9 +154,9 @@ const CalendarWidget = () => {
                   key={key}
                   onClick={() => startNew(key)}
                   className={cn(
-                    "flex cursor-pointer flex-col overflow-hidden border-b border-r border-white/5 px-1 py-0.5",
+                    "flex cursor-pointer flex-col overflow-hidden border-b border-r border-border/50 px-1 py-0.5",
                     faded && "opacity-30",
-                    key === draft.date && "bg-white/5",
+                    key === draft.date && "bg-accent/30",
                   )}
                 >
                   {/* Fixed-height number row so a day with events never shifts the date */}
@@ -165,7 +165,7 @@ const CalendarWidget = () => {
                       className={cn(
                         "text-[9px] leading-none",
                         isToday(d) &&
-                          "inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white/85 text-black",
+                          "inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-primary-foreground",
                       )}
                     >
                       {format(d, "d")}
@@ -183,7 +183,7 @@ const CalendarWidget = () => {
                         className={cn(
                           "flex h-4 w-4 items-center justify-center rounded-[4px] text-[8px] font-semibold uppercase leading-none",
                           avatarColor(ev.title),
-                          ev.id === selectedId && "ring-1 ring-white/70",
+                          ev.id === selectedId && "ring-1 ring-ring",
                         )}
                       >
                         {ev.title.slice(0, 2)}
@@ -240,7 +240,7 @@ const MonthYearLabel = ({ anchor, setAnchor }: { anchor: Date; setAnchor: (d: Da
   };
 
   const inputCls =
-    "rounded border border-white/20 bg-white/10 px-1 text-center text-[11px] outline-none focus:border-white/40";
+    "rounded border border-border bg-accent/15 px-1 text-center text-[11px] outline-none focus:border-ring";
 
   return (
     <span className="flex items-center gap-1 text-[11px] opacity-70">

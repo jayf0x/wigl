@@ -21,6 +21,7 @@ Each `docs/*.md` file owns one slice of ground truth. When a change in this sess
 | `docs/debugging.md` | How to verify a change and diagnose the current failure modes |
 | `docs/future-ideas.md` | Product ideas and closed/rejected scope decisions — defects and open gaps go in `backlog.md` instead |
 | `docs/principles.md` | Code-shape rules (functional core / imperative shell) — short on purpose |
+| `docs/theming.md` | The theme token contract, preset vs. parametric generation, and the no-hardcoded-color rule for widgets |
 
 If a task's outcome doesn't change any of those five claims, there's nothing to update — most small tweaks won't.
 
