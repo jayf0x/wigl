@@ -1,16 +1,16 @@
 import { useState } from "react";
+import { useStorage, Widget, WidgetHeader } from "@/wigl";
 import { Activity, Clock, CloudDownload, FolderGit2, RefreshCw, Tag } from "lucide-react";
-import { useReposWidget } from "./useReposWidget";
-import { useRemoteRepos } from "./useRemoteRepos";
-import { DEFAULT_SORT_DIR, sortProjects, type SortDir, type SortKey } from "./sort";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { SortableHead } from "./cells";
 import { Row } from "./Row";
 import { remoteToRow } from "./remoteRow";
 import { Settings } from "./Settings";
-import { Widget, WidgetHeader, useStorage } from "@/wigl";
-import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { DEFAULT_SORT_DIR, type SortDir, type SortKey, sortProjects } from "./sort";
+import { useRemoteRepos } from "./useRemoteRepos";
+import { useReposWidget } from "./useReposWidget";
 
 function ReposWidget() {
   const { projects, localNames, sourceDir, setSourceDirOverride, scanError, loading, refresh } = useReposWidget();

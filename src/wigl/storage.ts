@@ -9,8 +9,8 @@
 // read/write error until it is (see docs/debugging.md). External changes are
 // picked up by polling.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Command } from "@tauri-apps/plugin-shell";
 import { appDataDir, join } from "@tauri-apps/api/path";
+import { Command } from "@tauri-apps/plugin-shell";
 
 // Must match tauri.conf.json's `identifier` — Tauri derives appDataDir()
 // from it, and scripts/calendar.ts (no Tauri runtime, so no appDataDir()

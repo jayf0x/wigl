@@ -1,8 +1,8 @@
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Field, inputCls } from "./Field";
 import type { Draft } from "./calendar.utils";
+import { Field, inputCls } from "./Field";
 
 export function Sidebar({
   draft,

@@ -28,7 +28,15 @@
         "organizeImports": {
           "level": "on",
           "options": {
-            "groups": [":NODE:", ["@/**"], ":PACKAGE:", ":ALIAS:", ":PATH:"]
+            "groups": [
+              ["react", "react-dom", "react-dom/**"],
+              ["@tauri-apps/**"],
+              ["@/wigl", "@/wigl/**"],
+              ":PACKAGE:",
+              ["@/**"],
+              ":PATH:",
+              ":STYLE:"
+            ]
           }
         }
       }

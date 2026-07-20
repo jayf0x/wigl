@@ -9,17 +9,18 @@
 // freezes the card ("detached") and broadcasts a preview; the target monitor
 // renders the ghost and reflows a phantom. On drop the target adopts the
 // widget in one atomic commit; until then only the drag session mutates.
-import { Component, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+
 import type { ComponentType, ErrorInfo, ReactNode } from "react";
+import { Component, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { availableMonitors } from "@tauri-apps/api/window";
-import { TILING } from "./tiling.config";
+import { DESKTOP_ACTIONS, type DesktopActionCtx } from "./actions";
 import {
-  type GridItem,
   autoPlace,
-  colToPx,
   colsForWidth,
+  colToPx,
+  type GridItem,
   pxToCol,
   pxToRow,
   reflow,
@@ -29,8 +30,8 @@ import {
   springEasing,
 } from "./grid";
 import { useStorage } from "./storage";
-import { DESKTOP_ACTIONS, type DesktopActionCtx } from "./actions";
-import { WidgetSlotProvider, type WidgetGridReport } from "./widget";
+import { TILING } from "./tiling.config";
+import { type WidgetGridReport, WidgetSlotProvider } from "./widget";
 
 // Clicks on these inside a drag handle stay clicks; everything else drags.
 const INTERACTIVE = "button, a, input, select, textarea, [data-no-drag]";

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Widget, WidgetHeader } from "@/wigl";
+import Breakout from "./breakout";
 import Snake from "./snake";
 import Tetris from "./tetris";
-import Breakout from "./breakout";
 
 // Retro mini games for while a build runs. Session-only, no storage.
 // Only the selected game is mounted — back to the menu unmounts it entirely,

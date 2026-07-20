@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { GameChrome, useLoop, usePhase, type GameProps } from "../engine";
+import { GameChrome, type GameProps, useLoop, usePhase } from "../engine";
 
 const W = 320;
 const H = 260;

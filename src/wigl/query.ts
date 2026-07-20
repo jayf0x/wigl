@@ -4,7 +4,7 @@
 // `useStorage` uses, keyed `query_<key>`, with `updatedAt` baked into the
 // stored blob so no separate invalidation table is needed.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { sql, q } from "./storage";
+import { q, sql } from "./storage";
 
 export const hours = (n: number) => n * 60 * 60 * 1000;
 

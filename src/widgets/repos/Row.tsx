@@ -3,9 +3,9 @@ import { Check, CloudDownload, Code2, FolderOpen, GitBranch, GitCommitHorizontal
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { cloneRepo, commitAllChanges, openInEditor, openInGithubDesktop, revealInFileManager } from "./commands";
 import { RelativeTime, StatusIcon, statusTitle } from "./cells";
-import { ProjectStatus } from "./types";
+import { cloneRepo, commitAllChanges, openInEditor, openInGithubDesktop, revealInFileManager } from "./commands";
+import type { ProjectStatus } from "./types";
 
 // git's --progress lines restart at 0% per phase (Counting/Compressing/
 // Receiving/Resolving) — mapping each phase onto its own slice of the 0-99

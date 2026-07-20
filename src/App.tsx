@@ -1,9 +1,9 @@
-import { lazy, useEffect, useState } from "react";
 import type { ComponentType } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { lazy, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Desktop } from "@/wigl";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WidgetModule } from "@/wigl";
+import { Desktop } from "@/wigl";
 import "./App.css";
 
 // Widgets are discovered by folder: src/widgets/<name>/index.tsx. The folder
@@ -15,6 +15,7 @@ const loaders = import.meta.glob<WidgetModule>("./widgets/*/index.tsx");
 const widgets: Record<string, ComponentType> = {};
 for (const [path, load] of Object.entries(loaders)) {
   const id = path.split("/")[2];
+
   // The glob does no validation of what a widget exports, so a typo would
   // silently fail (blank widget / default size) — checked once the chunk
   // actually loads, since that's the earliest point the module exists.
@@ -47,9 +48,11 @@ function App() {
   // is_windowed_mode round-trip is ever slow or fails, the window still
   // shows and renders immediately instead of staying blank indefinitely.
   const [windowed, setWindowed] = useState(false);
+
   useEffect(() => {
     if (label !== "main") getCurrentWindow().show().catch(console.error);
   }, [label]);
+
   useEffect(() => {
     if (label === "main") return;
     invoke<boolean>("is_windowed_mode")
@@ -59,6 +62,7 @@ function App() {
       })
       .catch(console.error);
   }, [label]);
+
   if (label === "main") return null;
   return <Desktop widgets={widgets} monitorIndex={Number(label.split("-")[1]) || 0} windowed={windowed} />;
 }

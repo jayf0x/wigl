@@ -1,9 +1,9 @@
-import { ChevronDown, ChevronUp, Circle, CloudDownload, TriangleAlert, type LucideIcon } from "lucide-react";
-import { TableHead } from "@/components/ui/table";
 import { useRelativeTime } from "@/wigl";
+import { ChevronDown, ChevronUp, Circle, CloudDownload, type LucideIcon, TriangleAlert } from "lucide-react";
+import { TableHead } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import type { ProjectStatus } from "./types";
 import type { SortDir, SortKey } from "./sort";
+import type { ProjectStatus } from "./types";
 
 // npm release status, web3-flavored: nothing to show = invisible, pending
 // changes = glowing cyan pulse, released & settled = dimmed violet.

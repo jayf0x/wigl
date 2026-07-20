@@ -1,4 +1,5 @@
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { type KeyboardEvent, useMemo, useState } from "react";
+import { useStorage, Widget, WidgetHeader } from "@/wigl";
 import {
   addDays,
   addMonths,
@@ -11,20 +12,19 @@ import {
   startOfWeek,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Widget, WidgetHeader, useStorage } from "@/wigl";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Sidebar } from "./Sidebar";
 import {
-  EVENTS_STORAGE_KEY,
   avatarColor,
-  draftFrom,
-  parseMonth,
-  emptyDraft,
-  sameDraft,
   type CalendarEvent,
   type Draft,
+  draftFrom,
+  EVENTS_STORAGE_KEY,
+  emptyDraft,
+  parseMonth,
+  sameDraft,
 } from "./calendar.utils";
+import { Sidebar } from "./Sidebar";
 
 function CalendarWidget() {
   const [events, setEvents] = useStorage<CalendarEvent[]>(EVENTS_STORAGE_KEY, []);

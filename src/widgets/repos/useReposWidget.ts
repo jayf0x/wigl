@@ -1,6 +1,6 @@
+import { useCallback, useEffect, useState } from "react";
 import { homeDir, join, resolveResource } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
-import { useCallback, useEffect, useState } from "react";
 import { hours, useQuery, useStorage } from "@/wigl";
 import { loadArchivedRepoNames, shQuote } from "./commands";
 import { POLL_INTERVAL_MS, SOURCE_DIR_RELATIVE_TO_HOME } from "./config";

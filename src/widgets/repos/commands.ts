@@ -1,7 +1,7 @@
 import { homeDir } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import { isMacos } from "@/wigl";
-import { ProjectStatus, RemoteRepo } from "./types";
+import type { ProjectStatus, RemoteRepo } from "./types";
 
 // single string.
 export const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
