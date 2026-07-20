@@ -31,19 +31,6 @@ html.wigl-windowed #root {
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', sans-serif;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -71,50 +58,20 @@ html.wigl-windowed #root {
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* One unconditional palette, not a :root/.dark split — wigl has no
-   light/dark toggle (see docs/future-ideas.md's theming entry), and a
-   `.dark {...}` block here would shadow `applyTheme`'s :root overrides for
-   any element inside a `.dark`-classed subtree (a CSS var set directly on
-   an element always wins over one inherited from an ancestor, regardless
-   of the ancestor rule's specificity) — which is exactly what made widgets
-   (wrapped in `.dark` by `Widget` in src/wigl/widget.tsx, for the `dark:`
-   Tailwind-variant tweaks coss ui's own components use) ignore theme
-   changes. `dark:` variants still work via the `@custom-variant` above and
-   `Widget`'s `dark` class; they just no longer carry their own color
-   values. */
+/* `--radius` is shape, not color — the one non-color knob Tailwind's
+   `@theme` block above needs, so it stays a plain static value here rather
+   than living in `src/wigl/theme/` alongside the color vars. Every color
+   custom property Tailwind reads above (--background, --card, --primary,
+   ...) is deliberately undefined until JS sets it: `src/wigl/theme/` is the
+   single source of truth for their values (see `presets.ts`), applied via
+   `useTheme`'s layout effect before first paint — no `:root` color block
+   to keep in sync with it, no `.dark` variant block to shadow it (a CSS
+   var set directly on an element always wins over one inherited from an
+   ancestor, which is exactly what a `.dark {...}` color block here used to
+   do to every widget, since `Widget` wraps its contents in a `dark` class
+   for coss ui's `dark:`-variant tweaks). */
 :root {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
@@ -130,11 +87,8 @@ html.wigl-windowed #root {
 }
 
 /* --- tiling desktop (spring easing comes from wigl/grid/config.ts via a CSS
-   var set in Desktop.tsx) ------------------------------------------------ */
-:root {
-  --wigl-accent: #6ee7c7; /* keep in sync with ACCENT in Desktop.tsx */
-}
-
+   var set in Desktop.tsx; --wigl-accent comes from src/wigl/theme/, same as
+   every other color above) ------------------------------------------------ */
 .wigl-desktop {
   position: fixed;
   inset: 0;

@@ -43,16 +43,24 @@ authoring, not a blocker.
 
 Built in `src/wigl/theme/`:
 
-- `types.ts` — flat `ThemeColors` (one key per `App.css` `@theme` token,
-  plus `wiglAccent`) and `ThemePreset = {id, name, colors}`.
-- `applyTheme.ts` — `root.style.setProperty` loop over a key-to-`--css-var`
-  map; clears every managed var first so switching presets doesn't leave
-  stale values. Also mirrors `--wigl-accent` into a plain JS var
-  (`getWiglAccent()`) since the drag-field canvas in `Desktop.tsx` can't
-  read a CSS custom property per animation frame.
-- `presets.ts` — `default` (empty, i.e. `App.css`'s own look) plus `nord`,
-  `dracula`, `catppuccin`, `gruvbox`, ported from Terax's dark variants
-  (wigl has no light/dark toggle, so only one variant per preset).
+- `types.ts` — `THEME_COLOR_KEYS` (`as const` array) + `ThemeColors =
+  Record<ThemeColorKey, string>` — no `Partial`, so a preset object missing
+  (or misspelling) a key is a compile error, not a silent fallback. `radius`
+  and the unused shadcn `chart-*`/`sidebar-*` vars aren't in it — `radius`
+  is shape, not color, and stays a plain static value in `App.css`;
+  `chart-*`/`sidebar-*` were dead (nothing renders them), deleted outright.
+- `applyTheme.ts` — a `root.style.setProperty` loop over every
+  `ThemeColors` key onto a key-to-`--css-var` map; since every preset
+  supplies every key, this is a full overwrite each time, no clearing step
+  needed. Mirrors `--wigl-accent` into a plain JS var (`getWiglAccent()`)
+  since the drag-field canvas in `Desktop.tsx` can't read a CSS custom
+  property per animation frame.
+- `presets.ts` — the single source of truth for every color value; `App.css`
+  defines none anymore (see its own comment). `default` (wigl's own
+  always-dark look, moved here verbatim from the old `:root` block) and
+  `light` (the original unused shadcn light palette, wired up as an actual
+  selectable preset instead of dead CSS) plus `nord`, `dracula`,
+  `catppuccin`, `gruvbox` ported from Terax's dark variants.
 - `src/wigl/hooks/useTheme.ts` — active preset id via `useStorage`
   (`wigl_theme` key), applies on mount and on change. Every monitor window
   runs its own `useTheme()` (called once, in `Desktop.tsx`), so picking a

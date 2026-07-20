@@ -1,13 +1,64 @@
-import { DEFAULT_THEME_ID, type ThemePreset } from "./types";
+import { DEFAULT_THEME_ID, type ThemeColors, type ThemePreset } from "./types";
+
+// wigl's own always-dark identity — this used to live as raw CSS in
+// App.css's `:root`; now it's the one place that defines it. A preset that
+// only wants to tweak a couple of values spreads this and overrides the
+// rest (every preset must supply every key — see types.ts).
+const DEFAULT_COLORS: ThemeColors = {
+  background: "oklch(0.145 0 0)",
+  foreground: "oklch(0.985 0 0)",
+  card: "oklch(0.205 0 0)",
+  cardForeground: "oklch(0.985 0 0)",
+  popover: "oklch(0.205 0 0)",
+  popoverForeground: "oklch(0.985 0 0)",
+  primary: "oklch(0.922 0 0)",
+  primaryForeground: "oklch(0.205 0 0)",
+  secondary: "oklch(0.269 0 0)",
+  secondaryForeground: "oklch(0.985 0 0)",
+  muted: "oklch(0.269 0 0)",
+  mutedForeground: "oklch(0.708 0 0)",
+  accent: "oklch(0.269 0 0)",
+  accentForeground: "oklch(0.985 0 0)",
+  destructive: "oklch(0.704 0.191 22.216)",
+  border: "oklch(1 0 0 / 10%)",
+  input: "oklch(1 0 0 / 15%)",
+  ring: "oklch(0.556 0 0)",
+  wiglAccent: "#6ee7c7",
+};
+
+// The shadcn-template light palette wigl started from — never wired up to
+// anything (nothing ever toggled a light/dark mode), so it just sat dead in
+// App.css. Kept as an actual selectable preset instead of deleting it.
+const LIGHT_COLORS: ThemeColors = {
+  background: "oklch(1 0 0)",
+  foreground: "oklch(0.145 0 0)",
+  card: "oklch(1 0 0)",
+  cardForeground: "oklch(0.145 0 0)",
+  popover: "oklch(1 0 0)",
+  popoverForeground: "oklch(0.145 0 0)",
+  primary: "oklch(0.205 0 0)",
+  primaryForeground: "oklch(0.985 0 0)",
+  secondary: "oklch(0.97 0 0)",
+  secondaryForeground: "oklch(0.205 0 0)",
+  muted: "oklch(0.97 0 0)",
+  mutedForeground: "oklch(0.556 0 0)",
+  accent: "oklch(0.97 0 0)",
+  accentForeground: "oklch(0.205 0 0)",
+  destructive: "oklch(0.577 0.245 27.325)",
+  border: "oklch(0.922 0 0)",
+  input: "oklch(0.922 0 0)",
+  ring: "oklch(0.708 0 0)",
+  wiglAccent: "#0d9488",
+};
 
 // Ported from Terax (`src/modules/theme/themes/*.ts`), trimmed to wigl's
 // flat single-variant shape (see docs/future-ideas.md's "Theming beyond...").
-// Terax's `light`/`dark` variant split doesn't apply — wigl has no light/dark
-// toggle, so each preset below is that theme's dark variant, the fitting
-// look for a desktop overlay. `default` (empty colors) is wigl's current
-// hardcoded look, i.e. App.css's own `:root` values, untouched.
+// Terax's `light`/`dark` variant split doesn't apply here beyond the two
+// presets above — each of the following is that theme's dark variant, the
+// fitting look for a desktop overlay.
 export const PRESETS: ThemePreset[] = [
-  { id: DEFAULT_THEME_ID, name: "Default", colors: {} },
+  { id: DEFAULT_THEME_ID, name: "Default", colors: DEFAULT_COLORS },
+  { id: "light", name: "Light", colors: LIGHT_COLORS },
   {
     id: "nord",
     name: "Nord",
@@ -30,14 +81,6 @@ export const PRESETS: ThemePreset[] = [
       border: "rgba(255,255,255,0.08)",
       input: "rgba(255,255,255,0.12)",
       ring: "#88c0d0",
-      sidebar: "#3b4252",
-      sidebarForeground: "#d8dee9",
-      sidebarPrimary: "#88c0d0",
-      sidebarPrimaryForeground: "#2e3440",
-      sidebarAccent: "#434c5e",
-      sidebarAccentForeground: "#eceff4",
-      sidebarBorder: "rgba(255,255,255,0.08)",
-      sidebarRing: "#88c0d0",
       wiglAccent: "#88c0d0",
     },
   },
@@ -63,14 +106,6 @@ export const PRESETS: ThemePreset[] = [
       border: "rgba(248,248,242,0.08)",
       input: "rgba(248,248,242,0.12)",
       ring: "#bd93f9",
-      sidebar: "#21222c",
-      sidebarForeground: "#f8f8f2",
-      sidebarPrimary: "#bd93f9",
-      sidebarPrimaryForeground: "#282a36",
-      sidebarAccent: "#44475a",
-      sidebarAccentForeground: "#f8f8f2",
-      sidebarBorder: "rgba(248,248,242,0.08)",
-      sidebarRing: "#bd93f9",
       wiglAccent: "#bd93f9",
     },
   },
@@ -96,14 +131,6 @@ export const PRESETS: ThemePreset[] = [
       border: "rgba(205,214,244,0.10)",
       input: "rgba(205,214,244,0.14)",
       ring: "#cba6f7",
-      sidebar: "#181825",
-      sidebarForeground: "#cdd6f4",
-      sidebarPrimary: "#cba6f7",
-      sidebarPrimaryForeground: "#1e1e2e",
-      sidebarAccent: "#313244",
-      sidebarAccentForeground: "#cdd6f4",
-      sidebarBorder: "rgba(205,214,244,0.10)",
-      sidebarRing: "#cba6f7",
       wiglAccent: "#cba6f7",
     },
   },
@@ -129,14 +156,6 @@ export const PRESETS: ThemePreset[] = [
       border: "rgba(235,219,178,0.10)",
       input: "rgba(235,219,178,0.14)",
       ring: "#fabd2f",
-      sidebar: "#1d2021",
-      sidebarForeground: "#ebdbb2",
-      sidebarPrimary: "#fabd2f",
-      sidebarPrimaryForeground: "#282828",
-      sidebarAccent: "#3c3836",
-      sidebarAccentForeground: "#ebdbb2",
-      sidebarBorder: "rgba(235,219,178,0.10)",
-      sidebarRing: "#fabd2f",
       wiglAccent: "#fabd2f",
     },
   },
