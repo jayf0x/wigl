@@ -1,5 +1,7 @@
 import { type KeyboardEvent, useMemo, useState } from "react";
-import { useStorage, Widget, WidgetHeader } from "@/wigl";
+import { Widget, WidgetHeader } from "@/wigl";
+import { useStorage } from "@/wigl/hooks";
+import { cn } from "@/wigl/utils";
 import {
   addDays,
   addMonths,
@@ -13,7 +15,6 @@ import {
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import {
   avatarColor,
   type CalendarEvent,
@@ -26,7 +27,7 @@ import {
 } from "./calendar.utils";
 import { Sidebar } from "./Sidebar";
 
-function CalendarWidget() {
+const CalendarWidget = () => {
   const [events, setEvents] = useStorage<CalendarEvent[]>(EVENTS_STORAGE_KEY, []);
   const [view, setView] = useState<"month" | "week">("month");
   const [anchor, setAnchor] = useState(() => new Date());
@@ -207,13 +208,13 @@ function CalendarWidget() {
       </div>
     </Widget>
   );
-}
+};
 
 export default CalendarWidget;
 
 // Month/year label: double-click either part to type a target ("january",
 // "jan", "1" for month; a number for year); blur or Enter navigates.
-function MonthYearLabel({ anchor, setAnchor }: { anchor: Date; setAnchor: (d: Date) => void }) {
+const MonthYearLabel = ({ anchor, setAnchor }: { anchor: Date; setAnchor: (d: Date) => void }) => {
   const [editing, setEditing] = useState<"month" | "year" | null>(null);
   const [text, setText] = useState("");
 
@@ -273,4 +274,4 @@ function MonthYearLabel({ anchor, setAnchor }: { anchor: Date; setAnchor: (d: Da
       )}
     </span>
   );
-}
+};

@@ -1,14 +1,9 @@
-// Everything a widget imports from the app: import { Widget, WidgetHeader }
-// from "@/wigl". Future shared hooks/utils export from here too — widgets
-// never deep-import wigl internals.
-
-export { DESKTOP_ACTIONS, type DesktopAction, type DesktopActionCtx } from "./actions";
+// The app's shared visual/layout primitives: import { Desktop, Widget,
+// WidgetHeader, TILING } from "@/wigl". Non-visual helpers live in their own
+// barrels — import { useStorage, useQuery, ... } from "@/wigl/hooks" and
+// import { cn, isMacos, ... } from "@/wigl/utils". Widgets never deep-import
+// past these three barrels.
 export { Desktop } from "./Desktop";
-export { isMacos } from "./platform";
-export { hours, type UseQueryOptions, useQuery } from "./query";
-export { relativeTime, useRelativeTime } from "./relativeTime";
-export { useStorage } from "./storage";
-export { TILING } from "./tiling.config";
-export type { WidgetModule } from "./types";
+export { TILING } from "./grid/config";
 export type { WidgetGridProps } from "./widget";
 export { Widget, WidgetHeader } from "./widget";

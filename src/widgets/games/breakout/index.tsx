@@ -12,23 +12,19 @@ const PAD_W = 56;
 const PAD_H = 6;
 const R = 4; // ball radius
 
-function newLevel(speed: number) {
-  return {
-    bricks: new Uint8Array(BRICK_COLS * BRICK_ROWS).fill(1),
-    x: W / 2,
-    y: H - 40,
-    vx: speed * 0.6,
-    vy: -speed,
-    pad: W / 2 - PAD_W / 2,
-    speed,
-  };
-}
+const newLevel = (speed: number) => ({
+  bricks: new Uint8Array(BRICK_COLS * BRICK_ROWS).fill(1),
+  x: W / 2,
+  y: H - 40,
+  vx: speed * 0.6,
+  vy: -speed,
+  pad: W / 2 - PAD_W / 2,
+  speed,
+});
 
-function newGame() {
-  return { ...newLevel(3), score: 0, lives: 3, won: false };
-}
+const newGame = () => ({ ...newLevel(3), score: 0, lives: 3, won: false });
 
-export default function Breakout({ onExit }: GameProps) {
+const Breakout = ({ onExit }: GameProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const g = useRef(newGame());
   const keys = useRef<Record<string, boolean>>({});
@@ -138,4 +134,6 @@ export default function Breakout({ onExit }: GameProps) {
       }}
     />
   );
-}
+};
+
+export default Breakout;

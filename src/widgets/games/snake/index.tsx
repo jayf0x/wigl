@@ -15,24 +15,24 @@ const DIRS: Record<string, Cell> = {
   ArrowRight: { x: 1, y: 0 },
 };
 
-function randomFood(snake: Cell[]): Cell {
+const randomFood = (snake: Cell[]): Cell => {
   // ponytail: rejection sampling; fine until the snake nearly fills the board
   while (true) {
     const f = { x: (Math.random() * COLS) | 0, y: (Math.random() * ROWS) | 0 };
     if (!snake.some((c) => c.x === f.x && c.y === f.y)) return f;
   }
-}
+};
 
-function newGame() {
+const newGame = () => {
   const snake: Cell[] = [
     { x: 8, y: 9 },
     { x: 7, y: 9 },
     { x: 6, y: 9 },
   ];
   return { snake, prev: snake, dir: DIRS.ArrowRight, nextDir: DIRS.ArrowRight, food: randomFood(snake), score: 0 };
-}
+};
 
-export default function Snake({ onExit }: GameProps) {
+const Snake = ({ onExit }: GameProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const g = useRef(newGame());
   const { phase, setPhase } = usePhase();
@@ -107,4 +107,6 @@ export default function Snake({ onExit }: GameProps) {
       }}
     />
   );
-}
+};
+
+export default Snake;

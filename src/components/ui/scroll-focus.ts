@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-function getScrollParent(el: HTMLElement): HTMLElement | null {
+const getScrollParent = (el: HTMLElement): HTMLElement | null => {
   let node = el.parentElement;
   while (node) {
     const style = getComputedStyle(node);
@@ -8,7 +8,7 @@ function getScrollParent(el: HTMLElement): HTMLElement | null {
     node = node.parentElement;
   }
   return null;
-}
+};
 
 /**
  * Continuously sets a `--focus` (0..1) custom property on each `.scroll-focus`
@@ -22,7 +22,7 @@ function getScrollParent(el: HTMLElement): HTMLElement | null {
  * normalized to the container height, so it adapts to any widget size.
  * No-ops when the container doesn't scroll — rows keep their default look.
  */
-export function useScrollFocus<T extends HTMLElement>() {
+export const useScrollFocus = <T extends HTMLElement>() => {
   const ref = useRef<T>(null);
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export function useScrollFocus<T extends HTMLElement>() {
     let scroller = getScrollParent(container);
     let raf = 0;
 
-    function update() {
+    const update = () => {
       raf = 0;
       // Content can grow after mount (async data) — pick up the scroller late.
       scroller ??= getScrollParent(container!);
@@ -48,11 +48,11 @@ export function useScrollFocus<T extends HTMLElement>() {
         const eased = t * t * (3 - 2 * t); // smoothstep: gentle at edges and center
         el.style.setProperty("--focus", eased.toFixed(3));
       }
-    }
+    };
 
-    function schedule() {
+    const schedule = () => {
       if (!raf) raf = requestAnimationFrame(update);
-    }
+    };
 
     schedule();
     // Capture-phase on window: catches scrolls of whichever ancestor scrolls,
@@ -72,4 +72,4 @@ export function useScrollFocus<T extends HTMLElement>() {
   }, []);
 
   return ref;
-}
+};

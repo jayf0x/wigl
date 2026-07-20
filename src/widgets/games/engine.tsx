@@ -8,16 +8,16 @@ export type Phase = "idle" | "running" | "paused" | "over";
 
 export type GameProps = { onExit: () => void };
 
-export function usePhase() {
+export const usePhase = () => {
   const [phase, setPhase] = useState<Phase>("idle");
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   return { phase, setPhase, phaseRef };
-}
+};
 
 // tick/draw are read through refs so callers don't need useCallback gymnastics;
 // the effect re-mounts only when `active` or `tickMs` changes.
-export function useLoop(active: boolean, tickMs: number, tick: () => void, draw: (t: number) => void) {
+export const useLoop = (active: boolean, tickMs: number, tick: () => void, draw: (t: number) => void) => {
   const fns = useRef({ tick, draw });
   fns.current = { tick, draw };
   useEffect(() => {
@@ -38,7 +38,7 @@ export function useLoop(active: boolean, tickMs: number, tick: () => void, draw:
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
   }, [active, tickMs]);
-}
+};
 
 type ChromeProps = {
   phase: Phase;
@@ -55,7 +55,7 @@ type ChromeProps = {
   onKeyUp?: (e: React.KeyboardEvent) => void;
 };
 
-export function GameChrome({
+export const GameChrome = ({
   phase,
   score,
   overLabel = "GAME OVER",
@@ -68,7 +68,7 @@ export function GameChrome({
   setPhase,
   onKey,
   onKeyUp,
-}: ChromeProps) {
+}: ChromeProps) => {
   const boxRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (phase === "running") boxRef.current?.focus();
@@ -122,4 +122,4 @@ export function GameChrome({
       )}
     </div>
   );
-}
+};

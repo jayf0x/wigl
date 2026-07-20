@@ -57,7 +57,7 @@ const MONTHS = [
 ];
 
 /** "january", "jan", "1".."12" → month index 0–11, or null if unparseable. */
-export function parseMonth(input: string): number | null {
+export const parseMonth = (input: string): number | null => {
   const s = input.trim().toLowerCase();
   if (!s) return null;
   if (/^\d{1,2}$/.test(s)) {
@@ -66,7 +66,7 @@ export function parseMonth(input: string): number | null {
   }
   const i = MONTHS.findIndex((m) => m.startsWith(s));
   return i === -1 ? null : i;
-}
+};
 
 export const sameDraft = (a: Draft, b: Draft) =>
   a.title === b.title && a.date === b.date && a.time === b.time && a.description === b.description;

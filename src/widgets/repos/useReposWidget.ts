@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { homeDir, join, resolveResource } from "@tauri-apps/api/path";
-import { Command } from "@tauri-apps/plugin-shell";
-import { hours, useQuery, useStorage } from "@/wigl";
+import { hours, useQuery, useStorage } from "@/wigl/hooks";
+import { runCmd } from "@/wigl/utils";
 import { loadArchivedRepoNames, shQuote } from "./commands";
 import { POLL_INTERVAL_MS, SOURCE_DIR_RELATIVE_TO_HOME } from "./config";
 import type { ProjectStatus, RepoScanRow } from "./types";
@@ -17,10 +17,10 @@ import type { ProjectStatus, RepoScanRow } from "./types";
 // between dev and every bundled target, so this can't drift out of sync
 // with packaging again.
 let scanScriptPathCache: Promise<string> | null = null;
-function scanScriptPath(): Promise<string> {
-  if (!scanScriptPathCache) scanScriptPathCache = resolveResource("scripts/repos-scan.ts");
+const scanScriptPath = (): Promise<string> => {
+  scanScriptPathCache ??= resolveResource("scripts/repos-scan.ts");
   return scanScriptPathCache;
-}
+};
 
 // GUI-launched shells often lack ~/.bun/bin on PATH (it's added by shell rc
 // files, which a WebView-spawned `sh -c` doesn't source) — same problem as
@@ -34,15 +34,12 @@ function scanScriptPath(): Promise<string> {
 // a failed spawn attempt on every single poll tick.
 let workingBunBin: string | null = null;
 
-async function runBunScan(scriptPath: string, sourceDir: string): Promise<RepoScanRow[]> {
+const runBunScan = async (scriptPath: string, sourceDir: string): Promise<RepoScanRow[]> => {
   const bunAbsolute = await join(await homeDir(), ".bun/bin/bun");
   const candidates = workingBunBin ? [workingBunBin] : [bunAbsolute, "bun"];
   let lastErr = "";
   for (const bun of candidates) {
-    const out = await Command.create("sh", [
-      "-c",
-      `${shQuote(bun)} ${shQuote(scriptPath)} ${shQuote(sourceDir)}`,
-    ]).execute();
+    const out = await runCmd("sh", ["-c", `${shQuote(bun)} ${shQuote(scriptPath)} ${shQuote(sourceDir)}`]);
     if (out.code === 0) {
       workingBunBin = bun;
       return JSON.parse(out.stdout || "[]");
@@ -51,9 +48,9 @@ async function runBunScan(scriptPath: string, sourceDir: string): Promise<RepoSc
   }
   workingBunBin = null;
   throw new Error(`scan failed: ${lastErr}`);
-}
+};
 
-export function useReposWidget() {
+export const useReposWidget = () => {
   const [projects, setProjects] = useState<ProjectStatus[]>([]);
   const [sourceDir, setSourceDir] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,4 +111,4 @@ export function useReposWidget() {
     loading,
     refresh,
   };
-}
+};

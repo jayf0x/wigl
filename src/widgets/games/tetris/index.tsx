@@ -92,23 +92,16 @@ const ROTATIONS: Cell[][][] = BASE.map(({ size, cells }) => {
 
 type Piece = { idx: number; rot: number; x: number; y: number };
 
-function cellsOf(p: Piece): Cell[] {
-  return ROTATIONS[p.idx][p.rot].map((c) => ({ x: c.x + p.x, y: c.y + p.y }));
-}
+const cellsOf = (p: Piece): Cell[] => ROTATIONS[p.idx][p.rot].map((c) => ({ x: c.x + p.x, y: c.y + p.y }));
 
-function collides(board: Uint8Array, p: Piece): boolean {
-  return cellsOf(p).some((c) => c.x < 0 || c.x >= COLS || c.y >= ROWS || (c.y >= 0 && board[c.y * COLS + c.x] !== 0));
-}
+const collides = (board: Uint8Array, p: Piece): boolean =>
+  cellsOf(p).some((c) => c.x < 0 || c.x >= COLS || c.y >= ROWS || (c.y >= 0 && board[c.y * COLS + c.x] !== 0));
 
-function spawn(): Piece {
-  return { idx: (Math.random() * BASE.length) | 0, rot: 0, x: 3, y: -1 };
-}
+const spawn = (): Piece => ({ idx: (Math.random() * BASE.length) | 0, rot: 0, x: 3, y: -1 });
 
-function newGame() {
-  return { board: new Uint8Array(COLS * ROWS), piece: spawn(), next: spawn(), score: 0, lines: 0 };
-}
+const newGame = () => ({ board: new Uint8Array(COLS * ROWS), piece: spawn(), next: spawn(), score: 0, lines: 0 });
 
-export default function Tetris({ onExit }: GameProps) {
+const Tetris = ({ onExit }: GameProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const g = useRef(newGame());
   const { phase, setPhase } = usePhase();
@@ -233,4 +226,6 @@ export default function Tetris({ onExit }: GameProps) {
       }}
     />
   );
-}
+};
+
+export default Tetris;

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useStorage, Widget, WidgetHeader } from "@/wigl";
+import { Widget, WidgetHeader } from "@/wigl";
+import { useStorage } from "@/wigl/hooks";
+import { cn } from "@/wigl/utils";
 import { Activity, Clock, CloudDownload, FolderGit2, RefreshCw, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 import { SortableHead } from "./cells";
 import { Row } from "./Row";
 import { remoteToRow } from "./remoteRow";
@@ -12,7 +13,7 @@ import { DEFAULT_SORT_DIR, type SortDir, type SortKey, sortProjects } from "./so
 import { useRemoteRepos } from "./useRemoteRepos";
 import { useReposWidget } from "./useReposWidget";
 
-function ReposWidget() {
+const ReposWidget = () => {
   const { projects, localNames, sourceDir, setSourceDirOverride, scanError, loading, refresh } = useReposWidget();
   const { repos: remoteRepos, loading: remoteLoading, refresh: refreshRemote } = useRemoteRepos();
   const [sortBy, setSortBy] = useStorage<SortKey>("repos_sort_by", "time");
@@ -20,13 +21,13 @@ function ReposWidget() {
   const [showUndownloaded, setShowUndownloaded] = useState(false);
   const [gitOnly, setGitOnly] = useStorage<boolean>("repos_git_only", true);
 
-  function onSort(key: SortKey) {
+  const onSort = (key: SortKey) => {
     if (sortBy === key) setSortDir(sortDir === "asc" ? "desc" : "asc");
     else {
       setSortBy(key);
       setSortDir(DEFAULT_SORT_DIR[key]);
     }
-  }
+  };
 
   // Un-downloaded repos are reshaped into the same row type and merged into
   // the one sortable table rather than shown in a separate view — toggling
@@ -144,6 +145,6 @@ function ReposWidget() {
       </div>
     </Widget>
   );
-}
+};
 
 export default ReposWidget;

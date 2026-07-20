@@ -1,7 +1,7 @@
 // Pure tiling math: cell<->px conversion, collision push + gravity compaction
 // (react-grid-layout's algorithm without the library), first-fit auto-placement,
 // and a damped-spring curve baked into a CSS linear() easing string.
-import { TILING } from "./tiling.config";
+import { TILING } from "./config";
 
 export interface GridItem {
   id: string;
@@ -31,7 +31,7 @@ export const collides = (a: GridItem, b: GridItem) =>
 
 /** Push everything colliding with `moved` downward, then gravity-compact all
  * other items back up. Mutates `items`. */
-export function reflow(items: GridItem[], moved: GridItem) {
+export const reflow = (items: GridItem[], moved: GridItem) => {
   const queue = [moved];
   while (queue.length) {
     const m = queue.shift()!;
@@ -52,27 +52,27 @@ export function reflow(items: GridItem[], moved: GridItem) {
       }
     }
   }
-}
+};
 
 /** Settle all items so no two overlap — the reusable cleanup pass run on
  * boot and after a layout reset. Mutates `items`. */
-export function settle(items: GridItem[]) {
+export const settle = (items: GridItem[]) => {
   for (const it of [...items].sort((a, b) => a.row - b.row || a.col - b.col)) reflow(items, it);
-}
+};
 
 /** First open slot scanning left-to-right, top-to-bottom. */
-export function autoPlace(placed: GridItem[], w: number, h: number, cols: number) {
+export const autoPlace = (placed: GridItem[], w: number, h: number, cols: number) => {
   for (let row = 0; ; row++) {
     for (let col = 0; col <= Math.max(0, cols - w); col++) {
       const probe = { id: "", col, row, w, h };
       if (!placed.some((it) => collides(it, probe))) return { col, row };
     }
   }
-}
+};
 
 /** Sample a damped spring into a CSS linear() easing so widgets settle with a
  * real bounce on a plain CSS transition — zero JS per frame. */
-export function springEasing(stiffness: number, damping: number, samples = 40) {
+export const springEasing = (stiffness: number, damping: number, samples = 40) => {
   const w0 = Math.sqrt(stiffness);
   const zeta = damping / (2 * Math.sqrt(stiffness));
   const wd = w0 * Math.sqrt(Math.max(1e-6, 1 - zeta * zeta));
@@ -85,4 +85,4 @@ export function springEasing(stiffness: number, damping: number, samples = 40) {
   }
   pts[samples] = "1";
   return `linear(${pts.join(",")})`;
-}
+};

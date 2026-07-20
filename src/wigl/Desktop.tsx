@@ -11,11 +11,11 @@
 // widget in one atomic commit; until then only the drag session mutates.
 
 import type { ComponentType, ErrorInfo, ReactNode } from "react";
-import { Component, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Component, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { availableMonitors } from "@tauri-apps/api/window";
-import { DESKTOP_ACTIONS, type DesktopActionCtx } from "./actions";
+import { TILING } from "./grid/config";
 import {
   autoPlace,
   colsForWidth,
@@ -28,9 +28,8 @@ import {
   settle,
   spanToPx,
   springEasing,
-} from "./grid";
-import { useStorage } from "./storage";
-import { TILING } from "./tiling.config";
+} from "./grid/math";
+import { useGlobalActions, useRegisterGlobalAction, useStorage } from "./hooks";
 import { type WidgetGridReport, WidgetSlotProvider } from "./widget";
 
 // Clicks on these inside a drag handle stay clicks; everything else drags.
@@ -112,7 +111,7 @@ class WidgetErrorBoundary extends Component<{ id: string; children: ReactNode },
   }
 }
 
-export function Desktop({
+export const Desktop = ({
   widgets,
   monitorIndex,
   windowed = false,
@@ -124,7 +123,7 @@ export function Desktop({
   // poller is reading hit-rects (tried it, reverted — see lib.rs), so both
   // are skipped rather than firing IPC calls nothing listens to.
   windowed?: boolean;
-}) {
+}) => {
   const [saved, setSaved, { loading }] = useStorage<SavedPositions>("widget_layout", {});
   const [layout, setLayout] = useState<GridItem[] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -367,16 +366,27 @@ export function Desktop({
 
   // Reset = wipe all saved positions and rebootstrap every monitor: widgets
   // fall back to monitor 0 + autoPlace + settle, exactly like a first boot.
-  const doReset = () => {
+  const doReset = useCallback(() => {
     setSaved({});
     setLayout(null);
-  };
-  const actionCtx: DesktopActionCtx = {
-    resetLayout: () => {
-      emit("wigl-reset", { from: monitorIndex }).catch(console.error);
-      doReset();
-    },
-  };
+  }, [setSaved]);
+  // The only default entry in the right-click menu — a widget wanting its
+  // own entry there calls this same hook itself, no Desktop/wigl edit needed.
+  // Memoized so the registration effect doesn't re-fire on every render
+  // (Desktop re-renders per pointermove during a drag).
+  const resetLayoutAction = useMemo(
+    () => ({
+      id: "reset-layout",
+      label: "Reset layout",
+      run: () => {
+        emit("wigl-reset", { from: monitorIndex }).catch(console.error);
+        doReset();
+      },
+    }),
+    [monitorIndex, doReset],
+  );
+  useRegisterGlobalAction(resetLayoutAction);
+  const globalActions = useGlobalActions();
 
   // --- incoming cross-monitor previews / drops ---------------------------------
   useEffect(() => {
@@ -643,12 +653,12 @@ export function Desktop({
           onContextMenu={(e) => e.preventDefault()}
         >
           <div className="wigl-menu" style={{ left: menu.x, top: menu.y }}>
-            {DESKTOP_ACTIONS.map((a) => (
+            {globalActions.map((a) => (
               <button
                 key={a.id}
                 onClick={() => {
                   closeMenu();
-                  a.run(actionCtx);
+                  a.run();
                 }}
               >
                 {a.label}
@@ -659,4 +669,4 @@ export function Desktop({
       )}
     </div>
   );
-}
+};

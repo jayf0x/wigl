@@ -152,7 +152,7 @@ html.wigl-windowed #root {
   }
 }
 
-/* --- tiling desktop (spring easing comes from tiling.config.ts via a CSS
+/* --- tiling desktop (spring easing comes from wigl/grid/config.ts via a CSS
    var set in Desktop.tsx) ------------------------------------------------ */
 :root {
   --wigl-accent: #6ee7c7; /* keep in sync with ACCENT in Desktop.tsx */

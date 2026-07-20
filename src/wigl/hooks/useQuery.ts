@@ -4,7 +4,7 @@
 // `useStorage` uses, keyed `query_<key>`, with `updatedAt` baked into the
 // stored blob so no separate invalidation table is needed.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { q, sql } from "./storage";
+import { sql, sqlLiteral } from "../storage/client";
 
 export const hours = (n: number) => n * 60 * 60 * 1000;
 
@@ -16,18 +16,18 @@ interface CacheEntry<T> {
 const memoryCache = new Map<string, CacheEntry<unknown>>();
 const inflight = new Map<string, Promise<unknown>>();
 
-async function readSqlCache<T>(key: string): Promise<CacheEntry<T> | null> {
-  const raw = (await sql(`SELECT value FROM kv WHERE key=${q(`query_${key}`)}`)).trim();
+const readSqlCache = async <T>(key: string): Promise<CacheEntry<T> | null> => {
+  const raw = (await sql(`SELECT value FROM kv WHERE key=${sqlLiteral(`query_${key}`)}`)).trim();
   if (!raw) return null;
   return JSON.parse(raw) as CacheEntry<T>;
-}
+};
 
-async function writeSqlCache<T>(key: string, entry: CacheEntry<T>) {
+const writeSqlCache = async <T>(key: string, entry: CacheEntry<T>) => {
   const json = JSON.stringify(entry);
   await sql(
-    `INSERT INTO kv (key, value) VALUES (${q(`query_${key}`)}, ${q(json)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+    `INSERT INTO kv (key, value) VALUES (${sqlLiteral(`query_${key}`)}, ${sqlLiteral(json)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
   );
-}
+};
 
 export interface UseQueryOptions<T> {
   key: string;
@@ -44,7 +44,7 @@ export interface UseQueryOptions<T> {
  * Concurrent calls for the same key share one in-flight request. `refresh()`
  * forces a refetch and updates the cache for everyone reading that key.
  */
-export function useQuery<T>({ key, fn, stale, useSql = false }: UseQueryOptions<T>) {
+export const useQuery = <T>({ key, fn, stale, useSql = false }: UseQueryOptions<T>) => {
   const fnRef = useRef(fn);
   fnRef.current = fn;
 
@@ -98,4 +98,4 @@ export function useQuery<T>({ key, fn, stale, useSql = false }: UseQueryOptions<
   }, [key, load, useSql]);
 
   return [data, loading, { refresh: () => load(true) }] as const;
-}
+};

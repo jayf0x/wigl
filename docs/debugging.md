@@ -25,6 +25,14 @@ Fix: after any frontend edit, do a full `bun run build` (regenerates `dist/`) be
 
 Both are required; either alone fails (the second one fails the Cargo build outright with a clear "does not match the allowlist" error, so that half is hard to miss — the first half fails silently at runtime).
 
+## Webview console errors are invisible to `log show` / `bun run verify`
+
+Neither macOS's `log show` nor `verify.sh`'s captured stdout/stderr sees anything printed to a webview's own devtools console — that's a separate stream Rust never touches. A React crash (including a minified "Minified React error #NNN" message) can leave a monitor window blank with `bun run verify` still reporting "log errors: none", because verify only checks the native process's output, not the webview's console.
+
+Two things narrow this down:
+- `src/main.tsx` installs `window.onerror`/`unhandledrejection` handlers that `console.error` with a `[wigl]` prefix, and `AppErrorBoundary` (`src/App.tsx`, one level above `<Desktop>`) plus each widget's own `WidgetErrorBoundary` (`Desktop.tsx`) turn a render crash into a visible on-screen message instead of a blank window — check what's on screen for a "wigl crashed: ..." / "widget "..." crashed" line before assuming the window has no error to report.
+- To get the *un-minified* React error message, run against a dev bundle instead of a production one: `bun run tauri dev` (uses `beforeDevCommand: bun run dev`, an unminified Vite dev build) rather than `bun run tauri build`/`verify` (uses `bun run build`, minified). Minified React errors are only a numbered pointer to https://react.dev/errors/NNN — the dev bundle gives the actual message and component stack directly.
+
 ## Widget doesn't appear / isn't clickable
 
 Widgets aren't windows (see `docs/architecture.md`) — they're grid items rendered by whichever monitor's `<Desktop>` owns them, so "the app runs but a widget is missing or dead" has its own checklist:

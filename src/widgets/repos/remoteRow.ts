@@ -6,7 +6,7 @@ import type { ProjectStatus, RemoteRepo } from "./types";
 // set to values that already read as "no data" in the existing components
 // (hasNpmRelease: false hides the status dot, lastRelease: -1 sorts below
 // "never released" locals and renders blank).
-export function remoteToRow(repo: RemoteRepo, destDir: string): ProjectStatus {
+export const remoteToRow = (repo: RemoteRepo, destDir: string): ProjectStatus => {
   return {
     name: repo.name,
     path: destDir,
@@ -20,4 +20,4 @@ export function remoteToRow(repo: RemoteRepo, destDir: string): ProjectStatus {
     downloaded: false,
     remote: repo,
   };
-}
+};

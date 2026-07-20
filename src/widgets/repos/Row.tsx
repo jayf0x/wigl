@@ -1,8 +1,8 @@
 import { useState } from "react";
+import { cn } from "@/wigl/utils";
 import { Check, CloudDownload, Code2, FolderOpen, GitBranch, GitCommitHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 import { RelativeTime, StatusIcon, statusTitle } from "./cells";
 import { cloneRepo, commitAllChanges, openInEditor, openInGithubDesktop, revealInFileManager } from "./commands";
 import type { ProjectStatus } from "./types";
@@ -20,13 +20,13 @@ const CLONE_PHASES: { match: RegExp; base: number; span: number }[] = [
   { match: /updating files/i, base: 95, span: 4 },
 ];
 
-function nextClonePercent(line: string, prev: number): number {
+const nextClonePercent = (line: string, prev: number): number => {
   const pct = line.match(/(\d+)%/);
   if (!pct) return prev;
   const phase = CLONE_PHASES.find((p) => p.match.test(line));
   const mapped = phase ? phase.base + (Number(pct[1]) / 100) * phase.span : Number(pct[1]);
   return Math.max(prev, Math.min(99, Math.round(mapped)));
-}
+};
 
 // `onChanged` is called after a successful commit, so the caller re-scans
 // and this row's `hasUncommittedChanges` (and thus the commit icon) updates.
@@ -43,7 +43,7 @@ export const Row = ({ p, onChanged, onCloned }: { p: ProjectStatus; onChanged: (
 
   const downloaded = p.downloaded !== false;
 
-  async function submitCommit() {
+  const submitCommit = async () => {
     const trimmed = message.trim();
     if (!trimmed) return;
     try {
@@ -56,9 +56,9 @@ export const Row = ({ p, onChanged, onCloned }: { p: ProjectStatus; onChanged: (
       // shouldn't silently eat the message.
       console.error(err);
     }
-  }
+  };
 
-  async function startClone() {
+  const startClone = async () => {
     if (!p.remote || cloning || cloned) return;
     setCloneError(null);
     setClonePercent(0);
@@ -72,7 +72,7 @@ export const Row = ({ p, onChanged, onCloned }: { p: ProjectStatus; onChanged: (
       setCloning(false);
       setCloneError(err instanceof Error ? err.message : String(err));
     }
-  }
+  };
 
   return (
     <TableRow
@@ -184,30 +184,30 @@ export const Row = ({ p, onChanged, onCloned }: { p: ProjectStatus; onChanged: (
 
 // Compact day/week/month/year label — release cadence is measured in days,
 // not minutes, so this doesn't need the live-ticking useRelativeTime hook.
-function compactAge(time: number): string {
+const compactAge = (time: number): string => {
   const days = (Date.now() / 1000 - time) / 86400;
   if (days < 14) return `${Math.max(0, Math.round(days))}d`;
   if (days < 60) return `${Math.round(days / 7)}w`;
   if (days < 365) return `${Math.round(days / 30)}mo`;
   return `${Math.round(days / 365)}y`;
-}
+};
 
 // Expected release cadence grows sub-linearly with project age — a smooth
 // stand-in for "young projects ship often, mature ones settle down" instead
 // of a fixed threshold like "2 weeks". null = never released.
-function releaseScore(p: ProjectStatus): number {
+const releaseScore = (p: ProjectStatus): number => {
   const now = Date.now() / 1000;
   const ageDays = Math.max(0, (now - p.firstCommit) / 86400);
   const daysSinceRelease = Math.max(0, (now - p.lastRelease) / 86400);
   const expectedDays = 3 + ageDays ** 0.6;
   return daysSinceRelease / expectedDays;
-}
+};
 
-function releaseScoreClass(p: ProjectStatus) {
+const releaseScoreClass = (p: ProjectStatus) => {
   if (!p.lastRelease) return null;
   const s = releaseScore(p);
   if (s >= 2) return "text-red-400/80";
   if (s < 0.5) return "text-emerald-400/80";
   if (s < 1) return "text-yellow-400/80";
   return "text-orange-400/80";
-}
+};

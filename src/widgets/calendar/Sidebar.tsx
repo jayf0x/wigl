@@ -1,10 +1,10 @@
+import { cn } from "@/wigl/utils";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import type { Draft } from "./calendar.utils";
 import { Field, inputCls } from "./Field";
 
-export function Sidebar({
+export const Sidebar = ({
   draft,
   setDraft,
   canSave,
@@ -20,7 +20,7 @@ export function Sidebar({
   onSave: () => void;
   onDelete: () => void;
   onNew: () => void;
-}) {
+}) => {
   return (
     <div className="flex w-[150px] shrink-0 flex-col gap-1.5 border-l border-white/10 px-2.5 py-2 text-[10px]">
       <div className="flex items-center gap-0.5">
@@ -89,4 +89,4 @@ export function Sidebar({
       </Button>
     </div>
   );
-}
+};

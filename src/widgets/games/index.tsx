@@ -13,7 +13,7 @@ const GAMES = [
   { id: "breakout", name: "BREAKOUT", Game: Breakout },
 ] as const;
 
-export default function GamesWidget() {
+const GamesWidget = () => {
   const [active, setActive] = useState<(typeof GAMES)[number] | null>(null);
 
   return (
@@ -48,4 +48,6 @@ export default function GamesWidget() {
       )}
     </Widget>
   );
-}
+};
+
+export default GamesWidget;

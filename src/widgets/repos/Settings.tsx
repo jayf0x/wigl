@@ -1,25 +1,25 @@
 import { useState } from "react";
+import { cn } from "@/wigl/utils";
 import { Check, Loader2, Settings2, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { resolveSourceDir, sourceDirExists } from "./commands";
 
 // Plain absolute-positioned panel, not a popover/dialog primitive — same
 // "just a div" pattern Row.tsx already uses for its inline commit-message
 // box. The gear button toggles it; there's exactly one field today (source
 // dir), so a full form component would be pure ceremony.
-export function Settings({ sourceDir, onSave }: { sourceDir: string; onSave: (dir: string) => void }) {
+export const Settings = ({ sourceDir, onSave }: { sourceDir: string; onSave: (dir: string) => void }) => {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(sourceDir);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function close() {
+  const close = () => {
     setOpen(false);
     setError(null);
-  }
+  };
 
-  async function submit() {
+  const submit = async () => {
     if (checking) return;
     const resolved = await resolveSourceDir(value);
     if (!resolved) return;
@@ -33,7 +33,7 @@ export function Settings({ sourceDir, onSave }: { sourceDir: string; onSave: (di
     }
     if (resolved !== sourceDir) onSave(resolved);
     close();
-  }
+  };
 
   return (
     <div className="relative">
@@ -88,4 +88,4 @@ export function Settings({ sourceDir, onSave }: { sourceDir: string; onSave: (di
       )}
     </div>
   );
-}
+};

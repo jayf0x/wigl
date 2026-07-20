@@ -4,11 +4,11 @@ This file is the contract and the reasoning. It deliberately names no current wi
 
 ## Philosophy (shadcn-style)
 
-Widgets and shared components are **owned code**, not framework surface. A component's API is children + `className` (merged via `cn()` from `@/lib/utils`), not a prop for every conceivable variation — if a widget needs the header green, it passes `className="bg-green-950"`, it doesn't wait for a `background` prop to be added. When a shared component doesn't fit, edit it or don't use it; never grow a config system around it.
+Widgets and shared components are **owned code**, not framework surface. A component's API is children + `className` (merged via `cn()` from `@/wigl/utils`), not a prop for every conceivable variation — if a widget needs the header green, it passes `className="bg-green-950"`, it doesn't wait for a `background` prop to be added. When a shared component doesn't fit, edit it or don't use it; never grow a config system around it.
 
 ## A widget is one folder
 
-The contract, typed by `WidgetModule` in `src/wigl/types.ts`:
+The contract, typed by the `WidgetModule` interface local to `src/App.tsx` (the only place that needs it — a widget itself never imports this type):
 
 ```
 src/widgets/<name>/
@@ -28,16 +28,16 @@ Sibling files take plain names (`types.ts`, `commands.ts`, `sort.ts`, a `Row.tsx
 // src/widgets/clock/index.tsx — a complete, working widget
 import { Widget, WidgetHeader } from "@/wigl";
 
-export default function ClockWidget() {
-  return (
-    <Widget w={3} h={2} col={8} row={0}>
-      <WidgetHeader>
-        <span className="px-1 text-[10px] tracking-widest opacity-40">CLOCK</span>
-      </WidgetHeader>
-      {/* body */}
-    </Widget>
-  );
-}
+const ClockWidget = () => (
+  <Widget w={3} h={2} col={8} row={0}>
+    <WidgetHeader>
+      <span className="px-1 text-[10px] tracking-widest opacity-40">CLOCK</span>
+    </WidgetHeader>
+    {/* body */}
+  </Widget>
+);
+
+export default ClockWidget;
 ```
 
 Grid size/position are plain props on `<Widget>` — `w`/`h` in cells (default 3×4), `col`/`row` as a first-launch cell position (omit them and you get the first open slot). There's no separate config export sitting next to `default`: one export means nothing to typo, and grid props are ordinary JSX so TypeScript already catches a mistyped one (App.tsx still warns if it finds a leftover top-level `gridConfig` export, which means a widget predates this and needs its config moved onto `<Widget>`). `col`/`row` only matter the first time a widget is ever seen — the tiling desktop persists wherever the user drags it after that. Pick defaults that don't overlap other widgets' (check their `<Widget>` props in `src/widgets/*/index.tsx`). Window chrome (transparent, undecorated, always-on-bottom, skip-taskbar, non-resizable) is set once per monitor in Rust, not per widget — see "Window chrome" below — so there's no per-widget chrome to configure at all.
@@ -53,9 +53,15 @@ The shape, in dependency order (any widget in `src/widgets/` with a hook is the 
 3. **The component** (`index.tsx`) — consumes the hook, renders rows/state, wires up interactions. Wrapped in the shared panel chrome (below). When it grows past comfortable reading length, split sub-components/utils into sibling files in the same folder — that's expected, not a smell.
 4. **Import with the `@/` alias**, not relative paths, for anything outside the widget's own folder (`@/wigl`, `@/components/ui/...`). Within a widget's own folder, relative imports are fine.
 
-## Shared helpers (`@/wigl`)
+## Shared helpers (`@/wigl`, `@/wigl/hooks`, `@/wigl/utils`)
 
-Everything shared is exported from the `@/wigl` barrel — **read `src/wigl/index.ts` for the current list**; each module carries its own doc comment. The two you'll always use:
+Everything shared lives behind exactly three barrels — widgets never deep-import past them:
+
+- **`@/wigl`** — visual/layout primitives: `Widget`, `WidgetHeader`, `Desktop`, `TILING`.
+- **`@/wigl/hooks`** — stateful/React helpers: `useStorage`, `useQuery`, `useRelativeTime`, `useRegisterGlobalAction`.
+- **`@/wigl/utils`** — plain non-React helpers: `cn`, `runCmd`, `isMacos`, `relativeTime`.
+
+**Read each barrel's `index.ts` for the current list**; each module carries its own doc comment. The two you'll always use from `@/wigl`:
 
 - **`Widget`** — the dark rounded panel (also forces the `dark` class coss ui needs). Override looks via `className`. Children + `className` only, per the philosophy above.
 - **`WidgetHeader`** — a drag handle, and *only* a drag handle. Its single job is making window-drag and clicking coexist: mousedown on anything interactive (`button, a, input, select, textarea`, or any element carrying `data-no-drag`) passes through to the element; mousedown anywhere else starts the window drag. Content is whatever children you pass — a title span, status info, buttons (`ml-auto` to right-align them), nothing at all. **Never** attach `onMouseDown`/`stopPropagation` workarounds inside it, and never import the drag module directly in a widget — if a click is being eaten, add `data-no-drag` to that element instead.
@@ -67,12 +73,21 @@ Everything shared is exported from the `@/wigl` barrel — **read `src/wigl/inde
 </WidgetHeader>
 ```
 
-Before writing a utility inside your widget folder, skim the barrel — the helper you need (e.g. live relative-time labels, persisted state) may already exist. Conversely, don't add to `src/wigl/` for a single widget's needs; the promotion threshold is in `docs/architecture.md`.
+Before writing a utility inside your widget folder, skim the barrels — the helper you need (e.g. live relative-time labels, persisted state) may already exist. Conversely, don't add to `src/wigl/` for a single widget's needs; the promotion threshold is in `docs/architecture.md`.
+
+## The desktop's right-click menu (`useRegisterGlobalAction`)
+
+```ts
+import { useRegisterGlobalAction } from "@/wigl/hooks";
+useRegisterGlobalAction({ id: "<widget>_do-thing", label: "Do thing", run: () => doThing() });
+```
+
+Adds an entry to the desktop's right-click menu for as long as the calling component is mounted — no `Desktop.tsx` or `wigl` edit needed. `id` should be prefixed with the widget's folder name, same rule as storage keys, since the registry is a single flat namespace across every widget's menu entries.
 
 ## Persistent storage (`useStorage`)
 
 ```ts
-import { useStorage } from "@/wigl";
+import { useStorage } from "@/wigl/hooks";
 const [items, setItems, { loading }] = useStorage<Item[]>("<widget>_items", []);
 ```
 
@@ -87,7 +102,7 @@ Ceiling to know about: last-writer-wins on the whole blob — two writers mutati
 `useStorage` is for state a widget *owns and writes* (persisted, shared across windows). `useQuery` is the other half: caching the *result of an expensive read* — mainly a shell command you don't want to re-run on every poll tick, especially one with its own rate limit (a GitHub API call via `gh`, say).
 
 ```ts
-import { useQuery, hours } from "@/wigl";
+import { useQuery, hours } from "@/wigl/hooks";
 const [data, loading, { refresh }] = useQuery({
   key: "<widget>_archived",
   fn: loadArchivedRepoNames,
