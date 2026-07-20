@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { lazy, useEffect, useState } from "react";
+import type { ComponentType } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { Desktop } from "@/wigl";
@@ -7,21 +8,27 @@ import "./App.css";
 
 // Widgets are discovered by folder: src/widgets/<name>/index.tsx. The folder
 // name becomes the widget id. No registry, no manifest, no App.tsx edit —
-// adding a widget is adding a folder.
-const modules = import.meta.glob<WidgetModule>("./widgets/*/index.tsx", { eager: true });
-const widgets: Record<string, WidgetModule> = {};
-// The glob does no validation of what a widget exports, so a typo silently
-// fails (blank widget / default size) — warn instead.
-for (const [path, mod] of Object.entries(modules)) {
+// adding a widget is adding a folder. Non-eager: each monitor window only
+// pays the code-split cost of the widgets it actually mounts, not every
+// widget in the repo (a monitor renders a subset, decided by saved layout).
+const loaders = import.meta.glob<WidgetModule>("./widgets/*/index.tsx");
+const widgets: Record<string, ComponentType> = {};
+for (const [path, load] of Object.entries(loaders)) {
   const id = path.split("/")[2];
-  if (!mod.default) {
-    console.error(`[wigl] widget "${id}" has no default export — index.tsx must default-export its component`);
-    continue;
-  }
-  if ("gridConfig" in mod) {
-    console.warn(`[wigl] widget "${id}" exports a top-level "gridConfig" — ignored. Pass size/position as props instead: <Widget w={3} h={4}>`);
-  }
-  widgets[id] = mod;
+  // The glob does no validation of what a widget exports, so a typo would
+  // silently fail (blank widget / default size) — checked once the chunk
+  // actually loads, since that's the earliest point the module exists.
+  widgets[id] = lazy(async (): Promise<{ default: ComponentType }> => {
+    const mod = await load();
+    if (!mod.default) {
+      console.error(`[wigl] widget "${id}" has no default export — index.tsx must default-export its component`);
+      return { default: () => null };
+    }
+    if ("gridConfig" in mod) {
+      console.warn(`[wigl] widget "${id}" exports a top-level "gridConfig" — ignored. Pass size/position as props instead: <Widget w={3} h={4}>`);
+    }
+    return { default: mod.default };
+  });
 }
 
 // Rust creates one `screen-<i>` window per monitor at launch (see lib.rs),

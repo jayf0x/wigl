@@ -19,7 +19,8 @@
     "calendar:add": "bun scripts/calendar.ts add",
     "calendar:list": "bun scripts/calendar.ts list",
     "calendar:rm": "bun scripts/calendar.ts rm",
-    "repos:scan": "bun scripts/repos-scan.ts"
+    "repos:scan": "bun scripts/repos-scan.ts",
+    "check:eager": "bun scripts/check-eager.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

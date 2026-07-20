@@ -20,8 +20,9 @@ Each `docs/*.md` file owns one slice of ground truth. When a change in this sess
 | `docs/widgets.md` | The widget folder contract: what files a widget can have, how it's discovered, storage/query/shell conventions |
 | `docs/debugging.md` | How to verify a change and diagnose the current failure modes |
 | `docs/future-ideas.md` | Product ideas and closed/rejected scope decisions — defects and open gaps go in `backlog.md` instead |
+| `docs/principles.md` | Code-shape rules (functional core / imperative shell) — short on purpose |
 
-If a task's outcome doesn't change any of those four claims, there's nothing to update — most small tweaks won't.
+If a task's outcome doesn't change any of those five claims, there's nothing to update — most small tweaks won't.
 
 ## Read only what your task needs
 

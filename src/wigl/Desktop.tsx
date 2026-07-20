@@ -9,12 +9,11 @@
 // freezes the card ("detached") and broadcasts a preview; the target monitor
 // renders the ghost and reflows a phantom. On drop the target adopts the
 // widget in one atomic commit; until then only the drag session mutates.
-import { Component, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ErrorInfo, ReactNode } from "react";
+import { Component, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { ComponentType, ErrorInfo, ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { availableMonitors } from "@tauri-apps/api/window";
-import type { WidgetModule } from "./types";
 import { TILING } from "./tiling.config";
 import { type GridItem, autoPlace, colToPx, colsForWidth, pxToCol, pxToRow, reflow, rowToPx, settle, spanToPx, springEasing } from "./grid";
 import { useStorage } from "./storage";
@@ -105,7 +104,7 @@ export function Desktop({
   monitorIndex,
   windowed = false,
 }: {
-  widgets: Record<string, WidgetModule>;
+  widgets: Record<string, ComponentType>;
   monitorIndex: number;
   // True on Wayland's single-window flow (see lib.rs's windowed_mode): no
   // sibling monitor windows exist to hand a drag off to, and no click-through
@@ -587,7 +586,7 @@ export function Desktop({
         <i />
       </div>
       {layout.map((it) => {
-        const Component = widgets[it.id].default;
+        const Component = widgets[it.id];
         return (
           <div
             key={it.id}
@@ -601,7 +600,9 @@ export function Desktop({
           >
             <WidgetErrorBoundary id={it.id}>
               <WidgetSlotProvider value={getSlot(it.id)}>
-                <Component />
+                <Suspense fallback={null}>
+                  <Component />
+                </Suspense>
               </WidgetSlotProvider>
             </WidgetErrorBoundary>
           </div>
