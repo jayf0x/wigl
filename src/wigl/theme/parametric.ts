@@ -12,12 +12,24 @@ export interface ParametricKnobs {
   a: string;
   b: string;
   c: string;
+  // Elevation steps (see `elevate` below) exposed as their own knobs instead
+  // of baked-in constants — presets like Dracula/Catppuccin put `card`
+  // *below* `background` (negative step) while Nord/Gruvbox put it above
+  // (positive), so a single hardcoded sign can't fit both. Range roughly
+  // -0.3..0.4; sign is direction (toward vs. away from `foreground`),
+  // magnitude is how far.
+  cardElevation: number;
+  surfaceElevation: number;
+  accentElevation: number;
 }
 
 export const DEFAULT_KNOBS: ParametricKnobs = {
   a: "#28282c",
   b: "#6ee7c7",
   c: "#bd93f9",
+  cardElevation: 0.12,
+  surfaceElevation: 0.22,
+  accentElevation: 0.22,
 };
 
 interface Ok {
@@ -83,13 +95,15 @@ export const generateParametricColors = (knobs: ParametricKnobs): ThemeColors =>
   // it never reads as flat, library-default gray.
   const foreground = withC({ l: isDarkBg ? 0.97 : 0.16, c: a.c, h: a.h }, 0.25);
 
-  // Elevation: surfaces step a fixed fraction of the way from background
-  // toward foreground. The sign flips automatically with isDarkBg, so
-  // "card" is always a lighter dark or a darker light — never inverted.
+  // Elevation: surfaces step a tunable fraction of the way from background
+  // toward foreground — steps can go negative to step *away* from
+  // foreground instead (see ParametricKnobs). Dragging `a` toward white
+  // still flips the overall light/dark direction automatically, since the
+  // step is relative to (foreground - background), not an absolute sign.
   const elevate = (steps: number): Ok => withL(background, background.l + (foreground.l - background.l) * steps);
-  const card = elevate(0.12);
+  const card = elevate(knobs.cardElevation);
   const popover = card;
-  const secondary = elevate(0.22);
+  const secondary = elevate(knobs.surfaceElevation);
   const muted = secondary;
 
   // mutedForeground: partway between foreground and background — readable
@@ -103,9 +117,14 @@ export const generateParametricColors = (knobs: ParametricKnobs): ThemeColors =>
   const primaryMix = mix([[b, 1], [a, 0.3], [c, 0.1]]);
   const contrastTarget = isDarkBg ? 0.78 : 0.4;
   const primary = withC(withL(primaryMix, primaryMix.l * 0.5 + contrastTarget * 0.5), 1.15);
-  const primaryForeground = withC({ l: primary.l > 0.55 ? 0.18 : 0.97, c: 0, h: 0 }, 1);
+  // primaryForeground: reuse background/foreground themselves rather than a
+  // flat achromatic gray — every hand-written preset does this (a light
+  // primary button gets the theme's actual dark background as its text
+  // color, not a generic near-black), and it keeps the button tinted with
+  // the theme's hue instead of reading as a library-default gray-on-color.
+  const primaryForeground = primary.l > 0.55 ? background : foreground;
 
-  const accentToken = withL(mix([[c, 1], [a, 0.4]]), background.l + (foreground.l - background.l) * 0.22);
+  const accentToken = withL(mix([[c, 1], [a, 0.4]]), background.l + (foreground.l - background.l) * knobs.accentElevation);
 
   // Border/input ride on foreground's alpha, not a fixed color — since
   // foreground already flips light/dark with background, so does the

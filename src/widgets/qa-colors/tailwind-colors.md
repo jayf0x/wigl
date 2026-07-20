@@ -7,10 +7,9 @@ with `bun run tw-colors` if `tailwindcss` ever gets bumped (it dumps
 `node_modules/tailwindcss/theme.css`'s `--color-*` vars, one JSON file per
 run — see `scripts/tw-colors.ts`).
 
-## How to QA visually
+## The widget
 
-Run the app (`bun run tauri dev` / `bun run qa`), open the **qa-colors**
-widget. Three tabs:
+Three tabs:
 
 1. **Theme tokens** — every CSS var `applyTheme` writes (`src/wigl/theme/types.ts`'s
    `THEME_COLOR_KEYS`) plus `--wigl-accent`, as raw swatches read live off
@@ -111,13 +110,3 @@ widget currently references them.
 All values are `oklch(...)` (except `black`/`white`, which are hex) — same
 color space `parametric.ts` mixes in, so lifting a shade straight out of this
 palette into a knob or a formula constant needs no conversion.
-
-## Script
-
-`scripts/tw-colors.ts` (`bun run tw-colors`) replaces the old
-`scripts/all-tw-color.py`, which never worked (its `sVal`/`cl` helpers had
-scoping and multi-hyphen-name bugs — e.g. `amber-50` split on the first `-`
-only, dropping the shade). The bun version just regexes
-`^\s*--color-([a-z]+)(?:-(\d+))?:\s*([^;]+);` per line — good enough since
-`theme.css`'s format is completely regular (confirmed above: every entry is
-either `--color-<family>-<shade>` or a shade-less `--color-<name>`).

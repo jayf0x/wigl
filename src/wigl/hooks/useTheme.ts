@@ -24,7 +24,10 @@ export const useTheme = () => {
 
   useLayoutEffect(() => {
     if (themeId === CUSTOM_THEME_ID) {
-      applyTheme(generateParametricColors(knobs));
+      // Spread over DEFAULT_KNOBS: knobs persisted before the elevation
+      // sliders existed won't have those keys, and generateParametricColors
+      // requires every one.
+      applyTheme(generateParametricColors({ ...DEFAULT_KNOBS, ...knobs }));
       return;
     }
     const preset = PRESETS.find((p) => p.id === themeId) ?? PRESETS[0];

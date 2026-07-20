@@ -31,17 +31,25 @@ Two ways to produce a `ThemeColors`:
 
 - **Presets** (`presets.ts`): a literal object per theme, hand-picked colors.
   Adding one is copy an existing entry, change the values, done.
-- **Parametric** (`parametric.ts`): 3 opaque knobs (`a`/`b`/`c`, no semantic
-  names) run through OKLCH formulas to derive all ~18 tokens. Knob `a`'s own
-  lightness decides light-vs-dark for the whole set — every formula reads
-  `background`'s lightness and flips direction accordingly (see
-  `isDarkBg` in that file), so dragging `a` toward white doesn't strand one
-  pale rectangle in an otherwise-dark theme.
+- **Parametric** (`parametric.ts`): 3 opaque colors (`a`/`b`/`c`, no semantic
+  names) plus 3 numeric elevation sliders (`cardElevation`,
+  `surfaceElevation`, `accentElevation`) run through OKLCH formulas to derive
+  all ~18 tokens. Knob `a`'s own lightness decides light-vs-dark for the
+  whole set — every formula reads `background`'s lightness and flips
+  direction accordingly (see `isDarkBg` in that file), so dragging `a` toward
+  white doesn't strand one pale rectangle in an otherwise-dark theme.
+  The elevation sliders exist because hand-written presets don't agree on
+  sign: Nord/Gruvbox step `card` *lighter* than `background`, Dracula/
+  Catppuccin step it *darker* — a hardcoded fraction can't fit both, so the
+  step itself (and its sign) is a knob. `primaryForeground` is derived as
+  `background`/`foreground` directly (not a flat gray), matching what every
+  hand-written preset already does.
 
 `useTheme` picks between them based on the persisted theme id
 (`CUSTOM_THEME_ID` → parametric + persisted knobs, anything else → a
 `PRESETS` lookup) and calls `applyTheme`. `ThemeSettingsPopover` is the only
-UI: preset list + the 3 knob color pickers, shown when `Custom` is selected.
+UI: preset list + the 3 knob color pickers + the 3 elevation sliders, shown
+when `Custom` is selected.
 
 ## The one hard rule for widgets
 

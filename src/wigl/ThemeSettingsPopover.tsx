@@ -1,4 +1,5 @@
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle } from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
 import type { ParametricKnobs } from "./theme/parametric";
 import { PRESETS } from "./theme/presets";
 import { CUSTOM_THEME_ID } from "./theme/types";
@@ -20,10 +21,20 @@ interface ThemeSettingsPopoverProps {
 // Deliberately unlabeled beyond a letter — these aren't "background" or
 // "primary" pickers, they're formula inputs; every token below rides along
 // with whichever knob moves (see parametric.ts).
-const KNOB_FIELDS: Array<{ key: keyof ParametricKnobs; label: string }> = [
+const KNOB_FIELDS: Array<{ key: "a" | "b" | "c"; label: string }> = [
   { key: "a", label: "A" },
   { key: "b", label: "B" },
   { key: "c", label: "C" },
+];
+
+// Elevation sliders: how far card/popover, secondary/muted, and accent step
+// from `background` toward `foreground` — negative steps away instead (see
+// parametric.ts). This is what makes e.g. Dracula's darker-than-background
+// card reachable, not just Nord/Gruvbox's lighter one.
+const ELEVATION_FIELDS: Array<{ key: "cardElevation" | "surfaceElevation" | "accentElevation"; label: string }> = [
+  { key: "cardElevation", label: "Card" },
+  { key: "surfaceElevation", label: "Surface" },
+  { key: "accentElevation", label: "Accent" },
 ];
 
 /** The global settings panel — a preset picker plus a "Custom" entry whose
@@ -78,18 +89,34 @@ export const ThemeSettingsPopover = ({
           </button>
         </div>
         {themeId === CUSTOM_THEME_ID && (
-          <div className="mt-2 flex items-center justify-center gap-2 border-t pt-2">
-            {KNOB_FIELDS.map(({ key, label }) => (
-              <input
-                key={key}
-                type="color"
-                title={label}
-                aria-label={label}
-                value={knobs[key]}
-                onChange={(e) => onKnobsChange({ ...knobs, [key]: e.target.value })}
-                className="h-7 w-7 cursor-pointer rounded-full border-0 bg-transparent p-0"
-              />
-            ))}
+          <div className="mt-2 flex flex-col gap-2 border-t pt-2">
+            <div className="flex items-center justify-center gap-2">
+              {KNOB_FIELDS.map(({ key, label }) => (
+                <input
+                  key={key}
+                  type="color"
+                  title={label}
+                  aria-label={label}
+                  value={knobs[key]}
+                  onChange={(e) => onKnobsChange({ ...knobs, [key]: e.target.value })}
+                  className="h-7 w-7 cursor-pointer rounded-full border-0 bg-transparent p-0"
+                />
+              ))}
+            </div>
+            <div className="flex flex-col gap-1.5 px-1">
+              {ELEVATION_FIELDS.map(({ key, label }) => (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="w-14 shrink-0 text-muted-foreground text-xs">{label}</span>
+                  <Slider
+                    min={-0.3}
+                    max={0.4}
+                    step={0.01}
+                    value={knobs[key]}
+                    onValueChange={(v) => onKnobsChange({ ...knobs, [key]: Array.isArray(v) ? v[0] : v })}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </PopoverContent>
