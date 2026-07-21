@@ -205,7 +205,7 @@ export const Desktop = ({
       const s = saved[id];
       // Never trust storage blindly: a stale schema or unplugged monitor
       // must degrade to "no saved position", not NaN positions or an
-      // orphaned widget (see TODO.md's layout-sanity incident).
+      // orphaned widget (see docs/debugging.md's storage-shape-drift section).
       const validPos = s != null && Number.isFinite(s.col) && Number.isFinite(s.row);
       const mon = s != null && Number.isFinite(s.m) && s.m! < (monitors.current?.length ?? Infinity) ? s.m! : 0;
       if (mon !== monitorIndex) continue;
