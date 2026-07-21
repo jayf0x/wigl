@@ -149,6 +149,13 @@ export const Desktop = ({
   const foreign = useRef<{ id: string; w: number; h: number; snapshot: GridItem[] } | null>(null);
   const layoutRef = useRef<GridItem[] | null>(null);
   const savedRef = useRef<SavedPositions>({});
+  // Ids with no saved position yet (true first launch, or a widget added
+  // since the last save) — their real size/spot isn't known until they
+  // report in, so reflow is deferred until every one of them has reported
+  // at least once, then resolved in a single settle() pass. Otherwise the
+  // settled layout would depend on mount/report arrival order instead of
+  // being deterministic (see backlog).
+  const pendingReports = useRef<Set<string>>(new Set());
   useEffect(() => {
     layoutRef.current = layout;
   }, [layout]);
@@ -193,6 +200,7 @@ export const Desktop = ({
     if (loading || layout) return;
     const cols = colsForWidth(window.innerWidth);
     const items: GridItem[] = [];
+    pendingReports.current = new Set();
     for (const id of Object.keys(widgets)) {
       const s = saved[id];
       // Never trust storage blindly: a stale schema or unplugged monitor
@@ -204,6 +212,7 @@ export const Desktop = ({
       const { w, h } = TILING.defaultSize;
       const pos = validPos ? s : autoPlace(items, w, h, cols);
       items.push({ id, w, h, col: Math.max(0, Math.min(pos.col, cols - w)), row: Math.max(0, pos.row) });
+      if (!validPos) pendingReports.current.add(id);
     }
     // Saved/default positions can conflict after code changes — settle them.
     settle(items);
@@ -223,8 +232,21 @@ export const Desktop = ({
       const hasSavedPos = savedRef.current[id] != null;
       const col = !hasSavedPos && g.col != null ? Math.max(0, Math.min(g.col, cols - g.w)) : cur.col;
       const row = !hasSavedPos && g.row != null ? Math.max(0, g.row) : cur.row;
-      if (cur.w === g.w && cur.h === g.h && cur.col === col && cur.row === row) return prev; // no-op, bail out
+      const pending = pendingReports.current;
+      if (cur.w === g.w && cur.h === g.h && cur.col === col && cur.row === row) {
+        pending.delete(id);
+        return prev; // no-op, bail out
+      }
       const next = prev.map((i) => (i.id === id ? { ...i, w: g.w, h: g.h, col, row } : { ...i }));
+      if (pending.has(id)) {
+        pending.delete(id);
+        // Still waiting on other never-before-seen widgets to report their
+        // real size — hold off reflowing so the result doesn't depend on
+        // which one happened to report first.
+        if (pending.size > 0) return next;
+        settle(next);
+        return next;
+      }
       reflow(next, next.find((i) => i.id === id)!);
       return next;
     });

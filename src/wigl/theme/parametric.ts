@@ -114,7 +114,11 @@ export const generateParametricColors = (knobs: ParametricKnobs): ThemeColors =>
   // weighted-mix formula from the conversation. Lightness then gets pulled
   // toward whichever end contrasts with the background, so it stays a
   // legible button color whether background is light or dark.
-  const primaryMix = mix([[b, 1], [a, 0.3], [c, 0.1]]);
+  const primaryMix = mix([
+    [b, 1],
+    [a, 0.3],
+    [c, 0.1],
+  ]);
   const contrastTarget = isDarkBg ? 0.78 : 0.4;
   const primary = withC(withL(primaryMix, primaryMix.l * 0.5 + contrastTarget * 0.5), 1.15);
   // primaryForeground: reuse background/foreground themselves rather than a
@@ -124,7 +128,13 @@ export const generateParametricColors = (knobs: ParametricKnobs): ThemeColors =>
   // the theme's hue instead of reading as a library-default gray-on-color.
   const primaryForeground = primary.l > 0.55 ? background : foreground;
 
-  const accentToken = withL(mix([[c, 1], [a, 0.4]]), background.l + (foreground.l - background.l) * knobs.accentElevation);
+  const accentToken = withL(
+    mix([
+      [c, 1],
+      [a, 0.4],
+    ]),
+    background.l + (foreground.l - background.l) * knobs.accentElevation,
+  );
 
   // Border/input ride on foreground's alpha, not a fixed color — since
   // foreground already flips light/dark with background, so does the
