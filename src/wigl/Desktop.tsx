@@ -31,7 +31,6 @@ import {
 } from "./grid/math";
 import { useGlobalActions, useRegisterGlobalAction, useStorage, useTheme } from "./hooks";
 import { ThemeSettingsPopover } from "./ThemeSettingsPopover";
-import { getWiglAccent } from "./theme/applyTheme";
 import { type WidgetGridReport, WidgetSlotProvider } from "./widget";
 
 // Clicks on these inside a drag handle stay clicks; everything else drags.
@@ -78,15 +77,6 @@ interface DropMsg {
   h: number;
   col: number;
   row: number;
-}
-
-/** Broadcast whenever a monitor persists `widget_layout`, so every other
- * monitor's in-memory `saved` updates immediately instead of waiting up to
- * POLL_MS for the next poll — the window in which two monitors persisting
- * within the same poll interval could otherwise stomp each other's write. */
-interface LayoutMsg {
-  from: number;
-  saved: SavedPositions;
 }
 
 // All widgets on a monitor share one React root now, so an uncaught render
@@ -138,11 +128,11 @@ export const Desktop = ({
 
   const els = useRef<Record<string, HTMLDivElement | null>>({});
   const ghost = useRef<HTMLDivElement>(null);
-  const canvas = useRef<HTMLCanvasElement>(null);
+  const field = useRef<SVGSVGElement>(null);
+  const fieldGlow = useRef<SVGCircleElement>(null);
+  const [anchors, setAnchors] = useState<{ col: number; row: number; x: number; y: number }[]>([]);
   const drag = useRef<DragState | null>(null);
-  const cursor = useRef({ x: -1e4, y: -1e4 });
   const ghostCell = useRef<GridItem | null>(null);
-  const field = useRef({ alpha: 0, target: 0, raf: 0 });
   const monitors = useRef<MonitorRect[] | null>(null);
   // Incoming cross-monitor preview: snapshot of our layout from before the
   // phantom started pushing things around, restored if the drag leaves.
@@ -176,20 +166,41 @@ export const Desktop = ({
 
   // Every window derives the same ordered monitor list (left-to-right), so a
   // monitor's index is a shared, persistent id.
+  const refreshMonitors = useCallback(
+    () =>
+      availableMonitors()
+        .then((ms) => {
+          monitors.current = ms
+            .sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y)
+            .map((m) => ({
+              x: m.position.x / m.scaleFactor,
+              y: m.position.y / m.scaleFactor,
+              width: m.size.width / m.scaleFactor,
+              height: m.size.height / m.scaleFactor,
+            }));
+        })
+        .catch(console.error),
+    [],
+  );
   useEffect(() => {
-    availableMonitors()
-      .then((ms) => {
-        monitors.current = ms
-          .sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y)
-          .map((m) => ({
-            x: m.position.x / m.scaleFactor,
-            y: m.position.y / m.scaleFactor,
-            width: m.size.width / m.scaleFactor,
-            height: m.size.height / m.scaleFactor,
-          }));
-      })
-      .catch(console.error);
-  }, []);
+    refreshMonitors();
+  }, [refreshMonitors]);
+
+  // lib.rs's monitor poller (windowed mode has no dynamic screen windows, so
+  // nothing to reconcile there) broadcasts this when a display is plugged or
+  // unplugged. Refresh the monitor list, then rebuild the layout: the build
+  // effect below already treats a saved `m` >= the current monitor count as
+  // "no assignment" and falls back to monitor 0, so this is what actually
+  // migrates a removed monitor's widgets home.
+  useEffect(() => {
+    if (windowed) return;
+    const un = listen("wigl-monitor-count", () => {
+      refreshMonitors().then(() => setLayout(null));
+    });
+    return () => {
+      un.then((u) => u());
+    };
+  }, [windowed, refreshMonitors]);
 
   // Build the layout once storage has answered: this monitor's widgets only
   // (unassigned widgets land on monitor 0). A widget's real size/first-launch
@@ -215,7 +226,7 @@ export const Desktop = ({
       if (!validPos) pendingReports.current.add(id);
     }
     // Saved/default positions can conflict after code changes — settle them.
-    settle(items);
+    settle(items, cols);
     setLayout(items);
   }, [loading, layout, saved, widgets, monitorIndex]);
 
@@ -232,22 +243,23 @@ export const Desktop = ({
       const hasSavedPos = savedRef.current[id] != null;
       const col = !hasSavedPos && g.col != null ? Math.max(0, Math.min(g.col, cols - g.w)) : cur.col;
       const row = !hasSavedPos && g.row != null ? Math.max(0, g.row) : cur.row;
+      const hidden = !!g.hidden;
       const pending = pendingReports.current;
-      if (cur.w === g.w && cur.h === g.h && cur.col === col && cur.row === row) {
+      if (cur.w === g.w && cur.h === g.h && cur.col === col && cur.row === row && !!cur.hidden === hidden) {
         pending.delete(id);
         return prev; // no-op, bail out
       }
-      const next = prev.map((i) => (i.id === id ? { ...i, w: g.w, h: g.h, col, row } : { ...i }));
+      const next = prev.map((i) => (i.id === id ? { ...i, w: g.w, h: g.h, col, row, hidden } : { ...i }));
       if (pending.has(id)) {
         pending.delete(id);
         // Still waiting on other never-before-seen widgets to report their
         // real size — hold off reflowing so the result doesn't depend on
         // which one happened to report first.
         if (pending.size > 0) return next;
-        settle(next);
+        settle(next, cols);
         return next;
       }
-      reflow(next, next.find((i) => i.id === id)!);
+      reflow(next, next.find((i) => i.id === id)!, cols);
       return next;
     });
   };
@@ -283,81 +295,74 @@ export const Desktop = ({
   useEffect(() => {
     if (!layout || windowed) return;
     const s = window.devicePixelRatio;
-    const rects = layout.map((it) => ({
-      x: colToPx(it.col) * s,
-      y: rowToPx(it.row) * s,
-      w: spanToPx(it.w) * s,
-      h: spanToPx(it.h) * s,
-    }));
+    const rects = layout
+      .filter((it) => !it.hidden)
+      .map((it) => ({
+        x: colToPx(it.col) * s,
+        y: rowToPx(it.row) * s,
+        w: spanToPx(it.w) * s,
+        h: spanToPx(it.h) * s,
+      }));
     invoke("set_hit_rects", { rects }).catch(console.error);
   }, [layout, windowed]);
 
   // --- anchor field ------------------------------------------------------------
-  // Cross marks on every cell corner (centered in the gaps). Idle they're
-  // invisible; while dragging they fade in faintly, anchors near the cursor
-  // swell toward the accent, and the four corners of the drop target lock in.
-  const drawField = () => {
-    const cv = canvas.current;
-    const f = field.current;
-    if (!cv) return;
-    const ctx = cv.getContext("2d")!;
-    const dpr = window.devicePixelRatio || 1;
-    if (cv.width !== window.innerWidth * dpr) {
-      cv.width = window.innerWidth * dpr;
-      cv.height = window.innerHeight * dpr;
-    }
-    ctx.clearRect(0, 0, cv.width, cv.height);
-    if (f.alpha < 0.005 && f.target === 0) {
-      f.raf = 0;
-      return;
-    }
+  // Cross marks on every cell corner (centered in the gaps), rendered as SVG
+  // paths instead of a canvas redrawn every frame: idle fade and the drop
+  // target's corner lock-in are plain CSS (`.wigl-anchor` in App.css), and
+  // cursor-proximity brightening is one radial-gradient <circle> whose
+  // center tracks the cursor via `cx`/`cy` attribute writes on pointer move
+  // — no per-anchor distance math, no RAF loop.
+  const buildAnchors = useCallback(() => {
     const p = TILING.cell + TILING.gap;
     const half = TILING.gap / 2;
-    const R = TILING.field.influence;
-    const g = ghostCell.current;
-    const accent = getWiglAccent(); // mirrors the active theme's --wigl-accent
-    ctx.save();
-    ctx.scale(dpr, dpr);
-    ctx.lineCap = "round";
+    const list: { col: number; row: number; x: number; y: number }[] = [];
     for (let cx = 0, x = colToPx(0) - half; x < window.innerWidth - TILING.padding.right + p; cx++, x += p) {
       for (let cy = 0, y = rowToPx(0) - half; y < window.innerHeight - TILING.padding.bottom + p; cy++, y += p) {
-        // Anchor reacts to cursor proximity...
-        const d = Math.hypot(x - cursor.current.x, y - cursor.current.y);
-        const near = d < R ? (1 - d / R) ** 2 : 0;
-        // ...and locks in when it's a corner of the drop target.
-        const corner = g && (cx === g.col || cx === g.col + g.w) && (cy === g.row || cy === g.row + g.h);
-        const t = corner ? 1 : near;
-        const arm = 3 + t * 2; // cross arm length: 6px cross swelling to 10px
-        const a = f.alpha * (0.1 + t * 0.8);
-        if (a < 0.01) continue;
-        ctx.globalAlpha = Math.min(a, 1);
-        ctx.strokeStyle = t > 0.05 ? accent : "rgb(255 255 255)";
-        ctx.lineWidth = 1 + t * 0.5;
-        ctx.shadowBlur = t * 6;
-        ctx.shadowColor = accent;
-        ctx.beginPath();
-        ctx.moveTo(x - arm, y);
-        ctx.lineTo(x + arm, y);
-        ctx.moveTo(x, y - arm);
-        ctx.lineTo(x, y + arm);
-        ctx.stroke();
+        list.push({ col: cx, row: cy, x, y });
       }
     }
-    ctx.restore();
-    f.alpha += (f.target - f.alpha) * 0.12;
-    f.raf = requestAnimationFrame(drawField);
+    setAnchors(list);
+  }, []);
+  useEffect(() => {
+    buildAnchors();
+    window.addEventListener("resize", buildAnchors);
+    return () => window.removeEventListener("resize", buildAnchors);
+  }, [buildAnchors]);
+
+  // Moves the proximity glow to the cursor — replaces the old per-frame
+  // cursor.current used only by canvas math.
+  const moveFieldCursor = (x: number, y: number) => {
+    const g = fieldGlow.current;
+    if (!g) return;
+    g.setAttribute("cx", String(x));
+    g.setAttribute("cy", String(y));
+  };
+
+  // Marks the drop target's four corner anchors so CSS can light them up —
+  // called only when the target cell actually changes, not per frame.
+  const setGhostCell = (cell: GridItem | null) => {
+    ghostCell.current = cell;
+    const svg = field.current;
+    if (!svg) return;
+    for (const el of svg.querySelectorAll<SVGPathElement>(".wigl-anchor.locked")) el.classList.remove("locked");
+    if (!cell) return;
+    for (const col of [cell.col, cell.col + cell.w]) {
+      for (const row of [cell.row, cell.row + cell.h]) {
+        svg
+          .querySelector<SVGPathElement>(`.wigl-anchor[data-col="${col}"][data-row="${row}"]`)
+          ?.classList.add("locked");
+      }
+    }
   };
 
   const wakeField = (dragging: boolean) => {
     const { show } = TILING.field;
     if (show === "never") return;
-    field.current.target = dragging || show === "always" ? 1 : 0;
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) field.current.alpha = field.current.target;
-    if (!field.current.raf) field.current.raf = requestAnimationFrame(drawField);
+    field.current?.classList.toggle("active", dragging || show === "always");
   };
   useEffect(() => {
     wakeField(false); // honor field.show === "always" from boot
-    return () => cancelAnimationFrame(field.current.raf);
   }, []);
 
   const showGhost = (col: number, row: number, w: number, h: number) => {
@@ -376,7 +381,8 @@ export const Desktop = ({
       ...savedRef.current,
       ...Object.fromEntries(items.map((it) => [it.id, { col: it.col, row: it.row, m: monitorIndex }])),
     };
-    emit("wigl-layout", { from: monitorIndex, saved: merged } satisfies LayoutMsg).catch(console.error);
+    // useStorage's own set() broadcasts this to every other window
+    // (`wigl-kv`) — no bespoke layout-specific event needed.
     setSaved(merged);
   };
 
@@ -435,7 +441,7 @@ export const Desktop = ({
       if (!foreign.current) return;
       setLayout(foreign.current.snapshot.map((i) => ({ ...i })));
       foreign.current = null;
-      ghostCell.current = null;
+      setGhostCell(null);
       hideGhost();
       wakeField(false);
     };
@@ -450,18 +456,13 @@ export const Desktop = ({
         foreign.current = { id: p.id, w: p.w, h: p.h, snapshot: (layoutRef.current ?? []).map((i) => ({ ...i })) };
         wakeField(true);
       }
-      cursor.current = { x: p.cx, y: p.cy };
+      moveFieldCursor(p.cx, p.cy);
       const phantom: GridItem = { id: p.id, col: p.col, row: p.row, w: p.w, h: p.h };
-      ghostCell.current = phantom;
+      setGhostCell(phantom);
       const next = [...foreign.current.snapshot.map((i) => ({ ...i })), phantom];
-      reflow(next, phantom);
+      reflow(next, phantom, colsForWidth(window.innerWidth));
       showGhost(p.col, p.row, p.w, p.h);
       setLayout(next.filter((i) => i.id !== p.id));
-    });
-
-    const unLayout = listen<LayoutMsg>("wigl-layout", ({ payload: p }) => {
-      if (p.from === monitorIndex) return; // our own broadcast, already applied locally
-      setSaved(p.saved);
     });
 
     const unReset = listen<{ from: number }>("wigl-reset", ({ payload: p }) => {
@@ -480,9 +481,9 @@ export const Desktop = ({
       const base = (foreign.current?.snapshot ?? layoutRef.current ?? []).map((i) => ({ ...i }));
       const item: GridItem = { id: p.id, col: p.col, row: p.row, w: p.w, h: p.h };
       const next = [...base, item];
-      reflow(next, item);
+      reflow(next, item, colsForWidth(window.innerWidth));
       foreign.current = null;
-      ghostCell.current = null;
+      setGhostCell(null);
       hideGhost();
       wakeField(false);
       setLayout(next);
@@ -491,7 +492,6 @@ export const Desktop = ({
 
     return () => {
       unPreview.then((u) => u());
-      unLayout.then((u) => u());
       unReset.then((u) => u());
       unDrop.then((u) => u());
     };
@@ -515,8 +515,8 @@ export const Desktop = ({
       frozen: false,
     };
     setDragId(id);
-    ghostCell.current = { ...item };
-    cursor.current = { x: e.clientX, y: e.clientY };
+    setGhostCell({ ...item });
+    moveFieldCursor(e.clientX, e.clientY);
     showGhost(item.col, item.row, item.w, item.h);
     wakeField(true);
     // Pause the click-through poller: flipping ignore_cursor_events mid-drag
@@ -546,7 +546,7 @@ export const Desktop = ({
       if (!d.frozen) {
         d.frozen = true;
         d.el.classList.add("detached");
-        ghostCell.current = null;
+        setGhostCell(null);
         hideGhost();
         wakeField(false);
         setLayout(d.snapshot.map((i) => ({ ...i }))); // undo our local pushes
@@ -578,7 +578,7 @@ export const Desktop = ({
       d.el.classList.remove("detached");
       wakeField(true);
       showGhost(item.col, item.row, item.w, item.h);
-      ghostCell.current = { ...item };
+      setGhostCell({ ...item });
       // Tells whichever monitor was previewing to clear.
       emit("wigl-preview", {
         id: d.id,
@@ -591,7 +591,7 @@ export const Desktop = ({
         cy: 0,
       } satisfies PreviewMsg).catch(console.error);
     }
-    cursor.current = { x: e.clientX, y: e.clientY };
+    moveFieldCursor(e.clientX, e.clientY);
     const fx = e.clientX - d.offX;
     const fy = e.clientY - d.offY;
     d.el.style.transform = `translate(${fx}px, ${fy}px) scale(${TILING.liftScale})`;
@@ -608,8 +608,8 @@ export const Desktop = ({
     const moved = next.find((i) => i.id === d.id)!;
     moved.col = col;
     moved.row = row;
-    reflow(next, moved);
-    ghostCell.current = { ...moved };
+    reflow(next, moved, cols);
+    setGhostCell({ ...moved });
     ghost.current!.style.transform = `translate(${colToPx(col)}px, ${rowToPx(row)}px)`;
     setLayout(next);
   };
@@ -619,7 +619,7 @@ export const Desktop = ({
     if (!d || !layout) return;
     const item = layout.find((i) => i.id === d.id)!;
     drag.current = null;
-    ghostCell.current = null;
+    setGhostCell(null);
     setDragId(null); // re-enables the transition; layout effect springs it home
     hideGhost();
     wakeField(false);
@@ -655,7 +655,25 @@ export const Desktop = ({
 
   return (
     <div className="wigl-desktop" onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag}>
-      <canvas ref={canvas} className="wigl-field" />
+      <svg ref={field} className="wigl-field" aria-hidden="true">
+        <defs>
+          <radialGradient id="wigl-field-glow">
+            <stop offset="0%" stopColor="var(--wigl-accent)" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="var(--wigl-accent)" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        {anchors.map((a) => (
+          <path
+            key={`${a.col}-${a.row}`}
+            className="wigl-anchor"
+            data-col={a.col}
+            data-row={a.row}
+            d="M -3 0 L 3 0 M 0 -3 L 0 3"
+            transform={`translate(${a.x} ${a.y})`}
+          />
+        ))}
+        <circle ref={fieldGlow} className="wigl-field-glow" r={TILING.field.influence} cx={-1e4} cy={-1e4} />
+      </svg>
       <div ref={ghost} className="wigl-ghost">
         <i />
         <i />
@@ -663,6 +681,7 @@ export const Desktop = ({
         <i />
       </div>
       {layout.map((it) => {
+        if (it.hidden) return null;
         const Component = widgets[it.id];
         return (
           <div

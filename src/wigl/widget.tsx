@@ -9,6 +9,8 @@ export interface WidgetGridProps {
   h?: number;
   col?: number;
   row?: number;
+  /** Skip this widget entirely: not rendered, not reflowed, not hit-tested. */
+  hidden?: boolean;
 }
 
 export interface WidgetGridReport {
@@ -16,6 +18,7 @@ export interface WidgetGridReport {
   h: number;
   col?: number;
   row?: number;
+  hidden?: boolean;
 }
 
 /** Desktop.tsx provides one of these per widget instance so <Widget> can
@@ -33,13 +36,14 @@ export const Widget = ({
   h = TILING.defaultSize.h,
   col,
   row,
+  hidden,
 }: { className?: string; children: ReactNode } & WidgetGridProps) => {
   const report = useContext(WidgetSlotContext);
   // Layout effect, not a plain effect: this must resolve (and Desktop must
   // reflow) before the browser paints, or the placeholder size flashes.
   useLayoutEffect(() => {
-    report?.({ w, h, col, row });
-  }, [report, w, h, col, row]);
+    report?.({ w, h, col, row, hidden });
+  }, [report, w, h, col, row, hidden]);
 
   return (
     <div

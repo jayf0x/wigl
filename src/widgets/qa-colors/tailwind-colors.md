@@ -51,12 +51,9 @@ All 19 are exercised in the qa-colors widget's "Theme tokens" tab. Notes:
   themes with very different `foreground` hues currently produce
   indistinguishable gray borders. Worth a knob if "how visible should
   dividers be" ever becomes a tunable.
-- `wiglAccent` is the one non-CSS-var-mapped token — read via
-  `getWiglAccent()` in JS (Canvas draw loop), not a Tailwind utility class.
-  No `bg-wigl-accent` exists; the widget renders it with an inline
-  `background: var(--wigl-accent)` style instead. Keep that in mind if the
-  expanded system adds more JS-consumed (non-CSS) tokens — they need the
-  same `currentAccent`-style mirror in `applyTheme.ts`, not just a `:root` var.
+- `wiglAccent` has no Tailwind utility class (no `bg-wigl-accent`); the
+  widget renders it with an inline `background: var(--wigl-accent)` style
+  instead.
 
 ## Static, non-theme-reactive tokens (flag for follow-up)
 

@@ -9,6 +9,9 @@ export interface GridItem {
   row: number;
   w: number;
   h: number;
+  /** Hidden widgets are skipped entirely: not rendered, and (via `collides`)
+   * never block or get pushed by other items' placement. */
+  hidden?: boolean;
 }
 
 const pitch = () => TILING.cell + TILING.gap;
@@ -27,11 +30,19 @@ export const colsForWidth = (width: number) =>
   TILING.cols ?? Math.max(1, Math.floor((width - TILING.padding.left - TILING.padding.right + TILING.gap) / pitch()));
 
 export const collides = (a: GridItem, b: GridItem) =>
-  a !== b && a.col < b.col + b.w && b.col < a.col + a.w && a.row < b.row + b.h && b.row < a.row + a.h;
+  a !== b &&
+  !a.hidden &&
+  !b.hidden &&
+  a.col < b.col + b.w &&
+  b.col < a.col + a.w &&
+  a.row < b.row + b.h &&
+  b.row < a.row + a.h;
 
-/** Push everything colliding with `moved` downward, then gravity-compact all
- * other items back up. Mutates `items`. */
-export const reflow = (items: GridItem[], moved: GridItem) => {
+/** Push everything colliding with `moved` downward, then fully re-compact
+ * every other item into the first free top-left slot (row-major scan) —
+ * not just straight up, so a widget fills a horizontal gap instead of every
+ * item stacking into one wasted-width column. Mutates `items`. */
+export const reflow = (items: GridItem[], moved: GridItem, cols: number) => {
   const queue = [moved];
   while (queue.length) {
     const m = queue.shift()!;
@@ -41,23 +52,20 @@ export const reflow = (items: GridItem[], moved: GridItem) => {
       queue.push(it);
     }
   }
-  const sorted = [...items].sort((a, b) => a.row - b.row || a.col - b.col);
-  for (const it of sorted) {
-    if (it === moved) continue;
-    while (it.row > 0) {
-      it.row--;
-      if (sorted.some((o) => collides(o, it))) {
-        it.row++;
-        break;
-      }
-    }
+  const placed = [moved];
+  const rest = items.filter((it) => it !== moved && !it.hidden).sort((a, b) => a.row - b.row || a.col - b.col);
+  for (const it of rest) {
+    const pos = autoPlace(placed, it.w, it.h, cols);
+    it.col = pos.col;
+    it.row = pos.row;
+    placed.push(it);
   }
 };
 
 /** Settle all items so no two overlap — the reusable cleanup pass run on
  * boot and after a layout reset. Mutates `items`. */
-export const settle = (items: GridItem[]) => {
-  for (const it of [...items].sort((a, b) => a.row - b.row || a.col - b.col)) reflow(items, it);
+export const settle = (items: GridItem[], cols: number) => {
+  for (const it of [...items].sort((a, b) => a.row - b.row || a.col - b.col)) reflow(items, it, cols);
 };
 
 /** First open slot scanning left-to-right, top-to-bottom. */

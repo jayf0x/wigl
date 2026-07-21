@@ -64,13 +64,12 @@ this; skim one before adding a new color class. A raw white/black opacity
 class in a widget is a bug, not a style choice — fix it the same way, don't
 special-case it.
 
-## `wiglAccent`: the one non-CSS-var token
+## `wiglAccent`
 
-Canvas 2D (`Desktop.tsx`'s field-drawing loop) can't read a CSS var per
-frame without a `getComputedStyle` call, so `wiglAccent` is mirrored into a
-plain module variable (`getWiglAccent()`) alongside being set on `:root`.
-It must stay a hex string, not `oklch(...)` — canvas `fillStyle` parsing is
-the constraint, not styling preference.
+`wiglAccent` maps straight to `--wigl-accent` like every other token — the
+anchor field (`Desktop.tsx`) reads it via `var(--wigl-accent)` in its SVG
+(`stopColor`, `stroke`, `drop-shadow`), not through JS, so there's no
+format constraint beyond being a valid CSS color.
 
 ## Extending this
 
