@@ -192,18 +192,54 @@ html.wigl-windowed #root {
   color: var(--accent-foreground);
 }
 
-/* The anchor-field canvas (crosses on cell corners, drawn in Desktop.tsx). */
+/* The anchor field: cross marks on cell corners (Desktop.tsx builds the
+   <path> grid, cell/cursor math shared with the drag engine via
+   grid/math.ts). Idle it's invisible; `.active` (dragging, or
+   TILING.field.show === "always") fades it in. Cursor-proximity brightening
+   is one radial-gradient glow circle whose cx/cy Desktop.tsx moves on
+   pointer move — no per-anchor JS. The drop target's four corners get
+   `.locked` instead of proximity brightening. */
 .wigl-field {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.wigl-field.active {
+  opacity: 1;
+}
+.wigl-anchor {
+  stroke: rgb(255 255 255 / 0.5);
+  stroke-width: 1;
+  stroke-linecap: round;
+  opacity: 0.5;
+  transition:
+    stroke 0.15s ease,
+    opacity 0.15s ease;
+}
+.wigl-anchor.locked {
+  stroke: var(--wigl-accent);
+  stroke-width: 1.5;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px var(--wigl-accent));
+}
+.wigl-field-glow {
+  mix-blend-mode: screen;
+  fill: url(#wigl-field-glow);
+  transition:
+    cx 0.08s linear,
+    cy 0.08s linear;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .wigl-widget,
-  .wigl-ghost {
+  .wigl-ghost,
+  .wigl-field,
+  .wigl-anchor,
+  .wigl-field-glow {
     transition: none;
   }
 }

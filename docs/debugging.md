@@ -65,9 +65,10 @@ Check first: `sqlite3 ~/Library/Application\ Support/wigl/wigl.db "SELECT value 
 bug, not your layout/rendering logic. Fix by rewriting that one row with
 `UPDATE kv SET value = '...' WHERE key='<key>'` (this is dev-machine data,
 not a versioned external contract, so a direct one-time edit is the right
-fix — not a permanent legacy-shape fallback in app code). See `TODO.md`'s
-on-load sanity pass for the actual prevention: validate a stored shape
-before trusting it, fall back to a fresh default when it doesn't look right.
+fix — not a permanent legacy-shape fallback in app code). See the layout
+build effect in [Desktop.tsx](../src/wigl/Desktop.tsx) for the actual
+prevention: validate a stored shape before trusting it, fall back to a fresh
+default when it doesn't look right.
 
 ## "It does nothing" often means a missing permission
 

@@ -1,11 +1,73 @@
 use std::{
     collections::HashMap,
+    fs,
     sync::atomic::{AtomicBool, Ordering},
     sync::Mutex,
     thread,
     time::Duration,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+
+// Secret/token storage: a widget needing an API key or OAuth token has
+// nowhere else to put it (useStorage's sqlite kv is plaintext and synced
+// across every window/poller). One JSON file in the app's data dir,
+// chmod 600, atomic tmp-file+rename — no OS keychain crate, no
+// cross-platform branching. This clears the "shell out unless truly
+// impossible" bar in AGENTS.md: keeping the value out of shell argv/history
+// while still doing atomic tmp+rename+chmod genuinely wants a native
+// command instead of a shell one-liner.
+const SECRETS_FILE: &str = "secrets.json";
+// Names are used as JSON object keys only (never shell/SQL), but restrict
+// them anyway so a stray "." or "/" can't be mistaken for a path.
+fn valid_secret_name(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+fn secrets_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join(SECRETS_FILE))
+}
+
+fn read_secrets(path: &std::path::Path) -> Result<HashMap<String, String>, String> {
+    match fs::read_to_string(path) {
+        Ok(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(HashMap::new()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn write_secrets(path: &std::path::Path, secrets: &HashMap<String, String>) -> Result<(), String> {
+    let tmp = path.with_extension("json.tmp");
+    let json = serde_json::to_string(secrets).map_err(|e| e.to_string())?;
+    fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
+    }
+    fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn secrets_get(app: tauri::AppHandle, name: String) -> Result<Option<String>, String> {
+    if !valid_secret_name(&name) {
+        return Err(format!("invalid secret name: {name:?}"));
+    }
+    let path = secrets_path(&app)?;
+    Ok(read_secrets(&path)?.get(&name).cloned())
+}
+
+#[tauri::command]
+fn secrets_set(app: tauri::AppHandle, name: String, value: String) -> Result<(), String> {
+    if !valid_secret_name(&name) {
+        return Err(format!("invalid secret name: {name:?}"));
+    }
+    let path = secrets_path(&app)?;
+    let mut secrets = read_secrets(&path)?;
+    secrets.insert(name, value);
+    write_secrets(&path, &secrets)
+}
 
 // Click-through for the fullscreen desktop window: the webview reports the
 // physical-pixel rects of every widget on the tiling grid (the whole screen
@@ -78,6 +140,93 @@ fn windowed_mode() -> bool {
     session_type_wayland || has_wayland_display
 }
 
+// One fullscreen transparent window per monitor, ordered left-to-right so
+// `screen-<i>` labels match the JS-side monitor ids. Windows start hidden
+// and click-through; each webview shows itself once mounted, and the
+// cursor poller manages clicks from there. Shared by initial setup() and
+// spawn_monitor_poller() (new monitor plugged in after launch).
+fn spawn_screen_window(app: &tauri::AppHandle, i: usize, mon: &tauri::Monitor) {
+    let s = mon.scale_factor();
+    let pos = mon.position().to_logical::<f64>(s);
+    let size = mon.size().to_logical::<f64>(s);
+    let win = tauri::WebviewWindowBuilder::new(app, format!("screen-{i}"), tauri::WebviewUrl::App("index.html".into()))
+        .title(format!("wigl — screen {i}"))
+        .position(pos.x, pos.y)
+        // 1px shorter than the monitor: a borderless window sized exactly to
+        // the screen is treated as fullscreen by AppKit and loses its
+        // transparency.
+        .inner_size(size.width, size.height - 1.0)
+        .visible(false)
+        .transparent(true)
+        .decorations(false)
+        .shadow(false)
+        .always_on_bottom(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .build();
+    match win {
+        Ok(w) => {
+            let _ = w.set_ignore_cursor_events(true);
+        }
+        Err(e) => eprintln!("[wigl] failed to create screen-{i}: {e}"),
+    }
+}
+
+// Tracks the monitor count spawn_monitor_poller last reconciled against —
+// managed state so the periodic check (run on the main thread, see below)
+// can read/update it.
+struct MonitorCount(Mutex<usize>);
+
+// available_monitors()/window creation/window close all bottom out in
+// AppKit (NSScreen, NSWindow) on macOS, which is main-thread-only — calling
+// them from a background thread is undefined behavior (this silently
+// corrupted window creation during development: screen-0 stopped appearing
+// at all). So the poll interval lives on a plain OS thread, but every
+// AppKit-touching step is marshaled onto the main thread via
+// run_on_main_thread.
+fn reconcile_monitors(app: &tauri::AppHandle) {
+    let Ok(mut monitors) = app.available_monitors() else { return };
+    monitors.sort_by_key(|m| (m.position().x, m.position().y));
+    let new_count = monitors.len();
+    let state = app.state::<MonitorCount>();
+    let mut count = state.0.lock().unwrap();
+    if new_count == *count {
+        return;
+    }
+    if new_count > *count {
+        for (i, mon) in monitors.iter().enumerate().skip(*count) {
+            spawn_screen_window(app, i, mon);
+        }
+    } else {
+        for i in new_count..*count {
+            if let Some(w) = app.get_webview_window(&format!("screen-{i}")) {
+                let _ = w.close();
+            }
+        }
+    }
+    *count = new_count;
+    let _ = app.emit("wigl-monitor-count", new_count);
+}
+
+// Polls available_monitors() (the only cross-platform monitor-change signal
+// Tauri exposes) so plugging/unplugging a display doesn't need a relaunch.
+// Treats monitor indices as append-only: a newly plugged monitor becomes the
+// next index, and if the monitor count shrinks, the highest-indexed
+// screen-<i> windows are assumed to be the ones that vanished and are
+// closed. Reassigning those monitors' widgets back to monitor 0 is a
+// frontend concern (widget_layout lives in sqlite, not Rust) — this just
+// tells every window the new count via "wigl-monitor-count" and each
+// Desktop reconciles its own saved positions against it.
+fn spawn_monitor_poller(app: tauri::AppHandle) {
+    thread::spawn(move || {
+        loop {
+            thread::sleep(Duration::from_secs(2)); // ponytail: 2s poll, cheap and nobody notices a 2s lag on a docking event
+            let handle = app.clone();
+            let _ = app.run_on_main_thread(move || reconcile_monitors(&handle));
+        }
+    });
+}
+
 fn spawn_cursor_poller(app: tauri::AppHandle) {
     thread::spawn(move || {
         let mut ignoring: HashMap<String, bool> = HashMap::new();
@@ -127,7 +276,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_hit_rects,
             set_drag_active,
-            is_windowed_mode
+            is_windowed_mode,
+            secrets_get,
+            secrets_set
         ])
         .setup(|app| {
             let windowed = windowed_mode();
@@ -187,43 +338,14 @@ pub fn run() {
                 return Ok(());
             }
 
-            // One fullscreen transparent window per monitor, ordered
-            // left-to-right so `screen-<i>` labels match the JS-side monitor
-            // ids. Windows start hidden and click-through; each webview shows
-            // itself once mounted, and the poller manages clicks from there.
             let mut monitors: Vec<_> = app.available_monitors()?;
             monitors.sort_by_key(|m| (m.position().x, m.position().y));
             for (i, mon) in monitors.iter().enumerate() {
-                let s = mon.scale_factor();
-                let pos = mon.position().to_logical::<f64>(s);
-                let size = mon.size().to_logical::<f64>(s);
-                let win = tauri::WebviewWindowBuilder::new(
-                    app,
-                    format!("screen-{i}"),
-                    tauri::WebviewUrl::App("index.html".into()),
-                )
-                .title(format!("wigl — screen {i}"))
-                .position(pos.x, pos.y)
-                // 1px shorter than the monitor: a borderless window sized
-                // exactly to the screen is treated as fullscreen by AppKit
-                // and loses its transparency.
-                .inner_size(size.width, size.height - 1.0)
-                .visible(false)
-                .transparent(true)
-                .decorations(false)
-                .shadow(false)
-                .always_on_bottom(true)
-                .skip_taskbar(true)
-                .resizable(false)
-                .build();
-                match win {
-                    Ok(w) => {
-                        let _ = w.set_ignore_cursor_events(true);
-                    }
-                    Err(e) => eprintln!("[wigl] failed to create screen-{i}: {e}"),
-                }
+                spawn_screen_window(app.handle(), i, mon);
             }
+            app.manage(MonitorCount(Mutex::new(monitors.len())));
             spawn_cursor_poller(app.handle().clone());
+            spawn_monitor_poller(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
