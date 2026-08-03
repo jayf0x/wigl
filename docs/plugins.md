@@ -159,3 +159,49 @@ boundaries exist to prevent.
 deliberate: `<Desktop>` builds its layout from the widget ids it's handed,
 and handing it a set that grows a tick later is the same mount-order hazard
 that already cost a first-launch layout bug once.
+
+## Migrating a builtin widget to a plugin
+
+`wigl-widgets/calendar/` is the worked example — copy its shape, not just
+its idea. Steps, in order:
+
+1. `git mv src/widgets/<name> wigl-widgets/<name>`.
+2. Add `wigl-widgets/<name>/manifest.json` — `id` must equal the folder name,
+   `entry` is `"dist/index.js"`, `apiVersion` is `PLUGIN_API_VERSION`
+   (`src/wigl/plugins/types.ts`). Declare `permissions` for whatever the
+   widget actually uses (`storage` if it touches `useStorage`/`useQuery`;
+   nothing else exists as a permission yet — see the registry section above).
+3. If the widget has its own npm dependencies (calendar has `date-fns`), add
+   a `wigl-widgets/<name>/package.json` naming them and `bun install` at the
+   repo root so they resolve for the build.
+4. `bun run plugin:build wigl-widgets/<name>` — read the error if it fails.
+   The two failure modes so far are both host-module gaps: an import not in
+   `src/wigl/plugins/host-modules.ts` (add it there and to
+   `registry.ts`'s `HOST_MODULES`, gated by permission if it's a capability
+   rather than a pure helper), or a deep import past the three shared
+   barrels (`@/wigl/Desktop`, `@/wigl/grid/...`) — those are supposed to fail;
+   fix the widget's import instead of the registry.
+5. `bun run plugin:check wigl-widgets/<name>` — this must pass before
+   `typecheck:plugins`, i.e. before touching anything else. It's the only
+   step that proves the widget actually renders against the app's real,
+   production React; see "NODE_ENV is part of the contract" below for why a
+   green `typecheck` here is not sufficient on its own.
+6. `bun run typecheck:plugins` — proves the widget compiles against the
+   plugin tsconfig (`wigl-widgets/tsconfig.json`, generated `.d.ts`) rather
+   than the app's live source. A widget that only compiled by accident
+   (deep-importing something the app's root tsconfig happened to resolve)
+   fails here even though step 4/5 already passed, because the build step
+   externalizes by specifier while this step type-resolves by path — catching
+   one doesn't guarantee the other, run both.
+7. `bun run plugin:install wigl-widgets/<name>` then `bun run verify` —
+   confirm it's on screen. If the widget was one of the four still pending
+   (`games`, `qa-colors`, `repos`, `todo` — see `backlog.md`), delete its
+   `src/widgets/<name>/` folder once the plugin version is confirmed working,
+   so there's exactly one copy of the widget in the repo, not two.
+
+`repos` cannot make it past step 4 as-is: it imports `@tauri-apps/api/path`
+and `@tauri-apps/plugin-shell` directly, and plugins are not allowed to hold
+a raw Tauri API — see "The host module registry" above for why. It needs the
+host to grow mediated `command`/`filesystem` host modules (gated on the
+permissions of the same name, already in the manifest schema) before it can
+move; that's `backlog.md`'s entry for it, not a step to improvise here.

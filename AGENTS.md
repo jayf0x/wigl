@@ -34,6 +34,7 @@ If a task's outcome doesn't change any of those claims, there's nothing to updat
 | Change what data a widget shows / how it's fetched | `docs/architecture.md` → "Data flow pattern" | the widget's `use<Name>.ts` hook and `<name>.config.ts` |
 | Add a new widget | `docs/plugins.md` + `docs/widgets.md` (all of both), then read `wigl-widgets/calendar/` | a new `wigl-widgets/<name>/` folder — that's the only edit |
 | Change what a plugin may import or which capability it needs | `docs/plugins.md` → "The host module registry" | `src/wigl/plugins/host-modules.ts` + `registry.ts` |
+| Migrate a builtin widget (`src/widgets/`) to a plugin | `docs/plugins.md` → "Migrating a builtin widget to a plugin" (step-by-step) | `git mv` into `wigl-widgets/<name>/` + a `manifest.json` |
 | Add a UI primitive (dialog, select, ...) | `docs/widgets.md` → "Styling" | `bunx shadcn@latest add @coss/<component>` → `src/components/ui/` |
 | Run a new shell command / CLI from a widget | `docs/widgets.md` → "Running shell commands" | `src-tauri/capabilities/default.json` + the widget's hook |
 | Window/monitor behavior (drag, transparency, chrome, click-through) | `docs/architecture.md` (all of it) | `src/wigl/Desktop.tsx`, `src-tauri/src/lib.rs` |
