@@ -2,14 +2,41 @@
 // from "@/wigl/utils". Stateful/React-specific logic lives in "@/wigl/hooks"
 // instead — see that folder's barrel.
 
+import { homeDir as tauriHomeDir } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-/** Shorthand for the common `Command.create(...).execute()` one-shot —
- * use `Command.create(...).spawn()` directly instead when you need to
- * stream output (see the repos widget's clone-progress row for that shape). */
+/** Shorthand for the common `Command.create(...).execute()` one-shot — use
+ * `runCmdStreaming` instead when you need to observe output as it arrives
+ * (progress bars, live logs) rather than only the final result. */
 export const runCmd = (...args: Parameters<typeof Command.create>) => Command.create(...args).execute();
+
+/** Streams a command's stdout line-by-line via `onLine` and resolves with
+ * its exit code once it closes — the mediated equivalent of
+ * `Command.create(...).spawn()` for callers (including plugins) that can't
+ * hold a raw `Command` handle. Merge stderr into the stream yourself
+ * (`2>&1` in a `sh -c` command) if you want to see it, same as `runCmd`. */
+export const runCmdStreaming = (
+  program: Parameters<typeof Command.create>[0],
+  args: Parameters<typeof Command.create>[1],
+  onLine: (line: string) => void,
+): Promise<{ code: number | null }> => {
+  const cmd = Command.create(program, args);
+  return new Promise((resolve, reject) => {
+    cmd.stdout.on("data", (line) => onLine(line.replace(/[\r\n]+$/, "")));
+    cmd.on("error", (err) => reject(new Error(err)));
+    cmd.on("close", (data) => resolve({ code: data.code }));
+    cmd.spawn().catch(reject);
+  });
+};
+
+/** The user's home directory, trailing slash stripped so callers can always
+ * join with a plain template string (this app targets macOS/Linux only, so
+ * `/` is always the right separator — no path-joining host module needed).
+ * Mediated so plugins never hold a raw `@tauri-apps/api/path` handle (see
+ * `docs/plugins.md`'s host module registry section). */
+export const homeDir = async (): Promise<string> => (await tauriHomeDir()).replace(/\/$/, "");
 
 /** Merges Tailwind classes, later ones winning on conflicting utilities. */
 export const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));

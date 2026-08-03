@@ -120,6 +120,8 @@ Cached by `key` (prefix it with the widget's folder name, same rule as `useStora
 
 ## Running shell commands from a widget
 
+A plugin never imports `@tauri-apps/plugin-shell` directly — it can't hold a raw Tauri API at all (see `docs/plugins.md`'s host module registry). It calls `runCmd`/`runCmdStreaming` from `@/wigl/utils` instead, gated on the `command` permission; `wigl-widgets/repos/commands.ts` is the reference. A builtin (`src/widgets/`) is the app's own code and may still import `@tauri-apps/plugin-shell` directly — the rest of this section is written from that side.
+
 `src-tauri/capabilities/default.json`'s `shell:allow-execute` only registers `sh` and `sqlite3` — `{ "name": "sh", "args": true }` already grants arbitrary execution, so a per-binary allowlist would be decorative. Run everything through `sh -c`:
 
 ```ts
@@ -127,9 +129,9 @@ import { Command } from "@tauri-apps/plugin-shell";
 const output = await Command.create("sh", ["-c", "git status"]).execute();
 ```
 
-No capability edit needed for a new binary — `sh -c` reaches anything already on `PATH`. Quote your own arguments (`'${s.replace(/'/g, "'\\''")}'`) since `sh -c` takes one string, not an args array — see `revealInFinder`/`openInEditor` in `src/widgets/repos/commands.ts` for the pattern. `Command.create("sh", [...]).execute()` resolves even when the inner command fails — check `out.code !== 0`, don't rely on the promise rejecting.
+No capability edit needed for a new binary — `sh -c` reaches anything already on `PATH`. Quote your own arguments (`'${s.replace(/'/g, "'\\''")}'`) since `sh -c` takes one string, not an args array — see `revealInFileManager`/`openInEditor` in `wigl-widgets/repos/commands.ts` for the pattern. `Command.create("sh", [...]).execute()` resolves even when the inner command fails — check `out.code !== 0`, don't rely on the promise rejecting.
 
-Streaming a long-running command's output as it arrives (a progress bar, live log lines) needs `.spawn()` instead of `.execute()`, listening on `.stdout.on("data", ...)` and `.on("close", ...)` — but `spawn()` is gated by a *different* permission than `execute()` (`shell:allow-spawn`, not covered by `shell:allow-execute`), so it needs its own capability entry with the same `sh` scope. See `cloneRepo` in `src/widgets/repos/commands.ts` for the pattern.
+Streaming a long-running command's output as it arrives (a progress bar, live log lines) needs `.spawn()` instead of `.execute()`, listening on `.stdout.on("data", ...)` and `.on("close", ...)` — but `spawn()` is gated by a *different* permission than `execute()` (`shell:allow-spawn`, not covered by `shell:allow-execute`), so it needs its own capability entry with the same `sh` scope. See `runCmdStreaming` in `src/wigl/utils/index.ts` (used by `cloneRepo` in `wigl-widgets/repos/commands.ts`) for the pattern.
 
 **GUI-launched shells have a minimal `PATH`** — it doesn't source `.zshrc`/`.bash_profile`, so Homebrew (`/opt/homebrew/bin`), `nvm`/`bun`-style installers, and per-app "install CLI" steps (VS Code's, GitHub Desktop's) are all typically missing. Anything you shell out to that isn't a macOS system binary needs its absolute install path tried first, with the bare command as a PATH fallback for machines where it *does* resolve — see the same `commands.ts` for the pattern (a small `for (const candidate of [absolute, bare]) { ... if success return }` loop), repeated for every one of these binaries so far (VS Code, GitHub Desktop, `gh`, `bun`).
 
@@ -157,7 +159,7 @@ Init already ran once (`components.json`, `@/*` path alias in `tsconfig.json` + 
 
 `Widget` forces the `dark` class on its root wrapper — `App.css` defines no color values at all now (`src/wigl/theme/` is the single source, see its own comment), so `dark` no longer picks a different palette; it only activates coss ui's own `dark:`-prefixed variant tweaks (opacity/shadow-direction fine-tuning, not colors). Widgets built via `Widget` get this for free; don't re-add `dark` on anything inside it.
 
-Reach for semantic color tokens (`bg-card`, `border-border`, `text-muted-foreground`, `bg-popover`, `bg-input`, ...), never a literal Tailwind color (`bg-neutral-900`, `border-white/10`, `text-cyan-400` for anything but a genuinely fixed status/icon color) or an inline hex/rgba — a theme (`src/wigl/theme/`) rewrites the CSS vars those tokens read from, and a literal color silently opts a widget out of every future theme. Status-style icon colors that carry fixed meaning regardless of theme (a green "success" check, a red-vs-amber severity gradient) are the one legitimate exception — see `src/widgets/repos/Row.tsx`'s `releaseScoreClass` for the pattern.
+Reach for semantic color tokens (`bg-card`, `border-border`, `text-muted-foreground`, `bg-popover`, `bg-input`, ...), never a literal Tailwind color (`bg-neutral-900`, `border-white/10`, `text-cyan-400` for anything but a genuinely fixed status/icon color) or an inline hex/rgba — a theme (`src/wigl/theme/`) rewrites the CSS vars those tokens read from, and a literal color silently opts a widget out of every future theme. Status-style icon colors that carry fixed meaning regardless of theme (a green "success" check, a red-vs-amber severity gradient) are the one legitimate exception — see `wigl-widgets/repos/Row.tsx`'s `releaseScoreClass` for the pattern.
 
 ## Window chrome
 

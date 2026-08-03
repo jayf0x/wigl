@@ -1,6 +1,4 @@
-import { homeDir } from "@tauri-apps/api/path";
-import { Command } from "@tauri-apps/plugin-shell";
-import { isMacos, runCmd } from "@/wigl/utils";
+import { homeDir, isMacos, runCmd, runCmdStreaming } from "@/wigl/utils";
 import type { ProjectStatus, RemoteRepo } from "./types";
 
 // single string.
@@ -8,13 +6,13 @@ export const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 // `~` isn't expanded by anything downstream: `shQuote` single-quotes it
 // before it reaches a shell (which disables tilde expansion anyway), and
-// Node's `existsSync` (in scripts/repos-scan.ts) never expands it either —
-// so a path typed as "~/code" silently scanned nothing. Resolve `~` here,
-// once, before the path is stored or used.
+// `scan.ts`'s `[ -d ... ]` check never expands it either — so a path typed
+// as "~/code" silently scanned nothing. Resolve `~` here, once, before the
+// path is stored or used.
 export const resolveSourceDir = async (input: string): Promise<string> => {
   const trimmed = input.trim();
   if (trimmed === "~") return homeDir();
-  if (trimmed.startsWith("~/")) return `${(await homeDir()).replace(/\/$/, "")}${trimmed.slice(1)}`;
+  if (trimmed.startsWith("~/")) return `${await homeDir()}${trimmed.slice(1)}`;
   return trimmed;
 };
 
@@ -72,17 +70,14 @@ export const loadRemoteRepos = async (): Promise<RemoteRepo[]> => {
 // either, so `onProgress` still fires once per update, see docs/debugging.md
 // if this ever stops behaving that way). `2>&1` merges stderr (where
 // `--progress` writes) into the one stream we listen on.
-export const cloneRepo = (repo: RemoteRepo, destDir: string, onProgress: (line: string) => void): Promise<void> => {
-  const cmd = Command.create("sh", ["-c", `git clone --progress ${shQuote(repo.cloneUrl)} ${shQuote(destDir)} 2>&1`]);
-  return new Promise((resolve, reject) => {
-    cmd.stdout.on("data", (line) => onProgress(line.replace(/[\r\n]+$/, "")));
-    cmd.on("error", (err) => reject(new Error(err)));
-    cmd.on("close", (data) => {
-      if (data.code === 0) resolve();
-      else reject(new Error(`git clone exited with code ${data.code}`));
-    });
-    cmd.spawn().catch(reject);
-  });
+export const cloneRepo = async (
+  repo: RemoteRepo,
+  destDir: string,
+  onProgress: (line: string) => void,
+): Promise<void> => {
+  const script = `git clone --progress ${shQuote(repo.cloneUrl)} ${shQuote(destDir)} 2>&1`;
+  const { code } = await runCmdStreaming("sh", ["-c", script], onProgress);
+  if (code !== 0) throw new Error(`git clone exited with code ${code}`);
 };
 
 // Every binary here runs through `sh -c`, per capabilities: only `sh` and

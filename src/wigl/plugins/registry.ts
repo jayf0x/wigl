@@ -73,7 +73,7 @@ const HOST_MODULES: Record<HostModuleId, HostModule> = {
   },
   "@/wigl/utils": {
     value: WiglUtils,
-    members: { runCmd: "command", isMacos: "command" },
+    members: { runCmd: "command", runCmdStreaming: "command", isMacos: "command", homeDir: "filesystem" },
   },
   "@/components/ui/badge": { value: Badge },
   "@/components/ui/button": { value: Button },

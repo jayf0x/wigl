@@ -1,6 +1,4 @@
-// Shape shared with scripts/repos-scan.ts, which is the source of these
-// fields — kept here (not there) so importing it doesn't pull scripts/ (bun
-// runtime code, node types) into this project's `src`-only tsconfig.
+// Shape produced by scan.ts's shell-based scanner.
 export interface RepoScanRow {
   name: string;
   isGitRepo: boolean;

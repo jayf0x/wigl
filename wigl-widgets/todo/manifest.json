@@ -1,0 +1,8 @@
+{
+  "id": "todo",
+  "name": "Todo",
+  "version": "0.1.0",
+  "description": "Placeholder todo list",
+  "entry": "dist/index.js",
+  "apiVersion": 1
+}

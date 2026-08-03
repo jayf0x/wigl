@@ -1,0 +1,9 @@
+{
+  "id": "repos",
+  "name": "Repos",
+  "version": "0.1.0",
+  "description": "Local + remote GitHub repo status, sortable",
+  "entry": "dist/index.js",
+  "apiVersion": 1,
+  "permissions": ["storage", "command", "filesystem"]
+}

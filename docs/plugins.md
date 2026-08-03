@@ -194,14 +194,22 @@ its idea. Steps, in order:
    externalizes by specifier while this step type-resolves by path — catching
    one doesn't guarantee the other, run both.
 7. `bun run plugin:install wigl-widgets/<name>` then `bun run verify` —
-   confirm it's on screen. If the widget was one of the four still pending
-   (`games`, `qa-colors`, `repos`, `todo` — see `backlog.md`), delete its
-   `src/widgets/<name>/` folder once the plugin version is confirmed working,
-   so there's exactly one copy of the widget in the repo, not two.
+   confirm it's on screen. Step 1's `git mv` already left exactly one copy of
+   the widget in the repo; there's nothing left in `src/widgets/<name>/` to
+   delete.
 
-`repos` cannot make it past step 4 as-is: it imports `@tauri-apps/api/path`
-and `@tauri-apps/plugin-shell` directly, and plugins are not allowed to hold
-a raw Tauri API — see "The host module registry" above for why. It needs the
-host to grow mediated `command`/`filesystem` host modules (gated on the
-permissions of the same name, already in the manifest schema) before it can
-move; that's `backlog.md`'s entry for it, not a step to improvise here.
+A widget that imports `@tauri-apps/api/path` or `@tauri-apps/plugin-shell`
+directly (raw Tauri APIs — plugins can't hold one, see "The host module
+registry" above) needs the underlying capability turned into a mediated host
+module first, not an escape hatch around the registry. `@/wigl/utils`'s
+`homeDir` (gated on `filesystem`) and `runCmdStreaming` (gated on
+`command`, the streaming counterpart to `runCmd`) are two such modules,
+added when the `repos` widget migrated — copy that shape for the next gap
+rather than inventing a new one. A widget that located a bundled non-code
+resource via `resolveResource` (Tauri's app-resource resolution) has no
+plugin equivalent at all — installed plugins ship only `manifest.json` and
+`dist/` (see "Building and installing" below), so the fix is to stop needing
+the resource, not to find a way to ship it. `repos`' old scan script was a
+`bun`-run `.ts` file resolved this way; it's now a POSIX `sh` script
+(`wigl-widgets/repos/scan.ts`) run through `runCmd`, which needs nothing
+beyond what every other shell-out in this app already needs.

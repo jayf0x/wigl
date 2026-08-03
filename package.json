@@ -21,7 +21,6 @@
     "calendar:add": "bun scripts/calendar.ts add",
     "calendar:list": "bun scripts/calendar.ts list",
     "calendar:rm": "bun scripts/calendar.ts rm",
-    "repos:scan": "bun scripts/repos-scan.ts",
     "tw-colors": "bun scripts/tw-colors.ts",
     "check:eager": "bun scripts/check-eager.ts",
     "typecheck:plugins": "tsc -p wigl-widgets --noEmit",
