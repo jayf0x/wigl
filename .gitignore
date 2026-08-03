@@ -6,3 +6,6 @@ dist-ssr
 src-tauri/target
 src-tauri/gen
 .DS_Store
+
+# Generated host API types for plugins — `bun run plugin:types`
+wigl-widgets/types

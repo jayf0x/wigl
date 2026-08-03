@@ -22,8 +22,9 @@ Each `docs/*.md` file owns one slice of ground truth. When a change in this sess
 | `docs/future-ideas.md` | Product ideas and closed/rejected scope decisions — defects and open gaps go in `backlog.md` instead |
 | `docs/principles.md` | Code-shape rules (functional core / imperative shell) — short on purpose |
 | `docs/theming.md` | The theme token contract, preset vs. parametric generation, and the no-hardcoded-color rule for widgets |
+| `docs/plugins.md` | The external-plugin contract: manifest, build/install CLI, the host module registry, and the permission model |
 
-If a task's outcome doesn't change any of those five claims, there's nothing to update — most small tweaks won't.
+If a task's outcome doesn't change any of those claims, there's nothing to update — most small tweaks won't.
 
 ## Read only what your task needs
 
@@ -31,7 +32,8 @@ If a task's outcome doesn't change any of those five claims, there's nothing to 
 |------|-----------|---------------|
 | Small tweak to an existing widget (UI, sorting, labels, icons) | nothing else | `src/widgets/<name>/index.tsx` |
 | Change what data a widget shows / how it's fetched | `docs/architecture.md` → "Data flow pattern" | the widget's `use<Name>.ts` hook and `<name>.config.ts` |
-| Add a new widget | `docs/widgets.md` (all of it), then read one existing widget folder | a new `src/widgets/<name>/` folder — that's the only edit |
+| Add a new widget | `docs/plugins.md` + `docs/widgets.md` (all of both), then read `wigl-widgets/calendar/` | a new `wigl-widgets/<name>/` folder — that's the only edit |
+| Change what a plugin may import or which capability it needs | `docs/plugins.md` → "The host module registry" | `src/wigl/plugins/host-modules.ts` + `registry.ts` |
 | Add a UI primitive (dialog, select, ...) | `docs/widgets.md` → "Styling" | `bunx shadcn@latest add @coss/<component>` → `src/components/ui/` |
 | Run a new shell command / CLI from a widget | `docs/widgets.md` → "Running shell commands" | `src-tauri/capabilities/default.json` + the widget's hook |
 | Window/monitor behavior (drag, transparency, chrome, click-through) | `docs/architecture.md` (all of it) | `src/wigl/Desktop.tsx`, `src-tauri/src/lib.rs` |
@@ -41,7 +43,8 @@ If a task's outcome doesn't change any of those five claims, there's nothing to 
 
 ## Hard rules (violating these is the main way to fail here)
 
-1. A widget is a folder: `src/widgets/<name>/index.tsx` has exactly one export — a default-exported component — passing grid size/position as plain props to `<Widget w h col row>` from `@/wigl`. Discovery is Vite's build-time `import.meta.glob` in `src/App.tsx` — folder name = widget id, rendered as a grid item by whichever monitor's `<Desktop>` owns it (see `docs/architecture.md`). Adding/removing a widget touches only its own folder: no registry file, no manifest, no `tauri.conf.json` edit, no Rust edit. Don't name a folder `main` (reserved for the hidden bootstrap window) or `wigl` (the app's name).
+1. A widget is a folder with exactly one export — a default-exported component — passing grid size/position as plain props to `<Widget w h col row>` from `@/wigl`. Folder name = widget id, rendered as a grid item by whichever monitor's `<Desktop>` owns it (see `docs/architecture.md`). **New widgets are plugins**: `wigl-widgets/<name>/` with a `manifest.json`, built and installed by `bun run plugin:install` (`docs/plugins.md`). The builtin path (`src/widgets/<name>/`, discovered by `import.meta.glob` in `src/App.tsx`) still works and is being retired — don't add to it. Either way, adding/removing a widget touches only its own folder: no registry file, no `tauri.conf.json` edit, no Rust edit. Don't name a folder `main` (reserved for the hidden bootstrap window) or `wigl` (the app's name).
+   - A plugin imports React and everything shared through the host module registry (`src/wigl/plugins/host-modules.ts`), never its own copy, and never `@tauri-apps/*` directly. Needing something the registry doesn't serve means adding a host module — not an escape hatch. Anything else it needs, it bundles.
 2. Shared components follow the shadcn philosophy: owned code, children + `className`, no prop-per-feature APIs. Nothing new becomes "shared" until a second widget concretely needs it. Everything shared lives in `src/wigl/` behind exactly three barrels — visual/layout primitives from `@/wigl`, stateful/React hooks from `@/wigl/hooks`, plain non-React helpers from `@/wigl/utils` — each barrel's `index.ts` is the authoritative list of what it exports; widgets never deep-import past those three. The header component is a drag handle only — interactive children just work; use `data-no-drag` for custom clickable elements, never `stopPropagation` workarounds.
 3. Data comes from shell commands (`tauri-plugin-shell`), not custom Rust. New Rust logic requires the operation to be impossible via shell.
 4. macOS and Linux (Ubuntu) only — no Windows. No performance work without measuring first. If a task can't be tied to a real feature in one sentence, skip it and note it. Widgets sharing a monitor share one JS realm and React tree (each monitor is its own window/realm, not each widget) — a per-widget error boundary in `Desktop.tsx` stops one widget's crash from taking down the others on that screen, but don't assume render isolation between widgets the way separate windows would give you.

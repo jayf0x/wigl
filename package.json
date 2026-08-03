@@ -23,7 +23,14 @@
     "calendar:rm": "bun scripts/calendar.ts rm",
     "repos:scan": "bun scripts/repos-scan.ts",
     "tw-colors": "bun scripts/tw-colors.ts",
-    "check:eager": "bun scripts/check-eager.ts"
+    "check:eager": "bun scripts/check-eager.ts",
+    "typecheck:plugins": "tsc -p wigl-widgets --noEmit",
+    "plugin:build": "bun scripts/plugin.ts build",
+    "plugin:install": "bun scripts/plugin.ts install",
+    "plugin:list": "bun scripts/plugin.ts list",
+    "plugin:rm": "bun scripts/plugin.ts rm",
+    "plugin:types": "tsc -p tsconfig.types.json",
+    "plugin:check": "bun scripts/plugin.ts check"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

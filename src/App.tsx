@@ -3,6 +3,7 @@ import { Component, lazy, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Desktop } from "@/wigl";
+import { type FailedPlugin, loadPlugins } from "@/wigl/plugins";
 import "./App.css";
 
 // The full widget contract: a widget is a folder, src/widgets/<name>/index.tsx,
@@ -13,20 +14,24 @@ interface WidgetModule {
   default: ComponentType;
 }
 
-// Widgets are discovered by folder: src/widgets/<name>/index.tsx. The folder
-// name becomes the widget id. No registry, no manifest, no App.tsx edit —
-// adding a widget is adding a folder. Non-eager: each monitor window only
-// pays the code-split cost of the widgets it actually mounts, not every
-// widget in the repo (a monitor renders a subset, decided by saved layout).
+// Builtin widgets are discovered by folder: src/widgets/<name>/index.tsx,
+// compiled into the app. Non-eager: each monitor window only pays the
+// code-split cost of the widgets it actually mounts, not every widget in the
+// repo (a monitor renders a subset, decided by saved layout).
+//
+// This path is being retired in favour of installed plugins (see
+// `src/wigl/plugins/` and `wigl-widgets/`), which don't need an app rebuild
+// to add or remove. It stays alive only until the remaining builtin folders
+// are migrated — see `backlog.md`. Don't add a new widget here.
 const loaders = import.meta.glob<WidgetModule>("./widgets/*/index.tsx");
-const widgets: Record<string, ComponentType> = {};
+const builtins: Record<string, ComponentType> = {};
 for (const [path, load] of Object.entries(loaders)) {
   const id = path.split("/")[2];
 
   // The glob does no validation of what a widget exports, so a typo would
   // silently fail (blank widget / default size) — checked once the chunk
   // actually loads, since that's the earliest point the module exists.
-  widgets[id] = lazy(async (): Promise<{ default: ComponentType }> => {
+  builtins[id] = lazy(async (): Promise<{ default: ComponentType }> => {
     const mod = await load();
     if (!mod.default) {
       console.error(`[wigl] widget "${id}" has no default export — index.tsx must default-export its component`);
@@ -80,9 +85,34 @@ const App = () => {
   // is_windowed_mode round-trip is ever slow or fails, the window still
   // shows and renders immediately instead of staying blank indefinitely.
   const [windowed, setWindowed] = useState(false);
+  // Null until plugin discovery settles. <Desktop> is held back until then
+  // deliberately: it builds its layout from the widget ids it's handed, and
+  // handing it a set that grows a tick later is the same mount-order hazard
+  // that already cost a first-launch layout bug once. Discovery is a couple
+  // of `sh` reads, so the wait is imperceptible — and on failure it still
+  // resolves (with an empty list) rather than hanging.
+  const [widgets, setWidgets] = useState<Record<string, ComponentType> | null>(null);
+  const [failedPlugins, setFailedPlugins] = useState<FailedPlugin[]>([]);
 
   useEffect(() => {
     if (label !== "main") getCurrentWindow().show().catch(console.error);
+  }, [label]);
+
+  useEffect(() => {
+    if (label === "main") return;
+    loadPlugins()
+      .then(({ loaded, failed }) => {
+        const fromPlugins = Object.fromEntries(loaded.map((p) => [p.manifest.id, p.component]));
+        // Builtins win a name collision: a plugin can't shadow a widget
+        // that's compiled into the app, which would otherwise be a quiet way
+        // to replace one.
+        setWidgets({ ...fromPlugins, ...builtins });
+        setFailedPlugins(failed);
+      })
+      .catch((e) => {
+        console.error("[wigl] plugin discovery failed", e);
+        setWidgets(builtins);
+      });
   }, [label]);
 
   useEffect(() => {
@@ -96,8 +126,18 @@ const App = () => {
   }, [label]);
 
   if (label === "main") return null;
+  if (!widgets) return null;
   return (
     <AppErrorBoundary>
+      {failedPlugins.length > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 top-0 z-50 p-2 text-[11px] text-destructive">
+          {failedPlugins.map((p) => (
+            <div key={p.id}>
+              plugin "{p.id}" failed to load: {p.error}
+            </div>
+          ))}
+        </div>
+      )}
       <Desktop widgets={widgets} monitorIndex={Number(label.split("-")[1]) || 0} windowed={windowed} />
     </AppErrorBoundary>
   );

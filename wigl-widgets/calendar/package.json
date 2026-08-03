@@ -1,0 +1,8 @@
+{
+  "name": "wigl-widget-calendar",
+  "private": true,
+  "version": "0.1.0",
+  "dependencies": {
+    "date-fns": "^4.4.0"
+  }
+}

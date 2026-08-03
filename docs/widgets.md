@@ -1,6 +1,11 @@
 # Adding or editing a widget
 
-This file is the contract and the reasoning. It deliberately names no current widgets — for every pattern below, the living example is in `src/widgets/`: open the existing widget most similar to what you're building and read it top to bottom. If this doc and a widget's code ever disagree on style, the code is newer; fix whichever is wrong rather than following the stale one.
+This file is the contract and the reasoning. It deliberately names no current widgets — for every pattern below, the living example is in `src/widgets/` and `wigl-widgets/`: open the existing widget most similar to what you're building and read it top to bottom. If this doc and a widget's code ever disagree on style, the code is newer; fix whichever is wrong rather than following the stale one.
+
+**Two homes, one component contract.** A widget's *code* is the same either way — everything below applies unchanged. What differs is where the folder lives and how it reaches the app:
+
+- **A plugin** (`wigl-widgets/<name>/`, plus a `manifest.json`) is built and installed separately, and needs no app rebuild to add or remove. **This is where new widgets go.** The folder layout, build/install commands, host module registry and permission model are `docs/plugins.md`'s slice, not this file's.
+- **A builtin** (`src/widgets/<name>/`) is compiled into the app. This path is being retired as the remaining folders are migrated (see `backlog.md`); don't add one.
 
 ## Philosophy (shadcn-style)
 
@@ -22,7 +27,7 @@ src/widgets/<name>/
 
 Sibling files take plain names (`types.ts`, `commands.ts`, `sort.ts`, a `Row.tsx` component) — the folder itself is already the namespace, so don't prefix filenames with the widget's own name. `use<Name>.ts` is the one deliberate exception: that prefix is the hook-naming convention (see below), not a namespacing habit.
 
-`src/App.tsx` discovers folders with `import.meta.glob("./widgets/*/index.tsx")` at build time; the folder name becomes the widget's id (used as its grid-layout key and its `useStorage`/`useQuery` key prefix), not a window label — a widget renders as a grid item inside whichever monitor's window it's assigned to, it doesn't get its own OS window (see `docs/architecture.md`). Don't name a folder `main` (the hidden bootstrap window) or `wigl` (the app's name). **Adding a widget = creating the folder. Deleting it = removing the folder. No registration, no config edits, nothing else.**
+`src/App.tsx` discovers builtin folders with `import.meta.glob("./widgets/*/index.tsx")` at build time and merges them with whatever `loadPlugins()` found on disk (`docs/plugins.md`); the folder name becomes the widget's id (used as its grid-layout key and its `useStorage`/`useQuery` key prefix), not a window label — a widget renders as a grid item inside whichever monitor's window it's assigned to, it doesn't get its own OS window (see `docs/architecture.md`). Don't name a folder `main` (the hidden bootstrap window) or `wigl` (the app's name). **Adding a widget = creating the folder. Deleting it = removing the folder. No registration, no config edits, nothing else.**
 
 ```tsx
 // src/widgets/clock/index.tsx — a complete, working widget
