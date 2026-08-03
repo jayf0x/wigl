@@ -39,6 +39,21 @@ const die = (msg: string): never => {
   process.exit(1);
 };
 
+/** Bun picks the JSX transform (`jsx` vs `jsxDEV`) and resolves React's
+ * dev-vs-production build from NODE_ENV *at process start* — no build option
+ * or later assignment overrides it. The app ships production React, and the
+ * two are not interchangeable: a `jsxDEV` call into a production React is
+ * exactly the "dispatcher.getOwner is not a function" crash this cost once
+ * already. So building or checking under the wrong NODE_ENV is refused
+ * outright rather than producing a bundle that looks fine and isn't. The
+ * `plugin:*` package scripts set it; this is the guard for anyone invoking
+ * the script directly. */
+const requireProductionEnv = (what: string) => {
+  if (process.env.NODE_ENV !== "production") {
+    die(`${what} must run with NODE_ENV=production (use \`bun run plugin:${what}\`, which sets it)`);
+  }
+};
+
 const readManifest = async (dir: string): Promise<WidgetManifest> => {
   const path = join(dir, "manifest.json");
   const file = Bun.file(path);
@@ -70,6 +85,7 @@ const hostExternals = {
 };
 
 const build = async (dir: string) => {
+  requireProductionEnv("build");
   const manifest = await readManifest(dir);
   const entrySrc = ["index.tsx", "index.ts"].map((f) => join(dir, f)).find((p) => Bun.file(p).size >= 0);
   if (!entrySrc) die(`${dir}: no index.tsx or index.ts to build`);
@@ -125,32 +141,47 @@ const install = async (dir: string) => {
   console.log("  restart wigl (bun run verify) to see it.");
 };
 
-/** Loads a built plugin the same way the app does — header-bound
- * `__wigl_host`, dynamic import of the bundle — but against stub host
- * modules, in a plain bun process. This is the only way to prove the
- * pipeline works without a human looking at a desktop: a webview's console
- * is invisible to `bun run verify` (see docs/debugging.md), so "the app
- * launched cleanly" says nothing about whether a plugin actually evaluated.
+/** Loads *and renders* a built plugin in a plain bun process, against the
+ * host's real modules — the same React object the app would hand it.
  *
- * It also reports which host modules the bundle really pulls in, which is
- * the seed of the manifest-vs-reality check the permission model will
- * eventually need. */
+ * Rendering is the point, not a bonus. A webview's console is invisible to
+ * `bun run verify` (see docs/debugging.md), so "the app launched cleanly"
+ * says nothing about whether a plugin worked; and an earlier version of this
+ * check that only imported the bundle against stub modules passed happily
+ * while the plugin crashed on its first render with "dispatcher.getOwner is
+ * not a function" — a bundled copy of React's dev jsx runtime meeting the
+ * host's React. Anything that doesn't actually render can't catch that whole
+ * class of bug, which is the main risk this boundary carries.
+ *
+ * It also reports which host modules the bundle really pulls in — the seed of
+ * the manifest-vs-reality check the permission model will eventually want. */
 const check = async (dir: string) => {
+  requireProductionEnv("check");
   const manifest = await readManifest(dir);
   const entry = join(dir, manifest.entry);
   if (!(await Bun.file(entry).exists())) die(`${manifest.id}: not built yet — run plugin:build first`);
+
+  // Real host modules, resolved through the app's own tsconfig paths — a
+  // stub would defeat the purpose. `@tauri-apps/*` calls inside them do fail
+  // outside a webview, but `renderToString` runs no effects, so a widget's
+  // first paint doesn't depend on one.
+  const real = new Map<string, unknown>();
+  for (const spec of HOST_MODULE_IDS) {
+    try {
+      real.set(spec, await import(spec));
+    } catch (e) {
+      die(`host module "${spec}" can't be imported for checking: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 
   const required: string[] = [];
   const g = globalThis as unknown as { __wigl_scopes__: Record<string, (s: string) => unknown> };
   g.__wigl_scopes__ = {
     [manifest.id]: (spec: string) => {
-      if (!(HOST_MODULE_IDS as readonly string[]).includes(spec)) {
-        die(`${manifest.id}: required "${spec}", which the host doesn't serve`);
-      }
+      const mod = real.get(spec);
+      if (!mod) die(`${manifest.id}: required "${spec}", which the host doesn't serve`);
       required.push(spec);
-      // A Proxy stands in for every host module: the bundle only reads
-      // bindings off it at import time, so nothing here needs to be real.
-      return new Proxy({}, { get: () => () => null });
+      return mod;
     },
   };
 
@@ -168,8 +199,18 @@ const check = async (dir: string) => {
   }
   if (typeof mod.default !== "function") die(`${manifest.id}: entry has no default-exported component`);
 
+  const { createElement } = await import("react");
+  const { renderToString } = await import("react-dom/server");
+  let html: string;
+  try {
+    html = renderToString(createElement(mod.default as () => null));
+  } catch (e) {
+    die(`${manifest.id}: crashed on render — ${e instanceof Error ? e.message : String(e)}`);
+  }
+  if (!(html as string).trim()) die(`${manifest.id}: rendered nothing`);
+
   const unique = [...new Set(required)].sort();
-  console.log(`✓ ${manifest.id} loads, default export is a component`);
+  console.log(`✓ ${manifest.id} loads and renders (${(html as string).length} chars of markup)`);
   console.log(`  host modules: ${unique.join(", ") || "none"}`);
   console.log(`  permissions declared: ${manifest.permissions?.join(", ") || "none"}`);
 };

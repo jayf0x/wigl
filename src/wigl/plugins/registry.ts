@@ -3,6 +3,7 @@ import * as Wigl from "@/wigl";
 import * as WiglHooks from "@/wigl/hooks";
 import * as WiglUtils from "@/wigl/utils";
 import * as LucideReact from "lucide-react";
+import * as ReactJsxDevRuntime from "react/jsx-dev-runtime";
 import * as ReactJsxRuntime from "react/jsx-runtime";
 import * as Badge from "@/components/ui/badge";
 import * as Button from "@/components/ui/button";
@@ -63,6 +64,7 @@ interface HostModule {
 const HOST_MODULES: Record<HostModuleId, HostModule> = {
   react: { value: React },
   "react/jsx-runtime": { value: ReactJsxRuntime },
+  "react/jsx-dev-runtime": { value: ReactJsxDevRuntime },
   "lucide-react": { value: LucideReact },
   "@/wigl": { value: Wigl },
   "@/wigl/hooks": {

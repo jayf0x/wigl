@@ -96,11 +96,35 @@ in a user's data dir.
 
 `plugin:check` matters more than it looks: a webview's console is invisible
 to `bun run verify` (see `docs/debugging.md`), so "the app launched cleanly"
-says nothing about whether a plugin actually evaluated. `check` loads the
-built bundle in a plain bun process against stub host modules and asserts it
-evaluates and default-exports a component. It also prints which host modules
-the bundle really pulls in — the seed of the manifest-vs-reality check the
+says nothing about whether a plugin actually worked. `check` loads the built
+bundle in a plain bun process against the host's **real** modules and
+**renders it** with `renderToString`. It also prints which host modules the
+bundle really pulls in — the seed of the manifest-vs-reality check the
 permission model will eventually want.
+
+Both the rendering and the realness are load-bearing, and both are scar
+tissue: a first version of this check imported the bundle against stub
+modules, never rendered, and passed cleanly on a plugin that crashed on its
+first paint in the real app with `dispatcher.getOwner is not a function`.
+Anything that doesn't render can't see that class of bug at all.
+
+## NODE_ENV is part of the contract
+
+`plugin:build` and `plugin:check` refuse to run unless `NODE_ENV=production`
+(the `plugin:*` package scripts set it; the guard is for direct invocation).
+
+This isn't hygiene, it's correctness. Bun picks the JSX transform (`jsx` vs
+`jsxDEV`) and resolves React's dev-vs-production build from `NODE_ENV` *at
+process start* — no `Bun.build` option and no later assignment overrides it.
+The app ships production React, and a bundle transpiled to `jsxDEV` calls
+into React internals that build doesn't have. That's the crash above, and it
+is invisible in every check that doesn't render against production React
+specifically — including a check that renders against a *development* React,
+where the same broken bundle works fine.
+
+`react/jsx-dev-runtime` is on the host module list alongside
+`react/jsx-runtime` for the same reason: externalizing only the production
+one looks right and silently isn't.
 
 ## Typechecking
 

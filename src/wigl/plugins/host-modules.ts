@@ -9,6 +9,13 @@
 export const HOST_MODULE_IDS = [
   "react",
   "react/jsx-runtime",
+  // The dev runtime is served too, not just the production one. Bun's
+  // transpiler emits `jsxDEV` for an unminified build, and React's dev jsx
+  // runtime reaches into React's shared internals — so a bundled copy running
+  // against the host's React fails at first render with
+  // "dispatcher.getOwner is not a function". Externalizing only
+  // `react/jsx-runtime` looks right and silently isn't.
+  "react/jsx-dev-runtime",
   "lucide-react",
   "@/wigl",
   "@/wigl/hooks",
