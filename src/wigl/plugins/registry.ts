@@ -96,7 +96,7 @@ class PluginPermissionError extends Error {}
 const denied = (pluginId: string, spec: string, member: string, permission: WidgetPermission) => {
   const fail = () => {
     throw new PluginPermissionError(
-      `[wigl] plugin "${pluginId}" used ${member} from "${spec}" without the "${permission}" permission — add it to manifest.json`,
+      `[wigl] plugin "${pluginId}" used ${member} from "${spec}" without the "${permission}" permission — add it to package.json under "wigl.permissions"`,
     );
   };
   return fail;
@@ -118,7 +118,7 @@ export const createPluginRequire = (pluginId: string, permissions: WidgetPermiss
     }
     if (mod.gate && !granted.has(mod.gate)) {
       throw new PluginPermissionError(
-        `[wigl] plugin "${pluginId}" imported "${spec}" without the "${mod.gate}" permission — add it to manifest.json`,
+        `[wigl] plugin "${pluginId}" imported "${spec}" without the "${mod.gate}" permission — add it to package.json under "wigl.permissions"`,
       );
     }
     if (!mod.members) return mod.value;

@@ -5,15 +5,14 @@ import type { createPluginRequire } from "./registry";
 import {
   type FailedPlugin,
   type LoadedPlugin,
-  PLUGIN_API_VERSION,
-  PLUGIN_ENTRY,
   type PluginLoadResult,
-  type WidgetManifest,
+  RESERVED_PLUGIN_IDS,
+  resolvePluginConfig,
 } from "./types";
 
 // How an installed plugin actually gets into the running app:
 //
-//   ~/.local/share/<identifier>/plugins/<id>/{manifest.json,dist/index.js}
+//   ~/.local/share/<identifier>/plugins/<id>/{package.json?,dist/index.js}
 //        ↓ read as text (sh -c cat — same "shell out, no new Rust" rule as
 //          storage; no asset-protocol config, no new capability entry)
 //   source string + a per-plugin header binding __wigl_host
@@ -47,26 +46,23 @@ const readFile = async (path: string): Promise<string> => {
   return out.stdout;
 };
 
+/** `null` means "no package.json" (a valid, zero-config plugin), not an
+ * error — only a missing *entry* file should fail a load. */
+const tryReadFile = async (path: string): Promise<string | null> => {
+  const out = await runCmd("sh", ["-c", `cat ${shq(path)} 2>/dev/null`]);
+  return out.code === 0 ? out.stdout : null;
+};
+
 /** Where installed plugins live. Sibling of `wigl.db` in the same per-OS
  * app-data dir, so "everything wigl owns on disk" stays one folder. */
 export const pluginsDir = async () => join(await appDataDir(), "plugins");
 
-const RESERVED_IDS = new Set(["main", "wigl"]);
-
-const parseManifest = (raw: string, folder: string): WidgetManifest => {
-  const m = JSON.parse(raw) as Partial<WidgetManifest>;
-  if (!m.id) throw new Error("manifest.json has no `id`");
-  if (m.id !== folder) throw new Error(`manifest id "${m.id}" doesn't match folder name "${folder}"`);
-  if (RESERVED_IDS.has(m.id)) throw new Error(`"${m.id}" is a reserved id`);
-  if (m.apiVersion !== PLUGIN_API_VERSION) {
-    throw new Error(`built for plugin API v${m.apiVersion}, this wigl speaks v${PLUGIN_API_VERSION}`);
-  }
-  return m as WidgetManifest;
-};
-
 const loadOne = async (dir: string, folder: string): Promise<LoadedPlugin> => {
-  const manifest = parseManifest(await readFile(await join(dir, "manifest.json")), folder);
-  const code = await readFile(await join(dir, PLUGIN_ENTRY));
+  if (RESERVED_PLUGIN_IDS.has(folder)) throw new Error(`"${folder}" is a reserved id`);
+
+  const pkgRaw = await tryReadFile(await join(dir, "package.json"));
+  const { id, entry, permissions } = resolvePluginConfig(folder, pkgRaw);
+  const code = await readFile(await join(dir, entry));
 
   // Imported lazily, not at module top level: the registry holds a live
   // reference to every host module it can serve — including the whole of
@@ -75,18 +71,18 @@ const loadOne = async (dir: string, folder: string): Promise<LoadedPlugin> => {
   // installed at all. This way that cost is paid on the first plugin load.
   const { createPluginRequire } = await import("./registry");
   globalThis.__wigl_scopes__ ??= {};
-  globalThis.__wigl_scopes__[manifest.id] = createPluginRequire(manifest.id, manifest.permissions ?? []);
+  globalThis.__wigl_scopes__[id] = createPluginRequire(id, permissions);
 
   // The header is prepended at load time rather than baked into the bundle
   // because the bundle can't know which plugin it'll be installed as — and
   // binding the scope by id here is what stops one plugin from grabbing
   // another's (more permissive) require.
-  const header = `const __wigl_host = { require: globalThis.__wigl_scopes__[${JSON.stringify(manifest.id)}] };\n`;
+  const header = `const __wigl_host = { require: globalThis.__wigl_scopes__[${JSON.stringify(id)}] };\n`;
   const url = URL.createObjectURL(new Blob([header, code], { type: "text/javascript" }));
   try {
     const mod = (await import(/* @vite-ignore */ url)) as PluginModule;
     if (!mod.default) throw new Error("entry has no default export — it must default-export its component");
-    return { manifest, component: mod.default };
+    return { manifest: { id, permissions }, component: mod.default };
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -94,7 +90,7 @@ const loadOne = async (dir: string, folder: string): Promise<LoadedPlugin> => {
 
 /** Discovers and mounts every installed plugin. Never throws: a plugin that
  * fails to load comes back in `failed` so the caller can surface it, because
- * the alternative — one bad manifest blanking every widget on the desktop —
+ * the alternative — one bad plugin blanking every widget on the desktop —
  * is the failure mode this app's error boundaries exist to prevent. */
 export const loadPlugins = async (): Promise<PluginLoadResult> => {
   const dir = await pluginsDir();

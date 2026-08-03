@@ -7,7 +7,6 @@ export { loadPlugins, pluginsDir } from "./loader";
 export {
   type FailedPlugin,
   type LoadedPlugin,
-  PLUGIN_API_VERSION,
   type PluginLoadResult,
   type WidgetManifest,
   type WidgetPermission,

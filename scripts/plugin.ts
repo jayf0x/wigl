@@ -2,28 +2,37 @@
 /**
  * Plugin CLI — build / install / list / rm.
  *
- *   bun run plugin:build   wigl-widgets/calendar
- *   bun run plugin:install wigl-widgets/calendar   # build, then copy into app data
+ *   bun run plugin:build       wigl-widgets/calendar
+ *   bun run plugin:install     wigl-widgets/calendar   # build, then copy into app data
+ *   bun run plugin:build:all                           # every wigl-widgets/<name> folder
+ *   bun run plugin:install:all
  *   bun run plugin:list
- *   bun run plugin:rm      calendar
+ *   bun run plugin:rm          calendar
  *
  * Why a build step exists at all: a webview has no compiler, so it cannot
  * import a `.tsx` file. Shipping one in the app (esbuild-wasm and friends)
  * would add ~9MB to a desktop-widget app to save plugin authors a command.
  * `Bun.build` does it here instead — no new dependency, since the repo
- * already requires bun.
+ * already requires bun. A plugin that ships hand-written, already-built JS
+ * (no TypeScript, no `wigl` build tooling at all) skips this step entirely —
+ * `plugin:install` only builds when there's an `index.tsx`/`index.ts` to
+ * build, otherwise it installs whatever's already sitting at the resolved
+ * entry path.
  *
  * The important part isn't the bundling, it's the externals: every specifier
  * in HOST_MODULE_IDS is rewritten to a `__wigl_host.require(...)` call the
  * host answers at load time (see `src/wigl/plugins/loader.ts`). That's what
- * keeps exactly one React in the process, and it's what makes manifest
- * permissions enforceable rather than decorative.
+ * keeps exactly one React in the process, and it's what makes permissions
+ * enforceable rather than decorative.
  */
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { HOST_MODULE_IDS } from "../src/wigl/plugins/host-modules";
-import { PLUGIN_API_VERSION, PLUGIN_ENTRY, type WidgetManifest } from "../src/wigl/plugins/types";
+import { RESERVED_PLUGIN_IDS, resolvePluginConfig } from "../src/wigl/plugins/types";
+
+const WIDGETS_ROOT = "wigl-widgets";
+const NON_PLUGIN_DIRS = new Set(["types"]);
 
 // Mirrors Tauri's `appDataDir()` for this app's identifier. Kept in sync
 // with `src/config/app.ts` by reading the same source of truth Tauri does.
@@ -54,20 +63,20 @@ const requireProductionEnv = (what: string) => {
   }
 };
 
-// `apiVersion` isn't authored by hand: it's the host runtime's contract
-// version, not something a plugin author picks, so the build stamps the
-// current PLUGIN_API_VERSION onto the manifest here rather than requiring
-// (and validating) a number in the source file. The loader still enforces
-// it strictly on the installed copy — that check is real, only the "author
-// has to know the magic number" part is gone.
-const readManifest = async (dir: string): Promise<WidgetManifest> => {
-  const path = join(dir, "manifest.json");
-  const file = Bun.file(path);
-  if (!(await file.exists())) die(`no manifest.json in ${dir}`);
-  const m = (await file.json()) as WidgetManifest;
-  if (!m.id) die(`${path}: missing "id"`);
-  return { ...m, apiVersion: PLUGIN_API_VERSION };
+/** No manifest.json: id is the folder name, entry/permissions come from an
+ * optional package.json (`resolvePluginConfig` in types.ts — the same
+ * resolution the runtime loader uses). No package.json at all is valid: a
+ * zero-config plugin defaults to `dist/index.js`, no permissions. */
+const readPluginConfig = async (dir: string) => {
+  const id = basename(dir);
+  if (RESERVED_PLUGIN_IDS.has(id)) die(`"${id}" is a reserved id`);
+  const pkgFile = Bun.file(join(dir, "package.json"));
+  const raw = (await pkgFile.exists()) ? await pkgFile.text() : null;
+  return { ...resolvePluginConfig(id, raw), pkgRaw: raw };
 };
+
+const findEntrySource = (dir: string) =>
+  ["index.tsx", "index.ts"].map((f) => join(dir, f)).find((p) => Bun.file(p).size >= 0);
 
 /** Rewrites every host specifier to a CommonJS shim over `__wigl_host`.
  * CJS rather than ESM because the set of named exports isn't knowable at
@@ -88,11 +97,14 @@ const hostExternals = {
 
 const build = async (dir: string) => {
   requireProductionEnv("build");
-  const manifest = await readManifest(dir);
-  const entrySrc = ["index.tsx", "index.ts"].map((f) => join(dir, f)).find((p) => Bun.file(p).size >= 0);
-  if (!entrySrc) die(`${dir}: no index.tsx or index.ts to build`);
+  const config = await readPluginConfig(dir);
+  const entrySrc = findEntrySource(dir);
+  if (!entrySrc) {
+    die(`${dir}: no index.tsx or index.ts to build (ships hand-written JS? skip plugin:build, go straight to plugin:install)`);
+  }
 
-  const outdir = join(dir, "dist");
+  const outPath = join(dir, config.entry);
+  const outdir = dirname(outPath);
   await rm(outdir, { recursive: true, force: true });
   const result = await Bun.build({
     entrypoints: [entrySrc as string],
@@ -107,40 +119,47 @@ const build = async (dir: string) => {
   });
   if (!result.success) {
     for (const log of result.logs) console.error(log);
-    die(`${manifest.id}: build failed`);
+    die(`${config.id}: build failed`);
   }
 
-  const outPath = join(dir, PLUGIN_ENTRY);
   if (!(await Bun.file(outPath).exists())) {
-    die(`${manifest.id}: build didn't produce "${PLUGIN_ENTRY}"`);
+    die(
+      `${config.id}: build didn't produce "${config.entry}" — if package.json sets a custom "main", leave it as the default "dist/index.js" while using plugin:build`,
+    );
   }
   const size = (await stat(outPath)).size;
-  console.log(`✓ built ${manifest.id} → ${PLUGIN_ENTRY} (${(size / 1024).toFixed(1)}kb)`);
-  return manifest;
-};
-
-const copyDir = async (from: string, to: string) => {
-  await mkdir(to, { recursive: true });
-  for (const name of await readdir(from, { withFileTypes: true })) {
-    const src = join(from, name.name);
-    const dst = join(to, name.name);
-    if (name.isDirectory()) await copyDir(src, dst);
-    else await Bun.write(dst, Bun.file(src));
-  }
+  console.log(`✓ built ${config.id} → ${config.entry} (${(size / 1024).toFixed(1)}kb)`);
+  return config;
 };
 
 const install = async (dir: string) => {
-  const manifest = await build(dir);
-  const target = join(installRoot(), manifest.id);
-  // Only the manifest and the built entry are installed — the plugin's
-  // source, node_modules and tsconfig are build-time concerns and have no
+  const config = await readPluginConfig(dir);
+  const built = findEntrySource(dir) ? await build(dir) : config;
+  const entryPath = join(dir, built.entry);
+  if (!(await Bun.file(entryPath).exists())) {
+    die(`${dir}: no index.tsx/ts and no built entry at "${built.entry}" — nothing to install`);
+  }
+
+  const target = join(installRoot(), built.id);
+  // Only package.json and the entry file are installed — the plugin's other
+  // source, node_modules and tsconfig are build-time concerns with no
   // business sitting in a user's app-data dir.
   await rm(target, { recursive: true, force: true });
-  await mkdir(join(target, "dist"), { recursive: true });
-  await Bun.write(join(target, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  await copyDir(join(dir, "dist"), join(target, "dist"));
-  console.log(`✓ installed ${manifest.id} → ${target}`);
+  await mkdir(dirname(join(target, built.entry)), { recursive: true });
+  if (built.pkgRaw) await Bun.write(join(target, "package.json"), built.pkgRaw);
+  await Bun.write(join(target, built.entry), Bun.file(entryPath));
+  console.log(`✓ installed ${built.id} → ${target}`);
   console.log("  restart wigl (bun run verify) to see it.");
+};
+
+/** Every `wigl-widgets/<name>` folder, in the same order `ls` would give —
+ * used by `build-all`/`install-all` so "do it to every widget" is one
+ * command instead of one per folder. */
+const allPluginDirs = async (): Promise<string[]> => {
+  const entries = await readdir(WIDGETS_ROOT, { withFileTypes: true });
+  return entries
+    .filter((e) => e.isDirectory() && !NON_PLUGIN_DIRS.has(e.name))
+    .map((e) => resolve(WIDGETS_ROOT, e.name));
 };
 
 /** Loads *and renders* a built plugin in a plain bun process, against the
@@ -153,15 +172,12 @@ const install = async (dir: string) => {
  * while the plugin crashed on its first render with "dispatcher.getOwner is
  * not a function" — a bundled copy of React's dev jsx runtime meeting the
  * host's React. Anything that doesn't actually render can't catch that whole
- * class of bug, which is the main risk this boundary carries.
- *
- * It also reports which host modules the bundle really pulls in — the seed of
- * the manifest-vs-reality check the permission model will eventually want. */
+ * class of bug, which is the main risk this boundary carries. */
 const check = async (dir: string) => {
   requireProductionEnv("check");
-  const manifest = await readManifest(dir);
-  const entry = join(dir, PLUGIN_ENTRY);
-  if (!(await Bun.file(entry).exists())) die(`${manifest.id}: not built yet — run plugin:build first`);
+  const config = await readPluginConfig(dir);
+  const entry = join(dir, config.entry);
+  if (!(await Bun.file(entry).exists())) die(`${config.id}: not built yet — run plugin:build first`);
 
   // Real host modules, resolved through the app's own tsconfig paths — a
   // stub would defeat the purpose. `@tauri-apps/*` calls inside them do fail
@@ -179,19 +195,19 @@ const check = async (dir: string) => {
   const required: string[] = [];
   const g = globalThis as unknown as { __wigl_scopes__: Record<string, (s: string) => unknown> };
   g.__wigl_scopes__ = {
-    [manifest.id]: (spec: string) => {
+    [config.id]: (spec: string) => {
       const mod = real.get(spec);
-      if (!mod) die(`${manifest.id}: required "${spec}", which the host doesn't serve`);
+      if (!mod) die(`${config.id}: required "${spec}", which the host doesn't serve`);
       required.push(spec);
       return mod;
     },
   };
 
-  const header = `const __wigl_host = { require: globalThis.__wigl_scopes__[${JSON.stringify(manifest.id)}] };\n`;
+  const header = `const __wigl_host = { require: globalThis.__wigl_scopes__[${JSON.stringify(config.id)}] };\n`;
   // Via a temp file rather than the app's blob URL: bun can't import a data:
   // URL this large, and it has no `URL.createObjectURL`. The bundle is
   // byte-identical either way — only the module's origin differs.
-  const tmp = join(tmpdir(), `wigl-check-${manifest.id}-${Date.now()}.mjs`);
+  const tmp = join(tmpdir(), `wigl-check-${config.id}-${Date.now()}.mjs`);
   await Bun.write(tmp, header + (await Bun.file(entry).text()));
   let mod: { default?: unknown };
   try {
@@ -199,7 +215,7 @@ const check = async (dir: string) => {
   } finally {
     await rm(tmp, { force: true });
   }
-  if (typeof mod.default !== "function") die(`${manifest.id}: entry has no default-exported component`);
+  if (typeof mod.default !== "function") die(`${config.id}: entry has no default-exported component`);
 
   const { createElement } = await import("react");
   const { renderToString } = await import("react-dom/server");
@@ -207,17 +223,17 @@ const check = async (dir: string) => {
   try {
     html = renderToString(createElement(mod.default as () => null));
   } catch (e) {
-    die(`${manifest.id}: crashed on render — ${e instanceof Error ? e.message : String(e)}`);
+    die(`${config.id}: crashed on render — ${e instanceof Error ? e.message : String(e)}`);
   }
-  if (!(html as string).trim()) die(`${manifest.id}: rendered nothing`);
+  if (!(html as string).trim()) die(`${config.id}: rendered nothing`);
   if (!(html as string).includes("data-wigl-widget")) {
-    die(`${manifest.id}: default export doesn't render <Widget> — wrap the root in <Widget> from "@/wigl"`);
+    die(`${config.id}: default export doesn't render <Widget> — wrap the root in <Widget> from "@/wigl"`);
   }
 
   const unique = [...new Set(required)].sort();
-  console.log(`✓ ${manifest.id} loads and renders (${(html as string).length} chars of markup)`);
+  console.log(`✓ ${config.id} loads and renders (${(html as string).length} chars of markup)`);
   console.log(`  host modules: ${unique.join(", ") || "none"}`);
-  console.log(`  permissions declared: ${manifest.permissions?.join(", ") || "none"}`);
+  console.log(`  permissions declared: ${config.permissions.join(", ") || "none"}`);
 };
 
 const list = async () => {
@@ -232,11 +248,12 @@ const list = async () => {
   if (!entries.length) return console.log(`no plugins installed (${root})`);
   for (const id of entries) {
     try {
-      const m = (await Bun.file(join(root, id, "manifest.json")).json()) as WidgetManifest;
-      const perms = m.permissions?.length ? m.permissions.join(", ") : "none";
-      console.log(`${id.padEnd(16)} permissions: ${perms}`);
+      const pkgFile = Bun.file(join(root, id, "package.json"));
+      const raw = (await pkgFile.exists()) ? await pkgFile.text() : null;
+      const { permissions } = resolvePluginConfig(id, raw);
+      console.log(`${id.padEnd(16)} permissions: ${permissions.join(", ") || "none"}`);
     } catch {
-      console.log(`${id.padEnd(16)} (unreadable manifest)`);
+      console.log(`${id.padEnd(16)} (unreadable package.json)`);
     }
   }
 };
@@ -256,6 +273,15 @@ switch (cmd) {
   case "install":
     await install(resolve(arg ?? die("usage: plugin install <dir>")));
     break;
+  case "build-all":
+    for (const dir of await allPluginDirs()) {
+      if (findEntrySource(dir)) await build(dir);
+      else console.log(`- ${basename(dir)}: no index.tsx/ts, skipped (ships pre-built JS)`);
+    }
+    break;
+  case "install-all":
+    for (const dir of await allPluginDirs()) await install(dir);
+    break;
   case "check":
     await check(resolve(arg ?? die("usage: plugin check <dir>")));
     break;
@@ -266,5 +292,5 @@ switch (cmd) {
     await remove(arg ?? die("usage: plugin rm <id>"));
     break;
   default:
-    die("usage: plugin <build|check|install|list|rm> [dir|id]");
+    die("usage: plugin <build|check|install|build-all|install-all|list|rm> [dir|id]");
 }

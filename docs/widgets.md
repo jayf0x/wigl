@@ -2,7 +2,7 @@
 
 This file is the contract and the reasoning. It deliberately names no current widgets — for every pattern below, the living example is in `wigl-widgets/`: open the existing widget most similar to what you're building and read it top to bottom. If this doc and a widget's code ever disagree on style, the code is newer; fix whichever is wrong rather than following the stale one.
 
-**Every widget is a plugin** — a folder under `wigl-widgets/<name>/` plus a `manifest.json`, built and installed separately (`bun run plugin:install`), needing no app rebuild to add or remove. The folder layout, build/install commands, host module registry and permission model are `docs/plugins.md`'s slice, not this file's — this file is the component contract itself, which is the same regardless of where a widget's folder lives.
+**Every widget is a plugin** — a folder under `wigl-widgets/<name>/`, built and installed separately (`bun run plugin:install`), needing no app rebuild to add or remove. The folder layout, build/install commands, host module registry and permission model are `docs/plugins.md`'s slice, not this file's — this file is the component contract itself, which is the same regardless of where a widget's folder lives.
 
 ## Philosophy (shadcn-style)
 
@@ -10,14 +10,11 @@ Widgets and shared components are **owned code**, not framework surface. A compo
 
 ## A widget is one folder
 
-The contract, enforced two ways because TypeScript can't check "this JSX tree's root is `<Widget>`" on its own — that's a render-time shape, not a type:
-
-- **Build time**: `bun run plugin:check` renders the built default export and greps the markup for `<Widget>`'s marker attribute — a folder that default-exports something else fails the build (see `docs/plugins.md`).
-- **Render time**: `WidgetHeader` (and anything else meant to live only inside a widget) reads a context `<Widget>` provides and throws immediately if it's missing, same pattern coss ui/Radix use for a `Trigger` that needs a `Root` — a widget author who nests it wrong gets `<WidgetHeader> must be rendered inside <Widget>` at the mistake, not a silently dead drag handle.
+The contract, enforced at build time because TypeScript can't check "this JSX tree's root is `<Widget>`" on its own — that's a render-time shape, not a type: `bun run plugin:check` renders the built default export and greps the markup for `<Widget>`'s marker attribute, so a folder that default-exports something else fails the build (see `docs/plugins.md`). This is a build-boundary check only — nothing inside `<Widget>`/`<WidgetHeader>` enforces nesting at runtime; a widget author who misuses the shared components past what `plugin:check` catches is their own call to get wrong, not something worth extra ceremony to prevent.
 
 ```
 wigl-widgets/<name>/
-  manifest.json    ← { id, apiVersion, permissions? } — docs/plugins.md
+  package.json     ← optional — deps, permissions, custom entry (docs/plugins.md)
   index.tsx        ← exactly one export: the default-exported component
   use<Name>.ts     ← only if it fetches external data (see below)
   config.ts        ← only if it has tunable constants
@@ -26,9 +23,7 @@ wigl-widgets/<name>/
                      imported by another widget.
 ```
 
-Sibling files take plain names (`types.ts`, `commands.ts`, `sort.ts`, a `Row.tsx` component) — the folder itself is already the namespace, so don't prefix filenames with the widget's own name. `use<Name>.ts` is the one deliberate exception: that prefix is the hook-naming convention (see below), not a namespacing habit.
-
-`loadPlugins()` discovers installed plugin folders at startup (`docs/plugins.md`); the folder name becomes the widget's id (used as its grid-layout key and its `useStorage`/`useQuery` key prefix, and it must match `manifest.json`'s `id`), not a window label — a widget renders as a grid item inside whichever monitor's window it's assigned to, it doesn't get its own OS window (see `docs/architecture.md`). Don't name a folder `main` (the hidden bootstrap window) or `wigl` (the app's name). **Adding a widget = creating the folder + a manifest + `bun run plugin:install`. Deleting it = `bun run plugin:rm <id>`. No registration, no config edits, nothing else in the app itself.**
+`loadPlugins()` discovers installed plugin folders at startup (`docs/plugins.md`); the folder name *is* the widget's id (used as its grid-layout key and its `useStorage`/`useQuery` key prefix — nowhere else declares it), not a window label — a widget renders as a grid item inside whichever monitor's window it's assigned to, it doesn't get its own OS window (see `docs/architecture.md`). Don't name a folder `main` (the hidden bootstrap window) or `wigl` (the app's name). **Adding a widget = creating the folder + `bun run plugin:install`. Deleting it = `bun run plugin:rm <id>`. No registration, no config edits, nothing else in the app itself.**
 
 ```tsx
 // wigl-widgets/clock/index.tsx — a complete, working widget

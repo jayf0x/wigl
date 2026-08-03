@@ -1,4 +1,0 @@
-{
-  "id": "repos",
-  "permissions": ["storage", "command", "filesystem"]
-}

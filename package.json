@@ -31,8 +31,8 @@
     "plugin:rm": "bun scripts/plugin.ts rm",
     "plugin:types": "tsc -p tsconfig.types.json",
     "plugin:check": "NODE_ENV=production bun scripts/plugin.ts check",
-    "plugin:build:all": "for d in wigl-widgets/*/manifest.json; do bun run plugin:build \"$(dirname \"$d\")\"; done",
-    "plugin:install:all": "for d in wigl-widgets/*/manifest.json; do bun run plugin:install \"$(dirname \"$d\")\"; done"
+    "plugin:build:all": "NODE_ENV=production bun scripts/plugin.ts build-all",
+    "plugin:install:all": "NODE_ENV=production bun scripts/plugin.ts install-all"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -27,20 +27,6 @@ export interface WidgetGridReport {
 const WidgetSlotContext = createContext<((report: WidgetGridReport) => void) | null>(null);
 export const WidgetSlotProvider = WidgetSlotContext.Provider;
 
-/** TypeScript can't express "this component's root must be <Widget>" — that's
- * a JSX-tree shape, not a type. This is the runtime equivalent: <Widget> sets
- * it, <WidgetHeader> (and any future widget-only child) reads it and throws
- * immediately if it's missing, same pattern Radix/coss ui use for
- * Trigger-needs-Root. Fails loud in dev right where the mistake was made,
- * instead of a silently broken drag handle. */
-const InsideWidgetContext = createContext(false);
-
-const useRequireInsideWidget = (component: string) => {
-  if (!useContext(InsideWidgetContext)) {
-    throw new Error(`<${component}> must be rendered inside <Widget>`);
-  }
-};
-
 // The `dark` class is required: coss ui components read colors from CSS
 // variables scoped to :root/.dark in App.css.
 export const Widget = ({
@@ -63,32 +49,30 @@ export const Widget = ({
     // data-wigl-widget marks the root every widget must render through —
     // `plugin:check` greps built plugins for it so a folder that default-
     // exports some other component (not wrapped in <Widget>) fails the
-    // build instead of silently never reporting a grid size.
-    <InsideWidgetContext.Provider value>
-      <div
-        data-wigl-widget
-        className={cn(
-          "dark flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-card/90 font-mono text-card-foreground backdrop-blur-xl",
-          className,
-        )}
-      >
-        {children}
-      </div>
-    </InsideWidgetContext.Provider>
+    // build instead of silently never reporting a grid size. Nothing below
+    // <Widget> enforces its own placement at runtime (e.g. <WidgetHeader>
+    // outside a <Widget>) — that's a widget author's own call to get wrong,
+    // not a misuse worth guarding against.
+    <div
+      data-wigl-widget
+      className={cn(
+        "dark flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-card/90 font-mono text-card-foreground backdrop-blur-xl",
+        className,
+      )}
+    >
+      {children}
+    </div>
   );
 };
 
 // data-drag-handle is what the tiling Desktop looks for on pointerdown:
 // anything inside it drags the widget, except interactive elements and
 // anything marked data-no-drag (Desktop filters those).
-export const WidgetHeader = ({ className, children }: { className?: string; children?: ReactNode }) => {
-  useRequireInsideWidget("WidgetHeader");
-  return (
-    <div
-      data-drag-handle
-      className={cn("flex cursor-grab items-center border-b border-border px-2 py-1 active:cursor-grabbing", className)}
-    >
-      {children}
-    </div>
-  );
-};
+export const WidgetHeader = ({ className, children }: { className?: string; children?: ReactNode }) => (
+  <div
+    data-drag-handle
+    className={cn("flex cursor-grab items-center border-b border-border px-2 py-1 active:cursor-grabbing", className)}
+  >
+    {children}
+  </div>
+);

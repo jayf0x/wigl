@@ -1,45 +1,56 @@
 import type { ComponentType } from "react";
 
-/** Every capability a plugin can ask for. Declaring one in `manifest.json`
- * is what makes the matching host module (or module member) resolvable at
- * all — see `registry.ts`. Undeclared means the import throws at load time,
- * not "works but shouldn't have", which is the whole point of the list. */
+/** Every capability a plugin can ask for. Declaring one under package.json's
+ * `wigl.permissions` is what makes the matching host module (or module
+ * member) resolvable at all — see `registry.ts`. Undeclared means the
+ * import throws at load time, not "works but shouldn't have", which is the
+ * whole point of the list. */
 export type WidgetPermission = "command" | "filesystem" | "network" | "storage";
 
-/** The host runtime's contract version. Not something a plugin author picks
- * or writes — `bun run plugin:build` stamps the current value onto the
- * manifest at build time, and the loader refuses to mount anything that
- * doesn't match, so a plugin built against a host that's since moved on
- * fails loudly instead of half-working against an API that no longer
- * exists. Bump this whenever a host module is removed or changes shape. */
-export const PLUGIN_API_VERSION = 1;
+/** Where a plugin's built entry lives if it doesn't say otherwise. A plugin
+ * with its own `package.json` can override this via `main`, same field Node
+ * already uses for "here's the entry point" — no bespoke schema to learn. */
+export const DEFAULT_PLUGIN_ENTRY = "dist/index.js";
 
-/** Every built plugin's entry lives at this fixed path relative to its
- * folder. Not configurable — one location for every plugin means the loader
- * and the build script never need a field to agree on. */
-export const PLUGIN_ENTRY = "dist/index.js";
+export const RESERVED_PLUGIN_IDS = new Set(["main", "wigl"]);
 
-/** `manifest.json` — the one required file in a plugin folder. Deliberately
- * not `package.json`: that name implies npm semantics (a dependency list
- * something installs for you), and a plugin's dependencies are bundled at
- * build time, never resolved at runtime. Different contract, different file.
- *
- * Kept to exactly the fields something reads: `id` gates identity/storage
- * namespace, `apiVersion` gates host compatibility, `permissions` gates
- * capabilities (see `registry.ts`). `name`/`version`/`description` used to
- * live here too; nothing ever read them, so they're gone — a plugin author
- * puts that in their own README. */
-export interface WidgetManifest {
-  /** Folder-safe id. Doubles as the storage-key namespace and the grid id.
-   * Not `main` (the bootstrap window's label) or `wigl` (the app itself). */
-  id: string;
-  /** Optional in the *source* file — a plugin author never writes this,
-   * `plugin:build`/`plugin:install` stamp it onto the installed copy (see
-   * `PLUGIN_API_VERSION`). Always present once installed, which is the only
-   * place the loader ever reads it. */
-  apiVersion?: number;
-  permissions?: WidgetPermission[];
+/** The bits of `package.json` wigl actually reads. Not a full npm manifest
+ * type — a plugin's `package.json` is otherwise ordinary (name/version/
+ * dependencies/whatever the author wants), the host just never looks at the
+ * rest of it. `wigl` is a namespaced key, same convention as
+ * `eslintConfig`/`browserslist`/`lint-staged` — no separate config file. */
+interface PluginPackageJson {
+  main?: string;
+  wigl?: { permissions?: WidgetPermission[] };
 }
+
+/** A plugin's resolved identity: no manifest.json, no id/apiVersion fields
+ * to hand-write. `id` is always the folder name — it's already required to
+ * be unique (two plugins can't share a folder), so a second place to spell
+ * it out would only be one more thing to keep in sync. `entry`/`permissions`
+ * come from an optional `package.json`; no `package.json` at all is a valid,
+ * zero-config plugin (entry defaults to `dist/index.js`, no permissions). */
+export interface WidgetManifest {
+  id: string;
+  permissions: WidgetPermission[];
+}
+
+/** `raw` is the plugin folder's `package.json` text, or `null` if it has
+ * none — both the loader (runtime, reading through `sh`) and `scripts/
+ * plugin.ts` (build time, reading through `Bun.file`) call this the same
+ * way once they have the text, so "what does an empty/partial package.json
+ * mean" is defined in exactly one place. */
+export const resolvePluginConfig = (
+  folder: string,
+  raw: string | null,
+): { id: string; entry: string; permissions: WidgetPermission[] } => {
+  const pkg = raw ? (JSON.parse(raw) as PluginPackageJson) : {};
+  return {
+    id: folder,
+    entry: pkg.main ?? DEFAULT_PLUGIN_ENTRY,
+    permissions: pkg.wigl?.permissions ?? [],
+  };
+};
 
 export interface LoadedPlugin {
   manifest: WidgetManifest;
