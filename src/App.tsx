@@ -1,50 +1,10 @@
 import type { ComponentType, ErrorInfo, ReactNode } from "react";
-import { Component, lazy, useEffect, useState } from "react";
+import { Component, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Desktop } from "@/wigl";
 import { type FailedPlugin, loadPlugins } from "@/wigl/plugins";
 import "./App.css";
-
-// The full widget contract: a widget is a folder, src/widgets/<name>/index.tsx,
-// with exactly one export — a default-exported component. Grid size/position
-// are plain props on <Widget w h col row> (see wigl/widget.tsx), not a second
-// export.
-interface WidgetModule {
-  default: ComponentType;
-}
-
-// Builtin widgets are discovered by folder: src/widgets/<name>/index.tsx,
-// compiled into the app. Non-eager: each monitor window only pays the
-// code-split cost of the widgets it actually mounts, not every widget in the
-// repo (a monitor renders a subset, decided by saved layout).
-//
-// This path is being retired in favour of installed plugins (see
-// `src/wigl/plugins/` and `wigl-widgets/`), which don't need an app rebuild
-// to add or remove. It stays alive only until the remaining builtin folders
-// are migrated — see `backlog.md`. Don't add a new widget here.
-const loaders = import.meta.glob<WidgetModule>("./widgets/*/index.tsx");
-const builtins: Record<string, ComponentType> = {};
-for (const [path, load] of Object.entries(loaders)) {
-  const id = path.split("/")[2];
-
-  // The glob does no validation of what a widget exports, so a typo would
-  // silently fail (blank widget / default size) — checked once the chunk
-  // actually loads, since that's the earliest point the module exists.
-  builtins[id] = lazy(async (): Promise<{ default: ComponentType }> => {
-    const mod = await load();
-    if (!mod.default) {
-      console.error(`[wigl] widget "${id}" has no default export — index.tsx must default-export its component`);
-      return { default: () => null };
-    }
-    if ("gridConfig" in mod) {
-      console.warn(
-        `[wigl] widget "${id}" exports a top-level "gridConfig" — ignored. Pass size/position as props instead: <Widget w={3} h={4}>`,
-      );
-    }
-    return { default: mod.default };
-  });
-}
 
 // `WidgetErrorBoundary` (Desktop.tsx) only catches a crash inside one
 // widget's own render — a crash in <Desktop> itself (layout/drag logic, a
@@ -102,16 +62,12 @@ const App = () => {
     if (label === "main") return;
     loadPlugins()
       .then(({ loaded, failed }) => {
-        const fromPlugins = Object.fromEntries(loaded.map((p) => [p.manifest.id, p.component]));
-        // Builtins win a name collision: a plugin can't shadow a widget
-        // that's compiled into the app, which would otherwise be a quiet way
-        // to replace one.
-        setWidgets({ ...fromPlugins, ...builtins });
+        setWidgets(Object.fromEntries(loaded.map((p) => [p.manifest.id, p.component])));
         setFailedPlugins(failed);
       })
       .catch((e) => {
         console.error("[wigl] plugin discovery failed", e);
-        setWidgets(builtins);
+        setWidgets({});
       });
   }, [label]);
 

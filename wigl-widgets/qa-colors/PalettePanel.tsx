@@ -1,6 +1,6 @@
 import twColors from "./tw-colors.generated.json";
 
-// Regenerate via `bun run tw-colors > src/widgets/qa-colors/tw-colors.generated.json`
+// Regenerate via `bun run tw-colors > wigl-widgets/qa-colors/tw-colors.generated.json`
 // whenever node_modules/tailwindcss/theme.css changes (a tailwindcss bump).
 interface TwColorFamily {
   name: string;

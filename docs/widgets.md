@@ -1,11 +1,8 @@
 # Adding or editing a widget
 
-This file is the contract and the reasoning. It deliberately names no current widgets — for every pattern below, the living example is in `src/widgets/` and `wigl-widgets/`: open the existing widget most similar to what you're building and read it top to bottom. If this doc and a widget's code ever disagree on style, the code is newer; fix whichever is wrong rather than following the stale one.
+This file is the contract and the reasoning. It deliberately names no current widgets — for every pattern below, the living example is in `wigl-widgets/`: open the existing widget most similar to what you're building and read it top to bottom. If this doc and a widget's code ever disagree on style, the code is newer; fix whichever is wrong rather than following the stale one.
 
-**Two homes, one component contract.** A widget's *code* is the same either way — everything below applies unchanged. What differs is where the folder lives and how it reaches the app:
-
-- **A plugin** (`wigl-widgets/<name>/`, plus a `manifest.json`) is built and installed separately, and needs no app rebuild to add or remove. **This is where new widgets go.** The folder layout, build/install commands, host module registry and permission model are `docs/plugins.md`'s slice, not this file's.
-- **A builtin** (`src/widgets/<name>/`) is compiled into the app. This path is being retired as the remaining folders are migrated (see `backlog.md`); don't add one.
+**Every widget is a plugin** — a folder under `wigl-widgets/<name>/` plus a `manifest.json`, built and installed separately (`bun run plugin:install`), needing no app rebuild to add or remove. The folder layout, build/install commands, host module registry and permission model are `docs/plugins.md`'s slice, not this file's — this file is the component contract itself, which is the same regardless of where a widget's folder lives.
 
 ## Philosophy (shadcn-style)
 
@@ -13,10 +10,14 @@ Widgets and shared components are **owned code**, not framework surface. A compo
 
 ## A widget is one folder
 
-The contract, typed by the `WidgetModule` interface local to `src/App.tsx` (the only place that needs it — a widget itself never imports this type):
+The contract, enforced two ways because TypeScript can't check "this JSX tree's root is `<Widget>`" on its own — that's a render-time shape, not a type:
+
+- **Build time**: `bun run plugin:check` renders the built default export and greps the markup for `<Widget>`'s marker attribute — a folder that default-exports something else fails the build (see `docs/plugins.md`).
+- **Render time**: `WidgetHeader` (and anything else meant to live only inside a widget) reads a context `<Widget>` provides and throws immediately if it's missing, same pattern coss ui/Radix use for a `Trigger` that needs a `Root` — a widget author who nests it wrong gets `<WidgetHeader> must be rendered inside <Widget>` at the mistake, not a silently dead drag handle.
 
 ```
-src/widgets/<name>/
+wigl-widgets/<name>/
+  manifest.json    ← { id, apiVersion, permissions? } — docs/plugins.md
   index.tsx        ← exactly one export: the default-exported component
   use<Name>.ts     ← only if it fetches external data (see below)
   config.ts        ← only if it has tunable constants
@@ -27,10 +28,10 @@ src/widgets/<name>/
 
 Sibling files take plain names (`types.ts`, `commands.ts`, `sort.ts`, a `Row.tsx` component) — the folder itself is already the namespace, so don't prefix filenames with the widget's own name. `use<Name>.ts` is the one deliberate exception: that prefix is the hook-naming convention (see below), not a namespacing habit.
 
-`src/App.tsx` discovers builtin folders with `import.meta.glob("./widgets/*/index.tsx")` at build time and merges them with whatever `loadPlugins()` found on disk (`docs/plugins.md`); the folder name becomes the widget's id (used as its grid-layout key and its `useStorage`/`useQuery` key prefix), not a window label — a widget renders as a grid item inside whichever monitor's window it's assigned to, it doesn't get its own OS window (see `docs/architecture.md`). Don't name a folder `main` (the hidden bootstrap window) or `wigl` (the app's name). **Adding a widget = creating the folder. Deleting it = removing the folder. No registration, no config edits, nothing else.**
+`loadPlugins()` discovers installed plugin folders at startup (`docs/plugins.md`); the folder name becomes the widget's id (used as its grid-layout key and its `useStorage`/`useQuery` key prefix, and it must match `manifest.json`'s `id`), not a window label — a widget renders as a grid item inside whichever monitor's window it's assigned to, it doesn't get its own OS window (see `docs/architecture.md`). Don't name a folder `main` (the hidden bootstrap window) or `wigl` (the app's name). **Adding a widget = creating the folder + a manifest + `bun run plugin:install`. Deleting it = `bun run plugin:rm <id>`. No registration, no config edits, nothing else in the app itself.**
 
 ```tsx
-// src/widgets/clock/index.tsx — a complete, working widget
+// wigl-widgets/clock/index.tsx — a complete, working widget
 import { Widget, WidgetHeader } from "@/wigl";
 
 const ClockWidget = () => (
@@ -45,13 +46,13 @@ const ClockWidget = () => (
 export default ClockWidget;
 ```
 
-Grid size/position are plain props on `<Widget>` — `w`/`h` in cells (default 3×4), `col`/`row` as a first-launch cell position (omit them and you get the first open slot). There's no separate config export sitting next to `default`: one export means nothing to typo, and grid props are ordinary JSX so TypeScript already catches a mistyped one (App.tsx still warns if it finds a leftover top-level `gridConfig` export, which means a widget predates this and needs its config moved onto `<Widget>`). `col`/`row` only matter the first time a widget is ever seen — the tiling desktop persists wherever the user drags it after that. Pick defaults that don't overlap other widgets' (check their `<Widget>` props in `src/widgets/*/index.tsx`). Window chrome (transparent, undecorated, always-on-bottom, skip-taskbar, non-resizable) is set once per monitor in Rust, not per widget — see "Window chrome" below — so there's no per-widget chrome to configure at all.
+Grid size/position are plain props on `<Widget>` — `w`/`h` in cells (default 3×4), `col`/`row` as a first-launch cell position (omit them and you get the first open slot). There's no separate config export sitting next to `default`: one export means nothing to typo, and grid props are ordinary JSX so TypeScript already catches a mistyped one. `col`/`row` only matter the first time a widget is ever seen — the tiling desktop persists wherever the user drags it after that. Pick defaults that don't overlap other widgets' (check their `<Widget>` props in `wigl-widgets/*/index.tsx`). Window chrome (transparent, undecorated, always-on-bottom, skip-taskbar, non-resizable) is set once per monitor in Rust, not per widget — see "Window chrome" below — so there's no per-widget chrome to configure at all.
 
 No capability or window edit needed either — a new widget adds no window (see above), and `src-tauri/capabilities/default.json`'s `windows` field is a `["*"]` glob regardless. You only touch that file for new *permissions* (see "Running shell commands" below).
 
 ## What a real-data widget needs
 
-The shape, in dependency order (any widget in `src/widgets/` with a hook is the reference in action):
+The shape, in dependency order (any widget in `wigl-widgets/` with a hook is the reference in action):
 
 1. **A config module** (`config.ts`) — plain exported constants for anything you might want to tweak (poll interval, source paths). No env vars, no settings UI, no runtime config loading.
 2. **A data hook** (`use<Name>.ts`) — owns the `setInterval` + shell-command + `useState` cycle described in `docs/architecture.md`. One hook per widget; don't share it across widgets, don't generalize it into a "data fetching framework." Don't add a hook or config until there's actually external data to fetch or a constant to tune — a static widget is just `index.tsx`.
@@ -120,18 +121,16 @@ Cached by `key` (prefix it with the widget's folder name, same rule as `useStora
 
 ## Running shell commands from a widget
 
-A plugin never imports `@tauri-apps/plugin-shell` directly — it can't hold a raw Tauri API at all (see `docs/plugins.md`'s host module registry). It calls `runCmd`/`runCmdStreaming` from `@/wigl/utils` instead, gated on the `command` permission; `wigl-widgets/repos/commands.ts` is the reference. A builtin (`src/widgets/`) is the app's own code and may still import `@tauri-apps/plugin-shell` directly — the rest of this section is written from that side.
-
-`src-tauri/capabilities/default.json`'s `shell:allow-execute` only registers `sh` and `sqlite3` — `{ "name": "sh", "args": true }` already grants arbitrary execution, so a per-binary allowlist would be decorative. Run everything through `sh -c`:
+A widget never imports `@tauri-apps/plugin-shell` directly — a plugin can't hold a raw Tauri API at all (see `docs/plugins.md`'s host module registry). It calls `runCmd`/`runCmdStreaming` from `@/wigl/utils` instead, gated on the `command` permission; `wigl-widgets/repos/commands.ts` is the reference:
 
 ```ts
-import { Command } from "@tauri-apps/plugin-shell";
-const output = await Command.create("sh", ["-c", "git status"]).execute();
+import { runCmd } from "@/wigl/utils";
+const output = await runCmd("sh", ["-c", "git status"]);
 ```
 
-No capability edit needed for a new binary — `sh -c` reaches anything already on `PATH`. Quote your own arguments (`'${s.replace(/'/g, "'\\''")}'`) since `sh -c` takes one string, not an args array — see `revealInFileManager`/`openInEditor` in `wigl-widgets/repos/commands.ts` for the pattern. `Command.create("sh", [...]).execute()` resolves even when the inner command fails — check `out.code !== 0`, don't rely on the promise rejecting.
+`src-tauri/capabilities/default.json`'s `shell:allow-execute` only registers `sh` and `sqlite3` — `{ "name": "sh", "args": true }` already grants arbitrary execution, so a per-binary allowlist would be decorative. No capability edit needed for a new binary — `sh -c` reaches anything already on `PATH`. Quote your own arguments (`'${s.replace(/'/g, "'\\''")}'`) since `sh -c` takes one string, not an args array — see `revealInFileManager`/`openInEditor` in `wigl-widgets/repos/commands.ts` for the pattern. `runCmd` resolves even when the inner command fails — check `out.code !== 0`, don't rely on the promise rejecting.
 
-Streaming a long-running command's output as it arrives (a progress bar, live log lines) needs `.spawn()` instead of `.execute()`, listening on `.stdout.on("data", ...)` and `.on("close", ...)` — but `spawn()` is gated by a *different* permission than `execute()` (`shell:allow-spawn`, not covered by `shell:allow-execute`), so it needs its own capability entry with the same `sh` scope. See `runCmdStreaming` in `src/wigl/utils/index.ts` (used by `cloneRepo` in `wigl-widgets/repos/commands.ts`) for the pattern.
+Streaming a long-running command's output as it arrives (a progress bar, live log lines) needs `runCmdStreaming` instead of `runCmd` — but it's gated by a *different* permission (`command` covers both, but the underlying Tauri capability is `shell:allow-spawn`, not covered by `shell:allow-execute`), so it needs its own capability entry with the same `sh` scope. See `runCmdStreaming` in `src/wigl/utils/index.ts` (used by `cloneRepo` in `wigl-widgets/repos/commands.ts`) for the pattern.
 
 **GUI-launched shells have a minimal `PATH`** — it doesn't source `.zshrc`/`.bash_profile`, so Homebrew (`/opt/homebrew/bin`), `nvm`/`bun`-style installers, and per-app "install CLI" steps (VS Code's, GitHub Desktop's) are all typically missing. Anything you shell out to that isn't a macOS system binary needs its absolute install path tried first, with the bare command as a PATH fallback for machines where it *does* resolve — see the same `commands.ts` for the pattern (a small `for (const candidate of [absolute, bare]) { ... if success return }` loop), repeated for every one of these binaries so far (VS Code, GitHub Desktop, `gh`, `bun`).
 

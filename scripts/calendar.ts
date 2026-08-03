@@ -12,7 +12,7 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { APP_IDENTIFIER } from "../src/config/app";
-import { EVENTS_STORAGE_KEY, type CalendarEvent } from "../src/widgets/calendar/calendar.utils";
+import { EVENTS_STORAGE_KEY, type CalendarEvent } from "../wigl-widgets/calendar/calendar.utils";
 
 // No Tauri runtime here, so no appDataDir() call — reconstruct the same path
 // Tauri resolves at runtime, by hand, per OS.

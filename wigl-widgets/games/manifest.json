@@ -1,8 +1,3 @@
 {
-  "id": "games",
-  "name": "Games",
-  "version": "0.1.0",
-  "description": "Retro mini games — snake, tetris, breakout",
-  "entry": "dist/index.js",
-  "apiVersion": 1
+  "id": "games"
 }

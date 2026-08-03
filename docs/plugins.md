@@ -1,10 +1,11 @@
 # Plugins
 
-A plugin is a widget that lives outside the app: its own folder, its own
-build, installed into the user's app-data dir, loaded at startup. Adding one
-doesn't require rebuilding wigl, which is the whole point — the builtin
-`src/widgets/` path (see `docs/widgets.md`) makes every widget author a
-person who can compile the app, and that's not a usable distribution story.
+A plugin is a widget: its own folder, its own build, installed into the
+user's app-data dir, loaded at startup. Every widget is a plugin — adding one
+doesn't require rebuilding wigl, which is the whole point (an earlier
+`src/widgets/` path, compiled into the app, made every widget author a
+person who could compile the app; it's gone now that the last folder there
+migrated out — see `docs/widgets.md`).
 
 This file owns the plugin contract. The mechanism lives in
 `src/wigl/plugins/` (host side) and `scripts/plugin.ts` (build/install CLI) —
@@ -18,7 +19,7 @@ wigl-widgets/calendar/
 ├── package.json       # optional — the plugin's own npm dependencies
 ├── index.tsx          # source entry
 ├── Sidebar.tsx        # whatever else it wants
-└── dist/index.js      # built output; what the manifest's `entry` points at
+└── dist/index.js      # built output — the fixed path every plugin builds to
 ```
 
 `manifest.json`, not `package.json`, is the contract file. `package.json`
@@ -27,15 +28,26 @@ plugin's dependencies are bundled at build time, never resolved at runtime.
 Different contract deserves a different filename. A plugin may *also* have a
 `package.json` for its own build-time deps; the host never reads it.
 
-The manifest's fields are defined in `src/wigl/plugins/types.ts`. Two are
-worth calling out here because they're contract, not implementation:
+The manifest (`WidgetManifest` in `src/wigl/plugins/types.ts`) is down to the
+fields something actually reads — `name`, `version`, `description` and a
+configurable `entry` used to live here too, and nothing ever read them, so
+they're gone. A plugin author only ever writes two of these by hand:
 
-- **`entry` points at built JavaScript, not at the `.tsx` source.** A webview
-  has no compiler. Shipping one (esbuild-wasm and friends) would add
-  megabytes to a desktop-widget app to save plugin authors one command, so
-  the build happens on the author's machine instead.
-- **`apiVersion`** is the host runtime's contract version. A mismatch fails
-  the load loudly rather than half-working against an API that moved.
+- **`id`** (required) — must match the folder name. Doubles as the
+  storage-key namespace and the grid id.
+- **`permissions`** (optional) — see "Permissions" below. Actually enforced
+  at import time, not just metadata: an undeclared permission makes the
+  matching host module throw instead of load.
+
+`apiVersion` lives in the type but isn't authored — `bun run plugin:build`/
+`plugin:install` stamp the host's current `PLUGIN_API_VERSION` onto the
+manifest at build time, so a plugin author never needs to know or type the
+number. The loader still enforces it strictly on the *installed* manifest: a
+mismatch fails the load loudly rather than half-working against a host API
+that's since moved on. A webview has no compiler either, so the built entry
+is what actually loads — always at the fixed path `dist/index.js`
+(`PLUGIN_ENTRY` in `types.ts`), not a manifest field, since it's never
+varied.
 
 ## The host module registry — the actual boundary
 
@@ -85,6 +97,8 @@ VS Code extension. See `backlog.md`.
 bun run plugin:build   wigl-widgets/calendar   # source → dist/index.js
 bun run plugin:check   wigl-widgets/calendar   # load it headlessly, report host modules used
 bun run plugin:install wigl-widgets/calendar   # build, then copy into app data
+bun run plugin:build:all                       # build every wigl-widgets/*/manifest.json folder
+bun run plugin:install:all                     # same, then copy each into app data
 bun run plugin:list
 bun run plugin:rm      calendar
 ```
@@ -93,6 +107,20 @@ Installed plugins live next to `wigl.db` in the per-OS app-data dir, one
 folder per plugin id. Only `manifest.json` and `dist/` are installed —
 source, `node_modules` and tsconfig are build-time concerns with no business
 in a user's data dir.
+
+**Each plugin gets its own `dist/index.js`, on purpose — not one shared
+bundle.** That's what makes a plugin's own npm dependencies (calendar's
+`date-fns`, or a hypothetical stock-ticker widget's charting library) stay
+out of the core app: `bun run plugin:build` runs esbuild once per plugin
+folder, bundling *that* plugin's own `node_modules` into *that* plugin's own
+output, with only the host modules externalized (see below). A single
+combined `dist/` would mean either bundling every plugin's dependencies into
+one file the core ships (exactly what this design avoids) or reinventing a
+second build system to keep them apart — more moving parts for the same
+result. `plugin:build:all`/`plugin:install:all` exist so "build/install
+everything" is one command instead of one per folder; that's the whole gap a
+heavier tool (a Turborepo-style workspace) would have closed, and it doesn't
+need one.
 
 `plugin:check` matters more than it looks: a webview's console is invisible
 to `bun run verify` (see `docs/debugging.md`), so "the app launched cleanly"
@@ -107,6 +135,13 @@ tissue: a first version of this check imported the bundle against stub
 modules, never rendered, and passed cleanly on a plugin that crashed on its
 first paint in the real app with `dispatcher.getOwner is not a function`.
 Anything that doesn't render can't see that class of bug at all.
+
+The rendered markup is also how `plugin:check` enforces the export contract:
+a default export is required to render a `<Widget>` as its root (`docs/widgets.md`),
+not just any component, so `check` fails the build if the rendered HTML is
+missing `<Widget>`'s `data-wigl-widget` marker attribute — catching a widget
+that forgot to wrap itself, which would otherwise silently never report a
+grid size instead of erroring.
 
 ## NODE_ENV is part of the contract
 
@@ -160,43 +195,42 @@ deliberate: `<Desktop>` builds its layout from the widget ids it's handed,
 and handing it a set that grows a tick later is the same mount-order hazard
 that already cost a first-launch layout bug once.
 
-## Migrating a builtin widget to a plugin
+## Building a new plugin
 
 `wigl-widgets/calendar/` is the worked example — copy its shape, not just
 its idea. Steps, in order:
 
-1. `git mv src/widgets/<name> wigl-widgets/<name>`.
-2. Add `wigl-widgets/<name>/manifest.json` — `id` must equal the folder name,
-   `entry` is `"dist/index.js"`, `apiVersion` is `PLUGIN_API_VERSION`
+1. Create `wigl-widgets/<name>/index.tsx` (the component contract is
+   `docs/widgets.md`'s) and `wigl-widgets/<name>/manifest.json` — `id` must
+   equal the folder name, `apiVersion` is `PLUGIN_API_VERSION`
    (`src/wigl/plugins/types.ts`). Declare `permissions` for whatever the
    widget actually uses (`storage` if it touches `useStorage`/`useQuery`;
-   nothing else exists as a permission yet — see the registry section above).
-3. If the widget has its own npm dependencies (calendar has `date-fns`), add
+   see the registry section above for the full list).
+2. If the widget has its own npm dependencies (calendar has `date-fns`), add
    a `wigl-widgets/<name>/package.json` naming them and `bun install` at the
    repo root so they resolve for the build.
-4. `bun run plugin:build wigl-widgets/<name>` — read the error if it fails.
+3. `bun run plugin:build wigl-widgets/<name>` — read the error if it fails.
    The two failure modes so far are both host-module gaps: an import not in
    `src/wigl/plugins/host-modules.ts` (add it there and to
    `registry.ts`'s `HOST_MODULES`, gated by permission if it's a capability
    rather than a pure helper), or a deep import past the three shared
    barrels (`@/wigl/Desktop`, `@/wigl/grid/...`) — those are supposed to fail;
    fix the widget's import instead of the registry.
-5. `bun run plugin:check wigl-widgets/<name>` — this must pass before
+4. `bun run plugin:check wigl-widgets/<name>` — this must pass before
    `typecheck:plugins`, i.e. before touching anything else. It's the only
    step that proves the widget actually renders against the app's real,
-   production React; see "NODE_ENV is part of the contract" below for why a
-   green `typecheck` here is not sufficient on its own.
-6. `bun run typecheck:plugins` — proves the widget compiles against the
+   production React, and that its default export actually wraps a
+   `<Widget>`; see "NODE_ENV is part of the contract" below for why a green
+   `typecheck` here is not sufficient on its own.
+5. `bun run typecheck:plugins` — proves the widget compiles against the
    plugin tsconfig (`wigl-widgets/tsconfig.json`, generated `.d.ts`) rather
    than the app's live source. A widget that only compiled by accident
    (deep-importing something the app's root tsconfig happened to resolve)
-   fails here even though step 4/5 already passed, because the build step
+   fails here even though step 3/4 already passed, because the build step
    externalizes by specifier while this step type-resolves by path — catching
    one doesn't guarantee the other, run both.
-7. `bun run plugin:install wigl-widgets/<name>` then `bun run verify` —
-   confirm it's on screen. Step 1's `git mv` already left exactly one copy of
-   the widget in the repo; there's nothing left in `src/widgets/<name>/` to
-   delete.
+6. `bun run plugin:install wigl-widgets/<name>` then `bun run verify` —
+   confirm it's on screen.
 
 A widget that imports `@tauri-apps/api/path` or `@tauri-apps/plugin-shell`
 directly (raw Tauri APIs — plugins can't hold one, see "The host module
@@ -204,10 +238,10 @@ registry" above) needs the underlying capability turned into a mediated host
 module first, not an escape hatch around the registry. `@/wigl/utils`'s
 `homeDir` (gated on `filesystem`) and `runCmdStreaming` (gated on
 `command`, the streaming counterpart to `runCmd`) are two such modules,
-added when the `repos` widget migrated — copy that shape for the next gap
-rather than inventing a new one. A widget that located a bundled non-code
-resource via `resolveResource` (Tauri's app-resource resolution) has no
-plugin equivalent at all — installed plugins ship only `manifest.json` and
+added when the `repos` widget migrated to a plugin — copy that shape for the
+next gap rather than inventing a new one. A widget that locates a bundled
+non-code resource via `resolveResource` (Tauri's app-resource resolution) has
+no plugin equivalent at all — installed plugins ship only `manifest.json` and
 `dist/` (see "Building and installing" below), so the fix is to stop needing
 the resource, not to find a way to ship it. `repos`' old scan script was a
 `bun`-run `.ts` file resolved this way; it's now a POSIX `sh` script

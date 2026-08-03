@@ -23,7 +23,7 @@ import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { HOST_MODULE_IDS } from "../src/wigl/plugins/host-modules";
-import { PLUGIN_API_VERSION, type WidgetManifest } from "../src/wigl/plugins/types";
+import { PLUGIN_API_VERSION, PLUGIN_ENTRY, type WidgetManifest } from "../src/wigl/plugins/types";
 
 // Mirrors Tauri's `appDataDir()` for this app's identifier. Kept in sync
 // with `src/config/app.ts` by reading the same source of truth Tauri does.
@@ -54,17 +54,19 @@ const requireProductionEnv = (what: string) => {
   }
 };
 
+// `apiVersion` isn't authored by hand: it's the host runtime's contract
+// version, not something a plugin author picks, so the build stamps the
+// current PLUGIN_API_VERSION onto the manifest here rather than requiring
+// (and validating) a number in the source file. The loader still enforces
+// it strictly on the installed copy — that check is real, only the "author
+// has to know the magic number" part is gone.
 const readManifest = async (dir: string): Promise<WidgetManifest> => {
   const path = join(dir, "manifest.json");
   const file = Bun.file(path);
   if (!(await file.exists())) die(`no manifest.json in ${dir}`);
   const m = (await file.json()) as WidgetManifest;
   if (!m.id) die(`${path}: missing "id"`);
-  if (!m.entry) die(`${path}: missing "entry"`);
-  if (m.apiVersion !== PLUGIN_API_VERSION) {
-    die(`${path}: apiVersion ${m.apiVersion} — this wigl builds v${PLUGIN_API_VERSION} plugins`);
-  }
-  return m;
+  return { ...m, apiVersion: PLUGIN_API_VERSION };
 };
 
 /** Rewrites every host specifier to a CommonJS shim over `__wigl_host`.
@@ -108,12 +110,12 @@ const build = async (dir: string) => {
     die(`${manifest.id}: build failed`);
   }
 
-  const outPath = join(dir, manifest.entry);
+  const outPath = join(dir, PLUGIN_ENTRY);
   if (!(await Bun.file(outPath).exists())) {
-    die(`${manifest.id}: built output doesn't include "${manifest.entry}" — check the manifest's entry path`);
+    die(`${manifest.id}: build didn't produce "${PLUGIN_ENTRY}"`);
   }
   const size = (await stat(outPath)).size;
-  console.log(`✓ built ${manifest.id} → ${manifest.entry} (${(size / 1024).toFixed(1)}kb)`);
+  console.log(`✓ built ${manifest.id} → ${PLUGIN_ENTRY} (${(size / 1024).toFixed(1)}kb)`);
   return manifest;
 };
 
@@ -135,7 +137,7 @@ const install = async (dir: string) => {
   // business sitting in a user's app-data dir.
   await rm(target, { recursive: true, force: true });
   await mkdir(join(target, "dist"), { recursive: true });
-  await Bun.write(join(target, "manifest.json"), Bun.file(join(dir, "manifest.json")));
+  await Bun.write(join(target, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   await copyDir(join(dir, "dist"), join(target, "dist"));
   console.log(`✓ installed ${manifest.id} → ${target}`);
   console.log("  restart wigl (bun run verify) to see it.");
@@ -158,7 +160,7 @@ const install = async (dir: string) => {
 const check = async (dir: string) => {
   requireProductionEnv("check");
   const manifest = await readManifest(dir);
-  const entry = join(dir, manifest.entry);
+  const entry = join(dir, PLUGIN_ENTRY);
   if (!(await Bun.file(entry).exists())) die(`${manifest.id}: not built yet — run plugin:build first`);
 
   // Real host modules, resolved through the app's own tsconfig paths — a
@@ -208,6 +210,9 @@ const check = async (dir: string) => {
     die(`${manifest.id}: crashed on render — ${e instanceof Error ? e.message : String(e)}`);
   }
   if (!(html as string).trim()) die(`${manifest.id}: rendered nothing`);
+  if (!(html as string).includes("data-wigl-widget")) {
+    die(`${manifest.id}: default export doesn't render <Widget> — wrap the root in <Widget> from "@/wigl"`);
+  }
 
   const unique = [...new Set(required)].sort();
   console.log(`✓ ${manifest.id} loads and renders (${(html as string).length} chars of markup)`);
@@ -229,7 +234,7 @@ const list = async () => {
     try {
       const m = (await Bun.file(join(root, id, "manifest.json")).json()) as WidgetManifest;
       const perms = m.permissions?.length ? m.permissions.join(", ") : "none";
-      console.log(`${id.padEnd(16)} v${m.version.padEnd(8)} permissions: ${perms}`);
+      console.log(`${id.padEnd(16)} permissions: ${perms}`);
     } catch {
       console.log(`${id.padEnd(16)} (unreadable manifest)`);
     }

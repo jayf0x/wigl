@@ -1,6 +1,6 @@
 # Tailwind color inventory + qa-colors widget
 
-Written while building the `qa-colors` widget (`src/widgets/qa-colors/`) so the
+Written while building the `qa-colors` widget (`wigl-widgets/qa-colors/`) so the
 theming work (`src/wigl/theme/`) has a live surface to check "which value
 changed, which should, which shouldn't" against. Regenerate the palette JSON
 with `bun run tw-colors` if `tailwindcss` ever gets bumped (it dumps
@@ -89,7 +89,7 @@ and isn't. Pick one.
 ## Raw Tailwind palette (from `node_modules/tailwindcss/theme.css`)
 
 28 families, 11 shades each (50–950) except `black`/`white` (single value).
-Full JSON: `src/widgets/qa-colors/tw-colors.generated.json`.
+Full JSON: `wigl-widgets/qa-colors/tw-colors.generated.json`.
 
 Standard Tailwind v4 families (22): `red, orange, amber, yellow, lime, green,
 emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose,

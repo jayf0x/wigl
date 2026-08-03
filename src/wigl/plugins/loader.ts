@@ -6,6 +6,7 @@ import {
   type FailedPlugin,
   type LoadedPlugin,
   PLUGIN_API_VERSION,
+  PLUGIN_ENTRY,
   type PluginLoadResult,
   type WidgetManifest,
 } from "./types";
@@ -57,7 +58,6 @@ const parseManifest = (raw: string, folder: string): WidgetManifest => {
   if (!m.id) throw new Error("manifest.json has no `id`");
   if (m.id !== folder) throw new Error(`manifest id "${m.id}" doesn't match folder name "${folder}"`);
   if (RESERVED_IDS.has(m.id)) throw new Error(`"${m.id}" is a reserved id`);
-  if (!m.entry) throw new Error("manifest.json has no `entry` — point it at the built ESM file, not the .tsx source");
   if (m.apiVersion !== PLUGIN_API_VERSION) {
     throw new Error(`built for plugin API v${m.apiVersion}, this wigl speaks v${PLUGIN_API_VERSION}`);
   }
@@ -66,7 +66,7 @@ const parseManifest = (raw: string, folder: string): WidgetManifest => {
 
 const loadOne = async (dir: string, folder: string): Promise<LoadedPlugin> => {
   const manifest = parseManifest(await readFile(await join(dir, "manifest.json")), folder);
-  const code = await readFile(await join(dir, manifest.entry));
+  const code = await readFile(await join(dir, PLUGIN_ENTRY));
 
   // Imported lazily, not at module top level: the registry holds a live
   // reference to every host module it can serve — including the whole of

@@ -26,9 +26,8 @@
     "isolatedModules": true,
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["types/*"]
+      "@/*": ["./types/*"]
     }
   },
   "include": ["*/**/*.ts", "*/**/*.tsx"],
