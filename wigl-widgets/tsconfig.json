@@ -31,5 +31,5 @@
     }
   },
   "include": ["*/**/*.ts", "*/**/*.tsx"],
-  "exclude": ["*/dist", "types"]
+  "exclude": ["*/.wigl", "types"]
 }

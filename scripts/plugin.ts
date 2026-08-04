@@ -66,7 +66,7 @@ const requireProductionEnv = (what: string) => {
 /** No manifest.json: id is the folder name, entry/permissions come from an
  * optional package.json (`resolvePluginConfig` in types.ts — the same
  * resolution the runtime loader uses). No package.json at all is valid: a
- * zero-config plugin defaults to `dist/index.js`, no permissions. */
+ * zero-config plugin defaults to `.wigl/index.js`, no permissions. */
 const readPluginConfig = async (dir: string) => {
   const id = basename(dir);
   if (RESERVED_PLUGIN_IDS.has(id)) die(`"${id}" is a reserved id`);
@@ -124,7 +124,7 @@ const build = async (dir: string) => {
 
   if (!(await Bun.file(outPath).exists())) {
     die(
-      `${config.id}: build didn't produce "${config.entry}" — if package.json sets a custom "main", leave it as the default "dist/index.js" while using plugin:build`,
+      `${config.id}: build didn't produce "${config.entry}" — if package.json sets a custom "main", leave it as the default ".wigl/index.js" while using plugin:build`,
     );
   }
   const size = (await stat(outPath)).size;

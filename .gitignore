@@ -9,3 +9,7 @@ src-tauri/gen
 
 # Generated host API types for plugins — `bun run plugin:types`
 wigl-widgets/types
+
+# Per-plugin build output (bun run plugin:build) — dot-prefixed so it stays
+# out of a casual look at a widget folder, see docs/plugins.md
+wigl-widgets/*/.wigl

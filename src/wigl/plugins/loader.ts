@@ -12,7 +12,7 @@ import {
 
 // How an installed plugin actually gets into the running app:
 //
-//   ~/.local/share/<identifier>/plugins/<id>/{package.json?,dist/index.js}
+//   ~/.local/share/<identifier>/plugins/<id>/{package.json?,.wigl/index.js}
 //        ↓ read as text (sh -c cat — same "shell out, no new Rust" rule as
 //          storage; no asset-protocol config, no new capability entry)
 //   source string + a per-plugin header binding __wigl_host

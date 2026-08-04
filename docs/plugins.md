@@ -18,7 +18,7 @@ wigl-widgets/calendar/
 ├── package.json       # optional — deps, and wigl-specific config (below)
 ├── index.tsx          # source entry
 ├── Sidebar.tsx        # whatever else it wants
-└── dist/index.js      # built output — the default entry every plugin builds to
+└── .wigl/index.js     # built output — dot-prefixed, out of sight by default
 ```
 
 **No manifest.json, and no required config file at all.** A plugin's id is
@@ -27,13 +27,23 @@ hand-typed to match it would only be one more thing to keep in sync (and one
 more way for a typo to go unnoticed). A folder with just `index.tsx` and
 nothing else is a complete, valid, zero-config plugin.
 
+Build output lives under `.wigl/`, not a plain `dist/` — dot-prefixed
+folders are the convention this ecosystem already uses for "generated, not
+source" (`.next/`, `.svelte-kit/`, `.turbo/`), and it means a widget author
+who never touches the build step sees only their own source files when they
+open the folder, not the machinery. `node_modules/` stays exactly where
+`bun install` naturally puts it (sibling to `package.json`) rather than
+tucked away too — it's the one file every JS-literate author already expects
+there, and relocating it would need a non-standard bun linker config for a
+purely cosmetic win.
+
 `package.json` is optional and does triple duty when a plugin needs it:
 
 - **npm dependencies** — ordinary `dependencies`, bundled into *that*
   plugin's own build (see "Building and installing" below). This is the only
   thing `package.json` was for until now.
 - **`main`** — overrides the entry path, same field Node already uses for
-  "here's the entry point." Defaults to `dist/index.js`. Set this to a
+  "here's the entry point." Defaults to `.wigl/index.js`. Set this to a
   hand-written, already-built JS file (and skip `plugin:build` entirely) if a
   plugin doesn't want the TypeScript/JSX toolchain at all — the host just
   loads whatever's there, same as it loads a `plugin:build` output. It must
@@ -105,7 +115,7 @@ installed it. See `backlog.md`.
 ## Building and installing
 
 ```
-bun run plugin:build   wigl-widgets/calendar   # source → dist/index.js
+bun run plugin:build   wigl-widgets/calendar   # source → .wigl/index.js
 bun run plugin:check   wigl-widgets/calendar   # load it headlessly, report host modules used
 bun run plugin:install wigl-widgets/calendar   # build (if there's source), then copy into app data
 bun run plugin:build:all                       # every wigl-widgets/<name> folder that has source
@@ -119,7 +129,7 @@ folder per plugin id. Only `package.json` (if present) and the entry file are
 installed — other source, `node_modules` and tsconfig are build-time concerns
 with no business in a user's data dir.
 
-**Each plugin gets its own `dist/index.js`, on purpose — not one shared
+**Each plugin gets its own `.wigl/index.js`, on purpose — not one shared
 bundle.** That's what keeps a plugin's own npm dependencies (calendar's
 `date-fns`, or a hypothetical stock-ticker widget's charting library) out of
 the core app: `bun run plugin:build` runs esbuild once per plugin folder,
@@ -127,7 +137,7 @@ bundling *that* plugin's own `node_modules` into *that* plugin's own output,
 with only the host modules externalized (see above) — meaning React, `@/wigl`
 and every other host module are *not* duplicated per plugin; only a plugin's
 *own* third-party dependencies are, and only if another plugin happens to
-need the same one, which so far only calendar does. A single combined `dist/`
+need the same one, which so far only calendar does. A single combined bundle
 would mean either bundling every plugin's dependencies into one file the core
 ships (exactly what this design avoids) or reinventing a second build system
 to keep them apart — more moving parts for the same result. If per-plugin

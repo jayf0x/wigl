@@ -9,8 +9,12 @@ export type WidgetPermission = "command" | "filesystem" | "network" | "storage";
 
 /** Where a plugin's built entry lives if it doesn't say otherwise. A plugin
  * with its own `package.json` can override this via `main`, same field Node
- * already uses for "here's the entry point" — no bespoke schema to learn. */
-export const DEFAULT_PLUGIN_ENTRY = "dist/index.js";
+ * already uses for "here's the entry point" — no bespoke schema to learn.
+ * `.wigl/`, not `dist/`: dot-prefixed keeps the build machinery out of a
+ * casual look at the folder (same convention as `.next/`/`.svelte-kit/`) —
+ * a widget author who never touches the build should see source files, not
+ * output. */
+export const DEFAULT_PLUGIN_ENTRY = ".wigl/index.js";
 
 export const RESERVED_PLUGIN_IDS = new Set(["main", "wigl"]);
 
@@ -29,7 +33,7 @@ interface PluginPackageJson {
  * be unique (two plugins can't share a folder), so a second place to spell
  * it out would only be one more thing to keep in sync. `entry`/`permissions`
  * come from an optional `package.json`; no `package.json` at all is a valid,
- * zero-config plugin (entry defaults to `dist/index.js`, no permissions). */
+ * zero-config plugin (entry defaults to `DEFAULT_PLUGIN_ENTRY`, no permissions). */
 export interface WidgetManifest {
   id: string;
   permissions: WidgetPermission[];
