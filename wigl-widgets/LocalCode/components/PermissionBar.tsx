@@ -1,10 +1,33 @@
-// Renders opencode's own permission-ask protocol directly (see AGENTS.md —
-// "access model") rather than a wigl-invented approval flow: one row per
-// pending `PermissionRequest`, three buttons mapping 1:1 to opencode's
-// `reply` values (`once` / `always` / `reject`).
-import { Ban, Check, ShieldAlert } from "lucide-react";
-import { Button } from "@/components/ui/button";
+// opencode's own permission-ask protocol, rendered 1:1 (see AGENTS.md's
+// "access model") — three replies, no wigl-invented approval flow. Styled off
+// theme tokens only; the old amber literal was a hardcoded color, which
+// docs/theming.md bans outright.
+import { Ban, Check, CheckCheck, ShieldAlert } from "lucide-react";
 import type { PermissionRequest } from "../types";
+
+const Action = ({
+  icon: Icon,
+  title,
+  danger,
+  onClick,
+}: {
+  icon: typeof Check;
+  title: string;
+  danger?: boolean;
+  onClick: () => void;
+}) => (
+  <button
+    type="button"
+    data-no-drag
+    title={title}
+    onClick={onClick}
+    className={`rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted ${
+      danger ? "hover:text-destructive" : "hover:text-foreground"
+    }`}
+  >
+    <Icon className="size-3.5" />
+  </button>
+);
 
 export const PermissionBar = ({
   requests,
@@ -15,35 +38,17 @@ export const PermissionBar = ({
 }) => {
   if (requests.length === 0) return null;
   return (
-    <div className="flex flex-col gap-1 border-border/60 border-b bg-amber-500/5 px-2 py-1.5">
+    <div className="flex shrink-0 flex-col border-primary/30 border-b bg-primary/5">
       {requests.map((req) => (
-        <div key={req.id} className="flex items-center gap-2 text-[10.5px]">
-          <ShieldAlert className="size-3.5 shrink-0 text-amber-500" />
-          <span className="flex-1 truncate opacity-80">
+        <div key={req.id} className="flex items-center gap-2 px-4 py-1.5 text-[11px]">
+          <ShieldAlert className="size-3.5 shrink-0 text-primary" />
+          <span className="flex-1 truncate text-foreground/80">
             {req.permission}
             {req.patterns.length > 0 ? ` — ${req.patterns.join(", ")}` : ""}
           </span>
-          <Button size="icon-xs" variant="ghost" title="allow once" onClick={() => onReply(req.id, "once")}>
-            <Check className="size-3" />
-          </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            title="always allow"
-            onClick={() => onReply(req.id, "always")}
-            className="text-primary"
-          >
-            <Check className="size-3" />
-          </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            title="reject"
-            onClick={() => onReply(req.id, "reject")}
-            className="text-destructive"
-          >
-            <Ban className="size-3" />
-          </Button>
+          <Action icon={Check} title="allow once" onClick={() => onReply(req.id, "once")} />
+          <Action icon={CheckCheck} title="always allow" onClick={() => onReply(req.id, "always")} />
+          <Action icon={Ban} title="reject" danger onClick={() => onReply(req.id, "reject")} />
         </div>
       ))}
     </div>

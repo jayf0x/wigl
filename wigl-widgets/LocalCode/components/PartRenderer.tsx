@@ -1,40 +1,56 @@
-// One case per opencode part `type` (see types.ts's `PartType`) — mirrors
-// how OpenGUI dispatches part rendering, just collapsed to what fits a
-// small tile. Deliberately no diff view (AGENTS.md's decisions log) — a
-// `patch` part gets a one-line "N files changed" summary, nothing more.
+// One case per opencode part `type` (types.ts's `PartType`). Everything that
+// isn't the answer itself renders as a *trace row*: a single dim line you can
+// expand, never a card competing with the reply for attention. Expanded
+// content is height-capped and scrolls — a long reasoning trace used to push
+// the transcript down several screens on its own.
 import { type ReactNode, useState } from "react";
-import { ChevronRight, Loader2, ListTodo, Sparkles, Wrench } from "lucide-react";
+import { ChevronRight, Loader2, ListTodo, Sparkles, Terminal } from "lucide-react";
 import { cn } from "@/wigl/utils";
 import type { MessagePart } from "../types";
 import { Markdown } from "./Markdown";
 
-const Collapsible = ({
+const Trace = ({
   icon: Icon,
   label,
-  defaultOpen = false,
+  meta,
+  spin,
   children,
 }: {
   icon: typeof ChevronRight;
   label: string;
-  defaultOpen?: boolean;
+  meta?: string;
+  spin?: boolean;
   children: ReactNode;
 }) => {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-md border border-border/50">
+    <div className="flex flex-col">
       <button
         type="button"
         data-no-drag
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-2 py-1 text-[10.5px] opacity-60 hover:opacity-90"
+        className="group flex w-full items-center gap-1.5 py-0.5 text-left text-[10.5px] text-muted-foreground/70 transition-colors duration-150 hover:text-foreground"
       >
-        <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
-        <Icon className="size-3" />
+        <ChevronRight
+          className={cn("size-3 shrink-0 opacity-50 transition-transform duration-200", open && "rotate-90")}
+        />
+        <Icon className={cn("size-3 shrink-0", spin && "animate-spin")} />
         <span className="truncate">{label}</span>
+        {meta && <span className="shrink-0 truncate opacity-50">{meta}</span>}
       </button>
-      {open && <div className="border-border/50 border-t px-2 py-1.5">{children}</div>}
+      {open && (
+        <div className="mt-1 mb-1.5 ml-1.5 max-h-56 overflow-y-auto border-border border-l pl-3 text-muted-foreground">
+          {children}
+        </div>
+      )}
     </div>
   );
+};
+
+const duration = (time?: { start?: number; end?: number }) => {
+  if (!time?.start || !time?.end) return undefined;
+  const secs = (time.end - time.start) / 1000;
+  return secs >= 1 ? `${secs.toFixed(secs < 10 ? 1 : 0)}s` : undefined;
 };
 
 export const PartRenderer = ({ part }: { part: MessagePart }) => {
@@ -45,37 +61,43 @@ export const PartRenderer = ({ part }: { part: MessagePart }) => {
     case "reasoning":
       if (!part.text?.trim()) return null;
       return (
-        <Collapsible icon={Sparkles} label={part.time?.end ? "thinking" : "thinking…"}>
-          <Markdown text={part.text} />
-        </Collapsible>
+        <Trace
+          icon={Sparkles}
+          label={part.time?.end ? "thought" : "thinking"}
+          meta={duration(part.time)}
+          spin={!part.time?.end}
+        >
+          <Markdown text={part.text} className="text-[11.5px] opacity-80" />
+        </Trace>
       );
 
     case "tool": {
       const running = part.state?.status === "running" || part.state?.status === "pending";
+      const failed = part.state?.status === "error";
       return (
-        <Collapsible
-          icon={running ? Loader2 : Wrench}
-          label={`${part.tool ?? "tool"}${part.state?.status ? ` — ${part.state.status}` : ""}`}
+        <Trace
+          icon={running ? Loader2 : Terminal}
+          spin={running}
+          label={part.tool ?? "tool"}
+          meta={failed ? "failed" : running ? "running" : undefined}
         >
           {part.state?.error ? (
-            <div className="text-[10.5px] text-destructive/80">{part.state.error}</div>
+            <p className="text-[11px] text-destructive/90">{part.state.error}</p>
           ) : part.state?.output ? (
-            <pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[10px]">
-              {part.state.output}
-            </pre>
+            <pre className="whitespace-pre-wrap font-mono text-[10.5px] leading-relaxed">{part.state.output}</pre>
           ) : (
-            <div className="text-[10.5px] opacity-40">no output yet</div>
+            <p className="text-[11px] opacity-40">no output</p>
           )}
-        </Collapsible>
+        </Trace>
       );
     }
 
     case "subtask":
       return (
-        <div className="flex items-center gap-1.5 rounded-md border border-border/50 px-2 py-1 text-[10.5px] opacity-70">
+        <div className="flex items-center gap-1.5 py-0.5 text-[10.5px] text-muted-foreground/70">
           <Sparkles className="size-3" />
-          <span>
-            sub-agent <span className="font-medium">{part.agent ?? "?"}</span>
+          <span className="truncate">
+            sub-agent <span className="text-foreground/80">{part.agent ?? "?"}</span>
             {part.description ? ` — ${part.description}` : ""}
           </span>
         </div>
@@ -83,28 +105,19 @@ export const PartRenderer = ({ part }: { part: MessagePart }) => {
 
     case "patch":
       return (
-        <div className="text-[10.5px] opacity-50">
+        <div className="py-0.5 text-[10.5px] text-muted-foreground/60">
           {part.files?.length ? `${part.files.length} file${part.files.length === 1 ? "" : "s"} changed` : "edited files"}
         </div>
       );
 
-    case "step-start":
-    case "step-finish":
-    case "snapshot":
-    case "retry":
-    case "compaction":
-    case "agent":
-    case "file":
-      return null; // structural/bookkeeping parts — nothing worth a line in this tile
-
     default:
-      return null;
+      return null; // structural/bookkeeping parts — nothing worth a line here
   }
 };
 
 export const TodoBadge = ({ count }: { count: number }) =>
   count > 0 ? (
-    <span className="flex items-center gap-1 text-[10px] opacity-50">
+    <span className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
       <ListTodo className="size-3" />
       {count}
     </span>

@@ -53,8 +53,8 @@ Things confirmed live that aren't obvious from guessing:
 - Reasoning-effort options are **per-model**, not a fixed enum: each
   model in `/config/providers` may have a `variants` map (e.g.
   `{ high: { reasoningEffort: "high" } }`); a model with no `variants` has
-  no effort control at all. `Composer.tsx` only renders the effort
-  `<Select>` when `variantOptions.length > 0` — never hardcode a global
+  no effort control at all. `Composer.tsx` offers `/think` (and its chip)
+  only when the selected model declares `variants` — never hardcode a global
   low/medium/high list.
 - There's no dedicated "edit message" endpoint. `client.ts`'s
   `revertToMessage` + a fresh `sendPrompt` is opencode's own intended
@@ -175,11 +175,11 @@ when it's wired up.
 ### Reasoning-effort dropdown: why it used to stay disabled for every model
 
 `syncOllamaModels()` originally wrote `models[name] = { name }` and nothing
-else — no `variants` field, ever, for any Ollama model. `Composer.tsx`'s
-effort `<Select>` only enables when the selected model's catalog entry has
-a `variants` map (see the top comment there), so with every synced model
-missing one, the control was permanently disabled regardless of which model
-was picked — not a per-model bug, a structural one. Fixed: `ollama.ts`'s
+else — no `variants` field, ever, for any Ollama model. The effort control
+(a `<Select>` then, `/think` now) only exists when the selected model's
+catalog entry has a `variants` map, so with every synced model missing one,
+it was permanently unavailable regardless of which model was picked — not a
+per-model bug, a structural one. Fixed: `ollama.ts`'s
 `modelSupportsThinking(name)` calls Ollama's own `POST /api/show` and checks
 whether `"thinking"` is in the returned `capabilities` array (verified
 live: present for `qwen3.5:0.8b`, absent for `smollm:135m`), cached per
@@ -203,9 +203,9 @@ the best-supported mechanism available (opencode's own docs describe
 `variants` as generic, provider-agnostic per-model overrides you can "add
 your own" of) but wasn't confirmed with a live SSE trace the way every
 other claim in this section was — what *is* fixed and confirmed is the UI
-bug: the dropdown now correctly enables only for thinking-capable models
-and offers exactly High/Low/Off (Off is a real selectable item now, not
-just the unset default — see `Composer.tsx`). To confirm the deeper claim:
+bug: the control appears only for thinking-capable models and offers
+exactly high/low/off (off is a real selectable value, not just the unset
+default — see `commands.ts`). To confirm the deeper claim:
 run the same seeded prompt through a live `opencode serve` with `variant:
 "high"` vs `variant: "low"` against a thinking model and diff the
 `reasoning` part's length/content in the SSE trace.
@@ -268,6 +268,49 @@ call just leaves the truncated-prompt fallback title in place. Other
 consumers (greeting text, other small tasks) are unspecified scope, not
 built — see `TODO.md`.
 
+## UI shape (post-redesign) — read before adding a control
+
+The redesign pass replaced the first, functional-but-cramped UI. Its rules,
+because "add a dropdown" is the default instinct and it's the wrong one here:
+
+- **Slash commands are the settings UI.** `/model`, `/agent`, `/think` —
+  parsed by `commands.ts` (pure, tested in `tests/commands.test.ts`),
+  rendered as an inline palette by `Composer.tsx`. There is no model, agent,
+  or effort `<Select>` anymore. The chip row under the composer is the
+  current-state readout *and* the discovery path: clicking a chip types its
+  command. A new per-turn setting is a new entry in `COMMANDS`, not a new
+  widget on the toolbar. Something that changes once a month is a constant in
+  `config.ts`, not UI at all.
+- **Enter is a newline. ⌘/Ctrl/⌥+Enter sends.** Explicit owner call ("I
+  personally hate this in every LLM UI"). Same binding for edit-and-resend in
+  `MessageList.tsx`. Don't "fix" this back.
+- **Markdown is tokenized, never HTML.** `markdown.ts` (pure, tested) emits
+  spans/blocks; `components/Markdown.tsx` renders them as React children.
+  This is what closed the "broken agent responses formatting" report —
+  headings/lists/quotes/fences now parse, and emphasis delimiters must hug
+  their text so `2 * 3 * 4` and glob patterns stop turning into italics.
+  The `dangerouslySetInnerHTML` ban (see Hard rules) is why a real markdown
+  library is not an option.
+- **Milkdown/Crepe was considered for the composer and rejected**, despite
+  being requested by name. Two blockers, in order: the plugin build has no
+  CSS pipeline at all (`scripts/plugin.ts` emits a single JS bundle the
+  loader evaluates — nothing injects a stylesheet, so Crepe's required theme
+  CSS would silently not load), and that theme is a large sheet of hardcoded
+  colors, which `docs/theming.md` bans for widgets outright. A ProseMirror
+  editor also swallows the keyboard, which fights the slash palette. Revisit
+  only if the host gains a way to serve plugin CSS *and* someone maps Crepe's
+  theme onto wigl tokens — both are real projects, not a `bun add`.
+- **Everything stays widget-local.** Nothing here was promoted into
+  `src/wigl/` despite the "make it reusable" ask: the repo rule is that
+  nothing becomes shared until a *second* widget concretely needs it, and no
+  second chat-shaped widget exists. The reusable pieces that already exist
+  (`Button`, `ScrollArea`, `cn`, `useStorage`) are used; the rest — palette,
+  trace rows, turn layout — is one widget's opinion and would be a bad
+  general API today. The one thing genuinely shared-shaped, an error
+  surface, is still in `TODO.md` for exactly that reason.
+- **Theme tokens only.** The old `PermissionBar` amber literal is gone; every
+  color is a semantic token. Check any new class against `docs/theming.md`.
+
 ## Decisions log (so they don't get re-litigated from scratch)
 
 - **`session.error` must be handled, not just typed.** Found live: a failed
@@ -320,11 +363,7 @@ built — see `TODO.md`.
   clears `activeID` if the deleted session was the active one). Also added
   in the same pass: `MessageList.tsx` auto-scrolls to the bottom on new
   content (there was no scroll-following at all — a streaming reply was
-  invisible unless you kept scrolling manually), and the reasoning-effort
-  `<Select>` in `Composer.tsx` is now always rendered (disabled + a
-  "thinking: n/a" placeholder for non-reasoning models) instead of
-  disappearing outright when a model has no `variants` — a control that
-  only sometimes exists reads as broken, not as "not applicable".
+  invisible unless you kept scrolling manually).
 - **No diff view.** `PartRenderer.tsx`'s `patch` case is a one-line "N
   files changed" — deliberately not OpenGUI's `DiffView.tsx`. Owner's
   framing: don't rebuild what a real editor/git tool already does well: "no
@@ -337,14 +376,16 @@ built — see `TODO.md`.
   "Housekeeper model" above. `useSessions.ts`'s `autoTitle` (plain
   truncation) is still the fallback used if the housekeeper call fails or
   times out.
-- **No virtualization yet**, despite it being explicitly asked for.
-  `MessageList.tsx` renders every message unconditionally inside a plain
-  `ScrollArea`. Deliberately deferred, not skipped — the owner's own
-  framing was "smooth features... can be added in another session", and
-  virtualizing a tree with per-message collapsible parts (reasoning/tool
-  blocks with their own open/closed state) is real design work, not a
-  drop-in `react-window` wrap. Do it once real sessions get long enough to
-  make it matter, not preemptively.
+- **A render window, not virtualization.** `MessageList.tsx` mounts only the
+  last `RENDER_WINDOW` (40) messages and puts the rest behind one "N earlier
+  messages" button. This is the answer to the long-standing "conversations
+  need virtualization" ask, and it's deliberately *not* a windowing library:
+  the content is streaming, variable-height, and individually collapsible
+  (reasoning/tool traces own their open state), which is the exact case
+  measurement-based virtualizers handle worst. Ten lines buy the same win —
+  a 500-turn session never mounts 500 collapsible trees. Revisit only if
+  someone actually expands a huge session *and* it stutters; the fix then is
+  a real virtualizer, not a smaller window.
 - **Ollama: status only, no start/stop control.** `ollama.ts` polls
   `GET /api/tags` every 10s; there's no code path that spawns `ollama
   serve`. Explicit owner call during scoping — Ollama is normally already
@@ -441,7 +482,7 @@ summarized here, not duplicated in detail:
    in `client.ts`'s reach but nothing calls it — a real sub-agent view
    would show children as nested/linked sessions in the sidebar, not just
    the one-line badge `PartRenderer.tsx` renders inline today.
-4. **Virtualization** — see decisions log above.
+4. ~~Virtualization~~ — answered by the render window, see decisions log.
 5. **Multi-monitor server sharing** — see "Server lifecycle" above.
 6. **Ollama start/stop** — see decisions log above.
 

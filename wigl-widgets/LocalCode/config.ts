@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   lastAgent: "localcode_last_agent", // string | null
   lastVariant: "localcode_last_variant", // string | null
   housekeeperModel: "localcode_housekeeper_model", // ModelSelection — see housekeeper.ts
+  sidebarOpen: "localcode_sidebar_open", // boolean — sessions rail collapsed state
 } as const;
 
 // Fallback if the housekeeper call fails/times out, and the ceiling applied

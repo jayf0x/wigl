@@ -1,6 +1,9 @@
+// One session. Double-click renames in place; pin and delete only surface on
+// hover so the resting state is just a list of names. The active row is a
+// left accent bar rather than a filled pill — same signal, far less noise in
+// a list you're scanning.
 import { useState } from "react";
 import { Pin, Trash2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { relativeTime, cn } from "@/wigl/utils";
 import type { SessionView } from "../useSessions";
 
@@ -19,70 +22,70 @@ export const SessionRow = ({
   onTogglePin: () => void;
   onDelete: () => void;
 }) => {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(session.displayTitle);
+  const [draft, setDraft] = useState<string | null>(null);
 
-  if (editing) {
+  if (draft !== null) {
     return (
-      <Input
+      <input
         data-no-drag
         autoFocus
-        size="sm"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
-          setEditing(false);
           if (draft.trim()) onRename(draft.trim());
+          setDraft(null);
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
-          if (e.key === "Escape") {
-            setDraft(session.displayTitle);
-            setEditing(false);
-          }
+          if (e.key === "Escape") setDraft(null);
         }}
-        className="mx-1"
+        className="w-full rounded-md border border-ring/50 bg-background/50 px-2 py-1.5 text-[11px] outline-none"
       />
     );
   }
 
   return (
-    <button
-      type="button"
-      data-no-drag
-      onClick={onSelect}
-      onDoubleClick={() => setEditing(true)}
+    <div
       className={cn(
-        "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[11px]",
-        active ? "bg-primary/10" : "hover:bg-muted/60",
+        "group flex items-center gap-1.5 rounded-md border-l-2 px-2 py-1.5 text-[11px] transition-colors duration-150",
+        active ? "border-primary bg-muted/50 text-foreground" : "border-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground",
       )}
     >
       <button
         type="button"
         data-no-drag
-        onClick={(e) => {
-          e.stopPropagation();
-          onTogglePin();
-        }}
-        title={session.pinned ? "unpin" : "pin to top"}
-        className={cn("shrink-0 opacity-0 group-hover:opacity-60", session.pinned && "opacity-80")}
+        onClick={onSelect}
+        onDoubleClick={() => setDraft(session.displayTitle)}
+        className="min-w-0 flex-1 truncate text-left"
       >
-        <Pin className={cn("size-3", session.pinned && "fill-current")} />
+        {session.displayTitle}
       </button>
-      <span className="flex-1 truncate">{session.displayTitle}</span>
-      <span className="shrink-0 opacity-40 group-hover:hidden">{relativeTime(session.time.updated / 1000)}</span>
+      <span className="shrink-0 text-[10px] text-muted-foreground/40 group-hover:hidden">
+        {relativeTime(session.time.updated / 1000)}
+      </span>
       <button
         type="button"
         data-no-drag
-        onClick={(e) => {
-          e.stopPropagation();
+        onClick={onTogglePin}
+        title={session.pinned ? "unpin" : "pin to top"}
+        className={cn(
+          "hidden shrink-0 text-muted-foreground/60 hover:text-foreground group-hover:block",
+          session.pinned && "block text-foreground/70",
+        )}
+      >
+        <Pin className={cn("size-3", session.pinned && "fill-current")} />
+      </button>
+      <button
+        type="button"
+        data-no-drag
+        onClick={() => {
           if (confirm(`Delete "${session.displayTitle}"? This can't be undone.`)) onDelete();
         }}
         title="delete session"
-        className="hidden shrink-0 text-destructive/70 hover:text-destructive group-hover:block"
+        className="hidden shrink-0 text-muted-foreground/60 hover:text-destructive group-hover:block"
       >
         <Trash2 className="size-3" />
       </button>
-    </button>
+    </div>
   );
 };

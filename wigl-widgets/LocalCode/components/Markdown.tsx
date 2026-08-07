@@ -1,55 +1,108 @@
-// A markdown *renderer*, not a parser — deliberately just enough to make
-// agent output readable in a small tile: paragraphs, fenced code blocks,
-// inline code. No tables/links/headings/lists — those read fine as plain
-// text at this size, and every line here goes through React's own escaping
-// (`dangerouslySetInnerHTML` is banned app-wide, see AGENTS.md), so there's
-// no injection surface even though this is untrusted LLM output.
-const CODE_FENCE_RE = /```[\w-]*\n([\s\S]*?)```/g;
+// Renders markdown.ts's tokens. Every string lands as a React child, never
+// as HTML — see markdown.ts's header for why that's non-negotiable here.
+import { Fragment } from "react";
+import { cn } from "@/wigl/utils";
+import { type Block, parseBlocks, type Span } from "../markdown";
 
-const InlineText = ({ text }: { text: string }) => {
-  const segments = text.split(/(`[^`]+`)/g);
-  return (
-    <>
-      {segments.map((seg, i) =>
-        seg.startsWith("`") && seg.endsWith("`") ? (
-          // biome-ignore lint/suspicious/noArrayIndexKey: segments never reorder within a static render
-          <code key={i} className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">
-            {seg.slice(1, -1)}
+const Spans = ({ spans }: { spans: Span[] }) => (
+  <>
+    {spans.map((s, i) => {
+      // biome-ignore lint/suspicious/noArrayIndexKey: spans never reorder within a static render
+      const key = i;
+      if (s.kind === "code")
+        return (
+          <code key={key} className="rounded bg-muted px-1 py-px font-mono text-[0.9em] text-foreground/90">
+            {s.text}
           </code>
-        ) : (
-          // biome-ignore lint/suspicious/noArrayIndexKey: segments never reorder within a static render
-          <span key={i}>{seg}</span>
-        ),
-      )}
-    </>
-  );
-};
+        );
+      if (s.kind === "strong")
+        return (
+          <strong key={key} className="font-semibold text-foreground">
+            {s.text}
+          </strong>
+        );
+      if (s.kind === "em")
+        return (
+          <em key={key} className="italic">
+            {s.text}
+          </em>
+        );
+      // Not an anchor: nothing in a desktop widget should navigate the
+      // webview, and opening a browser is a capability this widget doesn't
+      // hold. The href is still visible on hover.
+      if (s.kind === "link")
+        return (
+          <span key={key} className="text-primary underline decoration-primary/30 underline-offset-2" title={s.href}>
+            {s.text}
+          </span>
+        );
+      return <Fragment key={key}>{s.text}</Fragment>;
+    })}
+  </>
+);
 
-export const Markdown = ({ text }: { text: string }) => {
-  const parts: Array<{ kind: "text" | "code"; content: string }> = [];
-  let last = 0;
-  for (const match of text.matchAll(CODE_FENCE_RE)) {
-    if (match.index > last) parts.push({ kind: "text", content: text.slice(last, match.index) });
-    parts.push({ kind: "code", content: match[1] });
-    last = match.index + match[0].length;
-  }
-  if (last < text.length) parts.push({ kind: "text", content: text.slice(last) });
-
-  return (
-    <div className="space-y-1.5 whitespace-pre-wrap break-words text-[11.5px] leading-snug">
-      {parts.map((part, i) =>
-        part.kind === "code" ? (
-          // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder within a static render
-          <pre key={i} className="overflow-x-auto rounded-md bg-muted p-2 font-mono text-[10.5px] leading-normal">
-            <code>{part.content}</code>
+const BlockView = ({ block }: { block: Block }) => {
+  switch (block.kind) {
+    case "code":
+      return (
+        <div className="group/code relative overflow-hidden rounded-lg border border-border/60 bg-background/60">
+          {block.lang && (
+            <span className="absolute top-1 right-2 text-[9px] tracking-wider text-muted-foreground/50 uppercase">
+              {block.lang}
+            </span>
+          )}
+          <pre className="overflow-x-auto p-2.5 font-mono text-[11px] leading-relaxed">
+            <code>{block.content}</code>
           </pre>
-        ) : (
-          // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder within a static render
-          <p key={i}>
-            <InlineText text={part.content} />
-          </p>
-        ),
-      )}
-    </div>
-  );
+        </div>
+      );
+    case "heading":
+      return (
+        <p
+          className={cn(
+            "font-semibold text-foreground",
+            block.level <= 2 ? "text-[13px]" : "text-[12px] text-foreground/80",
+          )}
+        >
+          <Spans spans={block.spans} />
+        </p>
+      );
+    case "list":
+      return (
+        <ul className="flex flex-col gap-0.5 pl-1">
+          {block.items.map((item, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: items never reorder within a static render
+            <li key={i} className="flex gap-2">
+              <span className="shrink-0 text-muted-foreground/60 tabular-nums">{block.ordered ? `${i + 1}.` : "·"}</span>
+              <span className="flex-1">
+                <Spans spans={item} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+    case "quote":
+      return (
+        <p className="border-border border-l-2 pl-2.5 text-muted-foreground italic">
+          <Spans spans={block.spans} />
+        </p>
+      );
+    case "rule":
+      return <hr className="border-border/60" />;
+    default:
+      return (
+        <p>
+          <Spans spans={block.spans} />
+        </p>
+      );
+  }
 };
+
+export const Markdown = ({ text, className }: { text: string; className?: string }) => (
+  <div className={cn("flex flex-col gap-2 break-words text-[12.5px] leading-relaxed", className)}>
+    {parseBlocks(text).map((block, i) => (
+      // biome-ignore lint/suspicious/noArrayIndexKey: blocks never reorder within a static render
+      <BlockView key={i} block={block} />
+    ))}
+  </div>
+);
