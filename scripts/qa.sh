@@ -35,6 +35,14 @@ done
 # of the last one instead of replacing it.
 pkill -x wigl 2>/dev/null && sleep 1 || true
 
+# Widgets are loaded at runtime from the app-data plugins dir (see
+# docs/plugins.md), not bundled into the frontend build below — so without
+# this, a widget you just edited (or never installed) silently doesn't show
+# up even though "the build" succeeded. No dir argument = every
+# wigl-widgets/<name> folder except a `_`-prefixed one.
+echo "[qa] building + installing widgets..."
+NODE_ENV=production bun scripts/plugin.ts install
+
 echo "[qa] building frontend..."
 bun run build >/dev/null
 

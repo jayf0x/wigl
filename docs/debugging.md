@@ -17,6 +17,14 @@ This window is `alwaysOnBottom` + `skipTaskbar` + undecorated, running in enviro
 
 Fix: after any frontend edit, do a full `bun run build` (regenerates `dist/`) before rebuilding Rust, and confirm freshness with the `grep` trick above before assuming a runtime bug when it might just be a stale bundle. If merely re-running `cargo build` (not `bun run tauri build`) after a frontend edit, note that cargo may not detect that `dist/` changed and skip re-embedding — force it by removing the stale binary/build cache (`rm -rf src-tauri/target/debug/build/wigl-* src-tauri/target/debug/wigl`) before rebuilding, if you're not sure. Note `wigl` here is the app binary name (from `Cargo.toml`), not a widget.
 
+## `bun run build` fails with "Vite requires Node.js version 20.19+" despite using bun
+
+Symptom: `bun run build` (and therefore `bun run tauri build`/`qa`/`verify`, all of which run it via `beforeBuildCommand`) fails with `crypto.getRandomValues is not a function` and a "You are using Node.js 16.20.2" warning, even though the project only uses `bun`. `tsc` runs fine; only the `vite build` half fails.
+
+Cause: `vite`'s installed binary (`node_modules/.bin/vite`) has a `#!/usr/bin/env node` shebang. `bun run <script>` executes a multi-command script string (`tsc && vite build`) through a real shell, not through bun's own binary resolution — so `vite` still resolves via plain `PATH`/shebang to whatever `node` a tool like `nvm` currently has active, independent of bun. If that's an old Node (or, as found live once, an `nvm alias default` pointing at a Node version that was never actually installed, silently falling back to an ancient one), Vite 7 refuses to run.
+
+Fix already in place: `package.json`'s `dev`/`build`/`preview` scripts call `bunx --bun vite ...`, not bare `vite ...` — `--bun` forces bunx to run the resolved binary under bun's own JS runtime instead of forking whatever `node` PATH would otherwise find, so this is independent of the machine's Node/nvm state. If a *new* script ever shells out to `vite` (or another binary with a Node shebang) directly, use the same `bunx --bun <name>` form rather than bare `<name>`.
+
 ## Transparent windows need the private API
 
 `"transparent": true` in `tauri.conf.json` silently does nothing on macOS (with a warning printed to stdout, not thrown) unless:

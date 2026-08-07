@@ -2,10 +2,10 @@
 /**
  * Plugin CLI — build / install / list / rm.
  *
- *   bun run plugin:build       wigl-widgets/calendar
+ *   bun run plugin:build       wigl-widgets/calendar   # one widget
+ *   bun run plugin:build                               # every wigl-widgets/<name> folder
  *   bun run plugin:install     wigl-widgets/calendar   # build, then copy into app data
- *   bun run plugin:build:all                           # every wigl-widgets/<name> folder
- *   bun run plugin:install:all
+ *   bun run plugin:install                             # build+install every widget
  *   bun run plugin:list
  *   bun run plugin:rm          calendar
  *
@@ -33,6 +33,8 @@ import { RESERVED_PLUGIN_IDS, resolvePluginConfig } from "../src/wigl/plugins/ty
 
 const WIDGETS_ROOT = "wigl-widgets";
 const NON_PLUGIN_DIRS = new Set(["types"]);
+// A leading "_" opts a wigl-widgets/ folder out of discovery/build entirely —
+// e.g. `_qa-color`, a dev-only QA surface with no reason to ship.
 
 // Mirrors Tauri's `appDataDir()` for this app's identifier. Kept in sync
 // with `src/config/app.ts` by reading the same source of truth Tauri does.
@@ -153,12 +155,12 @@ const install = async (dir: string) => {
 };
 
 /** Every `wigl-widgets/<name>` folder, in the same order `ls` would give —
- * used by `build-all`/`install-all` so "do it to every widget" is one
- * command instead of one per folder. */
+ * used when `build`/`install` are called with no dir so "do it to every
+ * widget" is one command instead of one per folder. */
 const allPluginDirs = async (): Promise<string[]> => {
   const entries = await readdir(WIDGETS_ROOT, { withFileTypes: true });
   return entries
-    .filter((e) => e.isDirectory() && !NON_PLUGIN_DIRS.has(e.name))
+    .filter((e) => e.isDirectory() && !NON_PLUGIN_DIRS.has(e.name) && !e.name.startsWith("_"))
     .map((e) => resolve(WIDGETS_ROOT, e.name));
 };
 
@@ -268,19 +270,21 @@ const remove = async (id: string) => {
 const [cmd, arg] = process.argv.slice(2);
 switch (cmd) {
   case "build":
-    await build(resolve(arg ?? die("usage: plugin build <dir>")));
-    break;
-  case "install":
-    await install(resolve(arg ?? die("usage: plugin install <dir>")));
-    break;
-  case "build-all":
-    for (const dir of await allPluginDirs()) {
-      if (findEntrySource(dir)) await build(dir);
-      else console.log(`- ${basename(dir)}: no index.tsx/ts, skipped (ships pre-built JS)`);
+    if (arg) {
+      await build(resolve(arg));
+    } else {
+      for (const dir of await allPluginDirs()) {
+        if (findEntrySource(dir)) await build(dir);
+        else console.log(`- ${basename(dir)}: no index.tsx/ts, skipped (ships pre-built JS)`);
+      }
     }
     break;
-  case "install-all":
-    for (const dir of await allPluginDirs()) await install(dir);
+  case "install":
+    if (arg) {
+      await install(resolve(arg));
+    } else {
+      for (const dir of await allPluginDirs()) await install(dir);
+    }
     break;
   case "check":
     await check(resolve(arg ?? die("usage: plugin check <dir>")));
@@ -292,5 +296,5 @@ switch (cmd) {
     await remove(arg ?? die("usage: plugin rm <id>"));
     break;
   default:
-    die("usage: plugin <build|check|install|build-all|install-all|list|rm> [dir|id]");
+    die("usage: plugin <build|check|install|list|rm> [dir|id]");
 }

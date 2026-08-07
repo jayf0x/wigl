@@ -31,5 +31,9 @@
     }
   },
   "include": ["*/**/*.ts", "*/**/*.tsx"],
-  "exclude": ["*/.wigl", "types"]
+  // */cli.ts: root-context CLI scripts (bun-run directly, not part of the
+  // plugin bundle) that deliberately reach into ../../src — excluded so
+  // they don't quietly defeat the "never resolve app internals" guarantee
+  // above just because their relative path happens to still work.
+  "exclude": ["*/.wigl", "types", "*/cli.ts"]
 }

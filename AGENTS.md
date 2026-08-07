@@ -58,7 +58,7 @@ Quick: `bun run typecheck`, then `bun run build`. Full app: `bun run verify` (`s
 
 For the owner's own fast build-and-look iteration (not for the agent to run unprompted), `bun run qa` / `bun run qa:app` (`scripts/qa.sh`) skip packaging and `verify`'s window/log checks — `qa` auto-detects overlay vs. windowed mode the same way the app itself does (see `docs/architecture.md`), `qa:app` forces windowed mode everywhere so both flows are QA-able on one machine.
 
-New debug/CLI scripts (widget data scanners, seed scripts, anything you'd otherwise inline as a big shell string) go in `scripts/` and get a one-line `package.json` entry, same shape as `calendar:add`/`calendar:list`/`calendar:rm` and `repos:scan` — keeps `package.json` a thin index instead of growing embedded logic.
+New debug/CLI scripts that operate on the whole repo (widget data scanners, seed scripts, anything you'd otherwise inline as a big shell string) go in `scripts/` and get a one-line root `package.json` entry, same shape as `tw-colors`/`check:eager`. A script that only makes sense for one widget (e.g. the calendar CLI) lives inside that widget's own folder instead, with its own `scripts` entry in *that* folder's `package.json` (invoked as `bun run --cwd wigl-widgets/<name> <script>`) — root `package.json` stays a thin index of repo-wide commands, not a registry of every widget's tooling.
 
 ## History
 

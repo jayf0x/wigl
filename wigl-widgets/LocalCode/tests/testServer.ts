@@ -5,6 +5,7 @@
 // only executes files matching bun:test's own test-file patterns, so this
 // plain helper is imported by the *.test.ts files in this folder without
 // being run as a suite itself.
+import { realpathSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -24,7 +25,17 @@ const OLLAMA_TAGS_URL = "http://localhost:11434/api/tags";
 // and a real user's directory never collide, a leaked test session (this
 // suite still cleans up after itself; this is defense in depth) can never
 // show up next to real sessions.
-export const SCRATCH_DIRECTORY = join(tmpdir(), "wigl-localcode-e2e-tests");
+//
+// `realpathSync(tmpdir())`, not `tmpdir()` directly: on macOS `os.tmpdir()`
+// returns a path through `/var`, itself a symlink to `/private/var` — verified
+// live that opencode's server resolves the directory it's given (matching
+// its own process cwd, see `startTestServer` below) to the real path, so a
+// test asserting `created.directory === SCRATCH_DIRECTORY` failed on exactly
+// that `/var` vs `/private/var` prefix, not a real drift bug. Resolving here
+// once, against `tmpdir()` itself (which always exists, unlike the
+// not-yet-created scratch subfolder), keeps this constant equal to whatever
+// opencode actually reports.
+export const SCRATCH_DIRECTORY = join(realpathSync(tmpdir()), "wigl-localcode-e2e-tests");
 
 /** Creates `SCRATCH_DIRECTORY` on disk — opencode's session creation isn't
  * guaranteed to work against a directory that doesn't exist. */
@@ -33,8 +44,17 @@ export const ensureScratchDirectory = (): Promise<void> => mkdir(SCRATCH_DIRECTO
 // Fixed seed + greedy decoding + a small output cap: the point isn't
 // realistic chat behavior, it's a reply short and stable enough to assert
 // on exactly, and a test run that finishes in seconds instead of minutes.
+//
+// 64 (the original value here) starved qwen3.5:0.8b on the generation e2e
+// test's prompt: verified live that this exact model, at temperature 0,
+// spends 100+ tokens on `thinking` before its first real-answer token for
+// some prompts, so a too-small cap hits `done_reason: "length"` mid-thought
+// and never emits `response` at all — the SSE stream then never produces a
+// text part, and the test hangs until TURN_TIMEOUT_MS instead of failing
+// fast. 256 gives real headroom above the ~160 tokens a short factual
+// prompt against this model needed in that same live check.
 export const SEED = 42;
-export const MAX_TOKENS = 64;
+export const MAX_TOKENS = 256;
 
 interface ModelBlock {
   name: string;

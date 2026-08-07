@@ -27,6 +27,12 @@ hand-typed to match it would only be one more thing to keep in sync (and one
 more way for a typo to go unnoticed). A folder with just `index.tsx` and
 nothing else is a complete, valid, zero-config plugin.
 
+A folder name starting with `_` (e.g. `_qa-color`) is skipped by the no-arg
+"every widget" form of `plugin:build`/`plugin:install`. Use this for dev-only
+QA surfaces that have no reason to ship; it's still buildable and installable
+by name (`bun run plugin:install wigl-widgets/_qa-color`), it just doesn't
+get swept in automatically.
+
 Build output lives under `.wigl/`, not a plain `dist/` — dot-prefixed
 folders are the convention this ecosystem already uses for "generated, not
 source" (`.next/`, `.svelte-kit/`, `.turbo/`), and it means a widget author
@@ -118,11 +124,26 @@ installed it. See `backlog.md`.
 bun run plugin:build   wigl-widgets/calendar   # source → .wigl/index.js
 bun run plugin:check   wigl-widgets/calendar   # load it headlessly, report host modules used
 bun run plugin:install wigl-widgets/calendar   # build (if there's source), then copy into app data
-bun run plugin:build:all                       # every wigl-widgets/<name> folder that has source
-bun run plugin:install:all                     # every wigl-widgets/<name> folder
+bun run plugin:build                           # no dir: every wigl-widgets/<name> folder that has source
+bun run plugin:install                         # no dir: every wigl-widgets/<name> folder
 bun run plugin:list
 bun run plugin:rm      calendar
 ```
+
+**Renaming or deleting a `wigl-widgets/<name>` folder does not remove its old
+installed copy.** `plugin:install` (with or without a dir argument) only
+ever adds/updates whatever source folders currently exist — it never looks
+at what's already sitting in the app-data plugins dir, so an id that no
+longer has a matching source folder is simply never touched again and keeps
+loading forever (verified live: renaming `qa-colors` → `_qa-color` left the
+app still rendering the old `qa-colors` install until it was removed by
+hand). Run `bun run plugin:rm <old-id>` yourself as part of any rename or
+deletion — `plugin:install` deliberately doesn't auto-prune orphaned ids,
+since the plugin system is meant to support installs with no corresponding
+`wigl-widgets/` source at all (see "Explicitly not going to happen" in
+`docs/future-ideas.md` for the URL-install case that's still rejected, but
+a hand-copied local plugin isn't), so "installed but no longer in source"
+isn't reliably a mistake the tooling can tell apart from an intentional one.
 
 Installed plugins live next to `wigl.db` in the per-OS app-data dir, one
 folder per plugin id. Only `package.json` (if present) and the entry file are
@@ -144,10 +165,12 @@ to keep them apart — more moving parts for the same result. If per-plugin
 duplication of a *shared* third-party library ever becomes a measured
 problem (not before), the fix shape is an opt-in host module for that
 specific library, same as `react`/`lucide-react` already are — not a shared
-build. `plugin:build:all`/`plugin:install:all` exist so "build/install
-everything" is one command instead of one per folder; that's the whole gap a
-heavier tool (a Turborepo-style workspace) would have closed, and it doesn't
-need one.
+build. Calling `plugin:build`/`plugin:install` with no dir argument builds
+or installs every widget folder in one pass; that's the whole gap a heavier
+tool (a Turborepo-style workspace) would have closed, and it doesn't need
+one. `bun run qa`/`bun run verify` already call `plugin:install` with no
+argument before launching, so a freshly-added or freshly-edited widget shows
+up without a separate install step.
 
 `plugin:check` matters more than it looks: a webview's console is invisible
 to `bun run verify` (see `docs/debugging.md`), so "the app launched cleanly"

@@ -1,9 +1,9 @@
 // useStorage — SQLite-backed persistent state, shared across widget windows
-// and external writers (e.g. `bun run calendar:add`). See ./client.ts for
-// the DB/table it reads and writes. External changes from another process
-// (a CLI script) are picked up by polling; changes from another wigl window
-// (another monitor's Desktop, or another widget) arrive near-instantly over
-// a broadcast event instead of waiting up to POLL_MS.
+// and external writers (e.g. `bun run --cwd wigl-widgets/calendar add`). See
+// ./client.ts for the DB/table it reads and writes. External changes from
+// another process (a CLI script) are picked up by polling; changes from
+// another wigl window (another monitor's Desktop, or another widget) arrive
+// near-instantly over a broadcast event instead of waiting up to POLL_MS.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { sql, sqlLiteral } from "../storage/client";

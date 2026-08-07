@@ -1,9 +1,12 @@
 {
-  "name": "wigl-widget-calendar",
-  "private": true,
-  "version": "0.1.0",
+  "$schema": "../plugin.schema.json",
   "dependencies": {
     "date-fns": "^4.4.0"
+  },
+  "scripts": {
+    "add": "bun cli.ts add",
+    "list": "bun cli.ts list",
+    "rm": "bun cli.ts rm"
   },
   "wigl": {
     "permissions": ["storage"]

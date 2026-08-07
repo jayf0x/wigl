@@ -3,24 +3,38 @@
 // (see AGENTS.md's "server lifecycle" section for the tradeoffs of this
 // choice, and what a multi-monitor / multi-instance setup would need).
 import { useEffect, useRef, useState } from "react";
-import { listOllamaModels } from "./ollama";
-import { syncOllamaModels } from "./opencodeConfig";
+import { listOllamaModels, modelSupportsThinking } from "./ollama";
+import { disableSkillTool, type OllamaModelSync, syncOllamaModels } from "./opencodeConfig";
 import { type OpencodeServerHandle, startOpencodeServer } from "./serverProcess";
 
 export type ServerStatus = "connecting" | "online" | "offline";
 
 // Config isn't hot-reloaded (verified live — see opencodeConfig.ts), so
-// whatever Ollama models exist must be synced into opencode's config
-// *before* `serve` starts, not after. Best-effort and time-boxed: Ollama
-// might not even be running, and this must never hang the server startup
-// waiting for it.
+// whatever Ollama models exist (and their thinking capability, so
+// opencodeConfig.ts knows which get a reasoning-effort `variants` block —
+// see Composer.tsx) must be resolved *before* `serve` starts, not after.
+// Best-effort and time-boxed as a whole: Ollama might not even be running,
+// and this must never hang the server startup waiting for it.
 const OLLAMA_SYNC_TIMEOUT_MS = 2000;
-const syncOllamaBeforeStart = async () => {
+
+const prepareOllamaModelSync = async (): Promise<OllamaModelSync[]> => {
+  const names = await listOllamaModels();
+  return Promise.all(names.map(async (name) => ({ name, thinking: await modelSupportsThinking(name) })));
+};
+
+// Sequential, not parallel: both steps read-modify-write the same
+// opencode.jsonc, and running them concurrently would race (the second
+// write could silently clobber the first). Neither is Ollama-availability
+// dependent for the skill-tool step, so only the model sync half gets the
+// timeout race — disabling the skill tool is a local file write with
+// nothing external to hang on.
+const syncConfigBeforeStart = async () => {
   const models = await Promise.race([
-    listOllamaModels(),
-    new Promise<string[]>((resolve) => setTimeout(() => resolve([]), OLLAMA_SYNC_TIMEOUT_MS)),
+    prepareOllamaModelSync(),
+    new Promise<OllamaModelSync[]>((resolve) => setTimeout(() => resolve([]), OLLAMA_SYNC_TIMEOUT_MS)),
   ]);
   if (models.length > 0) await syncOllamaModels(models).catch((e) => console.error("[LocalCode]", e));
+  await disableSkillTool().catch((e) => console.error("[LocalCode]", e));
 };
 
 // `directory` is where opencode's sessions actually get scoped — see
@@ -38,7 +52,7 @@ export const useOpencodeServer = (directory: string | null) => {
     if (!directory) return;
     let cancelled = false;
     setStatus("connecting");
-    syncOllamaBeforeStart()
+    syncConfigBeforeStart()
       .catch(() => {})
       .then(() => {
         if (cancelled) return undefined;

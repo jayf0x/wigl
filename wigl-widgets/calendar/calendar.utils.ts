@@ -6,7 +6,7 @@ export interface CalendarEvent {
   description?: string;
 }
 
-// Same kv key the CLI writes (scripts/calendar.ts) — keep them in sync.
+// Same kv key the CLI writes (cli.ts) — keep them in sync.
 export const EVENTS_STORAGE_KEY = "calendar_events";
 
 // Deterministic color from the event's first two chars — same label, same color.

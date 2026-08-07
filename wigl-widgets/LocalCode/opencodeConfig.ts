@@ -30,6 +30,11 @@ const writeRaw = async (path: string, content: string): Promise<void> => {
   if (out.code !== 0) throw new Error(out.stderr || "failed to write opencode config");
 };
 
+interface OpencodeModelConfig {
+  name?: string;
+  variants?: Record<string, { reasoningEffort: string }>;
+}
+
 interface OpencodeConfigShape {
   provider?: Record<
     string,
@@ -37,44 +42,84 @@ interface OpencodeConfigShape {
       npm?: string;
       name?: string;
       options?: { baseURL?: string };
-      models?: Record<string, { name?: string }>;
+      models?: Record<string, OpencodeModelConfig>;
     }
   >;
+  tools?: Record<string, boolean>;
   [key: string]: unknown;
 }
 
-/** Adds any of `modelNames` that aren't already declared under the ollama
- * provider block, creating that block if it doesn't exist yet. Never
- * removes a model — one pulled via `ollama rm` just stops being offered
- * from Ollama's own list, and quietly stays declared in opencode's config
- * (harmless: opencode just can't reach it, same as any misconfigured
- * model). Returns whether the file was actually written, so the caller
- * knows whether an `opencode serve` restart is needed to pick it up (config
- * is NOT hot-reloaded — verified live: editing the file while a server was
- * already running had no effect until restart). Fails safe: a config file
- * that isn't valid JSON (e.g. a user added real `//` comments — this repo
- * doesn't bundle a JSONC-comment-aware parser, see AGENTS.md) is left
- * untouched rather than risking a corrupting rewrite. */
-export const syncOllamaModels = async (modelNames: string[]): Promise<boolean> => {
-  if (modelNames.length === 0) return false;
-  const path = await configPath();
+/** Shared read+parse for every config-mutating step below — same fail-safe
+ * rule everywhere: a config file that isn't plain JSON (e.g. a user added
+ * real `//` comments — this repo doesn't bundle a JSONC-comment-aware
+ * parser, see AGENTS.md) is left untouched rather than risking a
+ * corrupting rewrite, and every caller must handle a `null` result the same
+ * way (skip the sync, log why). */
+const readConfig = async (path: string): Promise<OpencodeConfigShape | null> => {
   const raw = await readRaw(path);
-
-  let config: OpencodeConfigShape;
   try {
-    config = raw ? (JSON.parse(raw) as OpencodeConfigShape) : { $schema: "https://opencode.ai/config.json" };
+    return raw ? (JSON.parse(raw) as OpencodeConfigShape) : { $schema: "https://opencode.ai/config.json" };
   } catch (e) {
-    console.error("[LocalCode] opencode.jsonc isn't plain JSON — skipping Ollama model sync", e);
-    return false;
+    console.error("[LocalCode] opencode.jsonc isn't plain JSON — skipping config sync", e);
+    return null;
   }
+};
+
+export interface OllamaModelSync {
+  name: string;
+  /** From `ollama.ts`'s `modelSupportsThinking` — decides whether this
+   * model's config entry gets a `variants` block at all (see below). */
+  thinking: boolean;
+}
+
+// The two effort levels this widget's UI offers (see Composer.tsx) — opencode's
+// own docs describe `variants` as generic per-model overrides ("override
+// existing variants or add your own"), keyed by whatever label the config
+// author picks, with `reasoningEffort` as the field it forwards to the
+// provider. Picking exactly these two keys keeps `Composer.tsx`'s dropdown
+// contract simple (a fixed High/Low pair when present, nothing when not)
+// rather than surfacing whatever ad-hoc variant names a provider happens to
+// define — not verified live whether `reasoningEffort` actually changes
+// Ollama's own `think` behavior through the `openai-compatible` bridge (see
+// TODO.md); this is the best-supported mechanism available without
+// vendoring Ollama-specific request handling into this widget.
+const REASONING_VARIANTS: Record<string, { reasoningEffort: string }> = {
+  high: { reasoningEffort: "high" },
+  low: { reasoningEffort: "low" },
+};
+
+/** Adds any of `models` that aren't already declared under the ollama
+ * provider block, creating that block if it doesn't exist yet, and gives a
+ * thinking-capable model's entry a `variants` block if it doesn't have one
+ * yet (covers both a brand-new model and one synced by an older version of
+ * this function before `variants` existed here). Never removes a model or a
+ * variant once written — one pulled via `ollama rm` just stops being
+ * offered from Ollama's own list, and quietly stays declared in opencode's
+ * config (harmless: opencode just can't reach it, same as any
+ * misconfigured model). Returns whether the file was actually written, so
+ * the caller knows whether an `opencode serve` restart is needed to pick it
+ * up (config is NOT hot-reloaded — verified live: editing the file while a
+ * server was already running had no effect until restart). Fails safe: a
+ * config file that isn't valid JSON (e.g. a user added real `//` comments —
+ * this repo doesn't bundle a JSONC-comment-aware parser, see AGENTS.md) is
+ * left untouched rather than risking a corrupting rewrite. */
+export const syncOllamaModels = async (models: OllamaModelSync[]): Promise<boolean> => {
+  if (models.length === 0) return false;
+  const path = await configPath();
+  const config = await readConfig(path);
+  if (!config) return false;
 
   config.provider ??= {};
   const existing = config.provider[OLLAMA_PROVIDER_ID];
-  const models = { ...existing?.models };
+  const configuredModels = { ...existing?.models };
   let changed = !existing;
-  for (const name of modelNames) {
-    if (!(name in models)) {
-      models[name] = { name };
+  for (const { name, thinking } of models) {
+    const entry = configuredModels[name];
+    if (!entry) {
+      configuredModels[name] = thinking ? { name, variants: REASONING_VARIANTS } : { name };
+      changed = true;
+    } else if (thinking && !entry.variants) {
+      configuredModels[name] = { ...entry, variants: REASONING_VARIANTS };
       changed = true;
     }
   }
@@ -84,9 +129,32 @@ export const syncOllamaModels = async (modelNames: string[]): Promise<boolean> =
     npm: existing?.npm ?? "@ai-sdk/openai-compatible",
     name: existing?.name ?? "Ollama (local)",
     options: { baseURL: existing?.options?.baseURL ?? OLLAMA_BASE_URL },
-    models,
+    models: configuredModels,
   };
 
+  await writeRaw(path, JSON.stringify(config, null, 2));
+  return true;
+};
+
+/** Sets the global `tools.skill: false` in opencode's config — verified
+ * live (`opencode agent list`'s permission dump lists an `external_directory`
+ * allow-rule for `~/.claude/skills/<name>/*` with zero wigl-side config)
+ * that opencode discovers and offers Claude Code's own `~/.claude/skills/`
+ * `SKILL.md` files to every agent by default, this widget included. Small
+ * local models handle those skills badly (see AGENTS.md's "Skills" note) —
+ * until that's revisited, disabling the tool globally is simpler and safer
+ * than trying to strip it per-agent, since this widget doesn't own opencode's
+ * agent definitions (`build`, `plan`, or any custom agent a user has
+ * installed via `opencode plugin`) and has no business rewriting them.
+ * Idempotent — a no-op (and no file write) once already set. Same
+ * not-hot-reloaded / fails-safe-on-non-JSON rules as `syncOllamaModels`. */
+export const disableSkillTool = async (): Promise<boolean> => {
+  const path = await configPath();
+  const config = await readConfig(path);
+  if (!config) return false;
+  if (config.tools?.skill === false) return false;
+
+  config.tools = { ...config.tools, skill: false };
   await writeRaw(path, JSON.stringify(config, null, 2));
   return true;
 };

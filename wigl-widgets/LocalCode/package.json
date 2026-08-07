@@ -1,7 +1,5 @@
 {
-  "name": "wigl-widget-localcode",
-  "private": true,
-  "version": "0.1.0",
+  "$schema": "../plugin.schema.json",
   "wigl": {
     "permissions": ["storage", "command", "filesystem"]
   }

@@ -148,8 +148,11 @@ restart. So the sync must run *before* `startOpencodeServer()`, not after
 — `useOpencodeServer.ts` does exactly that, best-effort and time-boxed
 (`OLLAMA_SYNC_TIMEOUT_MS`, currently 2s) so a not-yet-running Ollama never
 blocks the widget from starting. A model pulled mid-session needs a manual
-restart (the button in `ServerStatusBar.tsx`) to show up — see `TODO.md`
-for the auto-detect-and-restart follow-up.
+restart to show up — `useOpencodeServer.ts`'s `restart()` still exists for
+this, though the button that called it (`ServerStatusBar.tsx`) was removed
+along with the rest of the always-on status UI, see TODO.md's "status
+polling removed" entry — for the auto-detect-and-restart follow-up, see
+`TODO.md`'s item 3.
 
 `opencodeConfig.ts` uses plain `JSON.parse`/`stringify`, not a real JSONC
 parser — no widget bundles its own npm dependency yet (every widget's
@@ -168,6 +171,75 @@ active out of the box with zero setup, which is what made model selection
 read as "predefined" rather than "reliant on Ollama" before this existed.
 Add Claude Code (or any other backend) to that list, not a special case,
 when it's wired up.
+
+### Reasoning-effort dropdown: why it used to stay disabled for every model
+
+`syncOllamaModels()` originally wrote `models[name] = { name }` and nothing
+else — no `variants` field, ever, for any Ollama model. `Composer.tsx`'s
+effort `<Select>` only enables when the selected model's catalog entry has
+a `variants` map (see the top comment there), so with every synced model
+missing one, the control was permanently disabled regardless of which model
+was picked — not a per-model bug, a structural one. Fixed: `ollama.ts`'s
+`modelSupportsThinking(name)` calls Ollama's own `POST /api/show` and checks
+whether `"thinking"` is in the returned `capabilities` array (verified
+live: present for `qwen3.5:0.8b`, absent for `smollm:135m`), cached per
+model name for the process lifetime. `useOpencodeServer.ts`'s
+`prepareOllamaModelSync()` resolves this for every installed model
+(parallelized, still inside the same `OLLAMA_SYNC_TIMEOUT_MS` budget as the
+rest of the sync) and hands `{ name, thinking }` pairs to
+`syncOllamaModels()`, which now writes a fixed `variants: { high: {
+reasoningEffort: "high" }, low: { reasoningEffort: "low" } }` block for any
+model that came back thinking-capable — and, on an existing config from
+before this fix, patches that block onto an already-declared model entry
+that's missing one, so nobody needs to delete `opencode.jsonc` by hand to
+pick this up.
+
+**Not verified live**: whether `reasoningEffort` in a `variants` entry
+actually changes what Ollama does for a request routed through opencode's
+generic `openai-compatible` provider (i.e. whether picking "High" vs "Low"
+in the UI produces a measurably different reasoning trace), as opposed to
+being a value opencode forwards that the provider silently ignores. This is
+the best-supported mechanism available (opencode's own docs describe
+`variants` as generic, provider-agnostic per-model overrides you can "add
+your own" of) but wasn't confirmed with a live SSE trace the way every
+other claim in this section was — what *is* fixed and confirmed is the UI
+bug: the dropdown now correctly enables only for thinking-capable models
+and offers exactly High/Low/Off (Off is a real selectable item now, not
+just the unset default — see `Composer.tsx`). To confirm the deeper claim:
+run the same seeded prompt through a live `opencode serve` with `variant:
+"high"` vs `variant: "low"` against a thinking model and diff the
+`reasoning` part's length/content in the SSE trace.
+
+## Skills — disabled for now
+
+opencode discovers and offers **the same Agent Skills Claude Code uses**
+automatically — `~/.claude/skills/<name>/SKILL.md`, no wigl-side config,
+confirmed live via `opencode agent list`'s permission dump listing an
+`external_directory` allow-rule for a skill folder under `~/.claude/skills/`
+before this widget had written anything about skills at all. This closes
+the "unconfirmed" question the old backlog entry here used to raise.
+
+Owner feedback: small local models (the only kind this widget targets —
+`ALLOWED_PROVIDER_IDS` is Ollama-only, see "Model catalog" above) don't
+handle these skills the way Claude Code itself does and "get kinds nuts"
+from them — a skill written and tuned for a frontier model's instruction-
+following isn't something a `smollm:135m`/`qwen3.5:0.8b`-class model can
+reliably parse and act on. `opencodeConfig.ts`'s `disableSkillTool()` now
+sets `tools.skill: false` globally in `opencode.jsonc` before `serve`
+starts (same not-hot-reloaded rule as the Ollama model sync above) — global
+rather than per-agent because this widget doesn't own opencode's agent
+definitions (`build`, `plan`, or any custom agent installed via `opencode
+plugin`, e.g. a `cavecrew-*` set already present on the machine this was
+verified against) and has no business rewriting someone else's agent
+config just to reach into `build`'s tool list.
+
+**This needs revisiting, not left disabled forever.** The right fix isn't
+"never give a local model skills," it's matching the skill (and how it's
+presented — shorter, more directive, fewer implicit assumptions about
+prior context) to what a small model can actually follow. That's a real
+piece of design work with no concrete spec yet — don't build a "smart"
+skill-filtering system speculatively; wait for a concrete direction on
+what a local-model-appropriate skill should look like.
 
 ## Housekeeper model
 
@@ -358,14 +430,12 @@ summarized here, not duplicated in detail:
 
 1. **Branching** — fork instead of revert (`/session/{id}/fork` exists,
    unused). Explicitly called out as "a nice addon" in scoping, not core.
-2. **Skills.** Owner's framing: "can just use active Claude Code skills, no
-   need to add extra logic" — opencode reads `SKILL.md` files itself if
-   they're on disk in the project directory (same convention Claude Code
-   uses), so this may already work with zero widget code once verified
-   against a real project with a `.claude/skills/` or equivalent folder.
-   Confirm opencode's actual skill-discovery path before assuming this is
-   free — not verified during this build (would have required running a
-   real prompt against a real skill).
+2. **Skills — confirmed, then disabled.** Superseded by the dedicated
+   "Skills — disabled for now" section above: opencode's own `SKILL.md`
+   discovery is confirmed live (no widget code needed for that part, as
+   originally hoped), but small local models handle those skills badly, so
+   `opencodeConfig.ts` now disables the skill tool globally until the
+   skill-matching-a-small-model design question above has an answer.
 3. **Sub-agent visibility beyond the inline `subtask` part.**
    `/session/{id}/children` (child sessions spawned by the current one) is
    in `client.ts`'s reach but nothing calls it — a real sub-agent view

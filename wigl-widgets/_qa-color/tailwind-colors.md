@@ -1,6 +1,6 @@
-# Tailwind color inventory + qa-colors widget
+# Tailwind color inventory + _qa-color widget
 
-Written while building the `qa-colors` widget (`wigl-widgets/qa-colors/`) so the
+Written while building the `_qa-color` widget (`wigl-widgets/_qa-color/`) so the
 theming work (`src/wigl/theme/`) has a live surface to check "which value
 changed, which should, which shouldn't" against. Regenerate the palette JSON
 with `bun run tw-colors` if `tailwindcss` ever gets bumped (it dumps
@@ -38,7 +38,7 @@ primary, primaryForeground, secondary, secondaryForeground, muted,
 mutedForeground, accent, accentForeground, destructive, border, input, ring,
 wiglAccent`
 
-All 19 are exercised in the qa-colors widget's "Theme tokens" tab. Notes:
+All 19 are exercised in the _qa-color widget's "Theme tokens" tab. Notes:
 
 - `destructive` is deliberately **not** derived from the 3 parametric knobs
   (`parametric.ts`'s comment: "danger shouldn't change meaning because the
@@ -66,7 +66,7 @@ vars straight into `src/App.css`'s `:root`/`.dark` blocks, outside
 
 These are fixed references to raw Tailwind palette shades (`var(--color-red-700)`,
 `var(--color-emerald-500)`, ...) and do **not** move with the active theme —
-confirmed by the dashed-outline "Status" group in the qa-colors widget, which
+confirmed by the dashed-outline "Status" group in the _qa-color widget, which
 stays put while every other swatch changes. Badge variants `error`/`info`/
 `success`/`warning` and any future coss ui component that reads `--warning`
 etc. will silently ignore theme switches.
@@ -89,7 +89,7 @@ and isn't. Pick one.
 ## Raw Tailwind palette (from `node_modules/tailwindcss/theme.css`)
 
 28 families, 11 shades each (50–950) except `black`/`white` (single value).
-Full JSON: `wigl-widgets/qa-colors/tw-colors.generated.json`.
+Full JSON: `wigl-widgets/_qa-color/tw-colors.generated.json`.
 
 Standard Tailwind v4 families (22): `red, orange, amber, yellow, lime, green,
 emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose,

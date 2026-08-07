@@ -1,13 +1,23 @@
 // Prompt input + the per-turn controls (model, agent, reasoning effort).
-// Effort is only offered when the selected model actually has `variants`
-// (see AGENTS.md — "thinking effort comes from the model, not a fixed
-// enum") so this never shows a control the model can't honor.
+// Effort is only offered when the selected model actually has `variants` —
+// for an Ollama model that's opencodeConfig.ts's own High/Low pair, written
+// only for models `ollama show` reports as thinking-capable (see
+// ollama.ts's `modelSupportsThinking`); for any other provider it's
+// whatever opencode itself declares. Either way this renders exactly the
+// declared keys, it never invents a control the model doesn't have — see
+// AGENTS.md's "thinking effort comes from the model, not a fixed enum".
 import { useEffect, useMemo, useState } from "react";
 import { Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentDef, ModelSelection, ProviderCatalogEntry } from "../types";
+
+// "off" is a UI-only sentinel — never sent as `variant` (see onValueChange
+// below), just what the Select needs for its own "no effort override"
+// item, since a Select item can't have an empty-string value.
+const EFFORT_OFF = "off";
+const REASONING_EFFORT_LABELS: Record<string, string> = { high: "High", low: "Low" };
 
 export const Composer = ({
   agents,
@@ -41,6 +51,12 @@ export const Composer = ({
     [providers],
   );
   const selectedModel = modelOptions.find((m) => m.providerID === model?.providerID && m.id === model?.modelID);
+  // Keys opencodeConfig.ts's `syncOllamaModels` actually writes ("high"/
+  // "low") for a thinking-capable Ollama model — a model with no `variants`
+  // at all (declared by opencode itself for a non-Ollama provider, or an
+  // Ollama model `ollama show` reported as non-thinking) has no effort
+  // control, full stop; this widget doesn't invent options a model doesn't
+  // have. See REASONING_EFFORT_LABELS below for how a key becomes UI text.
   const variantOptions = selectedModel?.variants ? Object.keys(selectedModel.variants) : [];
 
   // With ALLOWED_PROVIDER_IDS scoped to Ollama alone, there's often exactly
@@ -97,19 +113,22 @@ export const Composer = ({
             appears for some models reads as broken, not as "not
             applicable". Disabled + a placeholder explaining why communicates
             "this model has no reasoning-effort control" instead of hiding
-            the concept outright. */}
+            the concept outright. "Off" is a real, selectable item (not just
+            the unset default) — the only way back to no-effort-override
+            once you've picked High/Low for a session. */}
         <Select
-          value={variantOptions.length > 0 ? (variant ?? undefined) : undefined}
-          onValueChange={(v) => onVariantChange(String(v))}
+          value={variantOptions.length > 0 ? (variant ?? EFFORT_OFF) : undefined}
+          onValueChange={(v) => onVariantChange(v === EFFORT_OFF ? undefined : String(v))}
           disabled={variantOptions.length === 0}
         >
           <SelectTrigger className="h-6 w-auto max-w-28 px-2 text-[10.5px]">
             <SelectValue placeholder={variantOptions.length > 0 ? "thinking: effort" : "thinking: n/a"} />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value={EFFORT_OFF}>thinking: off</SelectItem>
             {variantOptions.map((v) => (
               <SelectItem key={v} value={v}>
-                thinking: {v}
+                thinking: {REASONING_EFFORT_LABELS[v] ?? v}
               </SelectItem>
             ))}
           </SelectContent>

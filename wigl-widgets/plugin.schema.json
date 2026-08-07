@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "wigl widget package.json",
+  "description": "Only the fields resolvePluginConfig (src/wigl/plugins/types.ts) actually reads, plus plain bun-run scripts. No npm publish metadata — a widget's id is its folder name, never this file, and it's never published. See docs/plugins.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "main": {
+      "type": "string",
+      "description": "Overrides the built entry path. Defaults to .wigl/index.js."
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "npm dependencies bundled into this plugin's own build.",
+      "additionalProperties": { "type": "string" }
+    },
+    "scripts": {
+      "type": "object",
+      "description": "bun-run scripts local to this widget (e.g. a CLI companion). Not read by the plugin loader/build — plain bun convention, invoked with `bun run --cwd wigl-widgets/<name> <script>`.",
+      "additionalProperties": { "type": "string" }
+    },
+    "wigl": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "permissions": {
+          "type": "array",
+          "items": {
+            "enum": ["storage", "command", "filesystem", "network"]
+          }
+        }
+      }
+    }
+  }
+}

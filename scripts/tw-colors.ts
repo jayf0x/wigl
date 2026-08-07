@@ -1,7 +1,7 @@
 // Extracts every `--color-*` custom property Tailwind v4 ships in its own
 // theme.css (the only place the full palette + OKLCH values live — there's
 // no API for this) and prints it as JSON: { family: { shade: cssValue } }.
-// Used by the qa-colors widget's build step isn't needed — the widget
+// Used by the _qa-color widget's build step isn't needed — the widget
 // imports this data as a plain generated JSON file (see `bun run tw-colors`).
 import { readFileSync } from "node:fs";
 

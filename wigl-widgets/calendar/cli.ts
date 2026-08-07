@@ -2,17 +2,17 @@
 // uses via useStorage (src/wigl/storage.ts). The widget polls the DB, so
 // changes made here appear in the open widget within a few seconds.
 //
-//   bun run calendar:add "2027-12-12" "some event" [HH:MM] [description]
-//   bun run calendar:list
-//   bun run calendar:rm <id-prefix>
+//   bun run --cwd wigl-widgets/calendar add "2027-12-12" "some event" [HH:MM] [description]
+//   bun run --cwd wigl-widgets/calendar list
+//   bun run --cwd wigl-widgets/calendar rm <id-prefix>
 //
 // Dates also accepted as DD/MM/YYYY or MM/DD/YYYY-ambiguous "12/12/2027".
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { APP_IDENTIFIER } from "../src/config/app";
-import { EVENTS_STORAGE_KEY, type CalendarEvent } from "../wigl-widgets/calendar/calendar.utils";
+import { APP_IDENTIFIER } from "../../src/config/app";
+import { EVENTS_STORAGE_KEY, type CalendarEvent } from "./calendar.utils";
 
 // No Tauri runtime here, so no appDataDir() call — reconstruct the same path
 // Tauri resolves at runtime, by hand, per OS.
@@ -54,7 +54,7 @@ switch (cmd) {
   case "add": {
     const [dateArg, title, time, description] = args;
     if (!dateArg || !title) {
-      console.error('Usage: bun run calendar:add "2027-12-12" "some event" [HH:MM] [description]');
+      console.error('Usage: bun run --cwd wigl-widgets/calendar add "2027-12-12" "some event" [HH:MM] [description]');
       process.exit(1);
     }
     const ev: CalendarEvent = { id: crypto.randomUUID(), title, date: parseDate(dateArg), time, description };
@@ -73,7 +73,11 @@ switch (cmd) {
     const events = read();
     const matches = prefix ? events.filter((e) => e.id.startsWith(prefix)) : [];
     if (matches.length !== 1) {
-      console.error(matches.length ? `Ambiguous id prefix "${prefix}"` : `No event matching "${prefix ?? ""}" — see calendar:list`);
+      console.error(
+        matches.length
+          ? `Ambiguous id prefix "${prefix}"`
+          : `No event matching "${prefix ?? ""}" — see bun run --cwd wigl-widgets/calendar list`,
+      );
       process.exit(1);
     }
     write(events.filter((e) => e.id !== matches[0].id));
@@ -81,6 +85,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.error("Usage: calendar:add | calendar:list | calendar:rm");
+    console.error("Usage: add | list | rm");
     process.exit(1);
 }

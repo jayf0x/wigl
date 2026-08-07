@@ -1,22 +1,8 @@
-// Reachability only (see AGENTS.md's decisions log for why start/stop is
-// deferred) — this widget never starts or stops Ollama itself, just shows
-// whether it's there so the model picker can grey out `ollama/*` entries.
-import { useEffect, useRef, useState } from "react";
-
+// Reachability/metadata reads against Ollama's local API — no polling here
+// (see TODO.md's "status polling removed" entry for why the old always-on
+// status UI and its poll loop are gone; a real error surface is future
+// work, not this file's job).
 const OLLAMA_BASE = "http://127.0.0.1:11434";
-const POLL_MS = 10_000;
-
-export const checkOllamaOnline = async (): Promise<boolean> => {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1500);
-    const res = await fetch(`${OLLAMA_BASE}/api/tags`, { signal: controller.signal });
-    clearTimeout(timer);
-    return res.ok;
-  } catch {
-    return false;
-  }
-};
 
 /** Names as Ollama itself reports them (e.g. `"smollm:135m"`) — these are
  * exactly the ids opencodeConfig.ts's `syncOllamaModels` needs, since a
@@ -32,20 +18,31 @@ export const listOllamaModels = async (): Promise<string[]> => {
   }
 };
 
-export const useOllamaStatus = () => {
-  const [online, setOnline] = useState<boolean | null>(null);
-  const mounted = useRef(true);
+// Process-lifetime cache: a model's capabilities don't change without a
+// re-pull, and this widget has no signal for that happening mid-session
+// anyway (same ceiling `useOpencodeServer`'s config sync already accepts —
+// see TODO.md's "Ollama model catalog" entry).
+const thinkingCache = new Map<string, boolean>();
 
-  useEffect(() => {
-    mounted.current = true;
-    const poll = () => checkOllamaOnline().then((v) => mounted.current && setOnline(v));
-    poll();
-    const id = setInterval(poll, POLL_MS);
-    return () => {
-      mounted.current = false;
-      clearInterval(id);
-    };
-  }, []);
-
-  return online;
+/** Whether Ollama reports `"thinking"` in `POST /api/show`'s `capabilities`
+ * array for this model — verified live (`ollama show <model>` / the same
+ * endpoint): present for a real reasoning model (e.g. `qwen3.5:0.8b`),
+ * absent for a plain one (e.g. `smollm:135m`). This is the ground truth for
+ * "does this model have a reasoning-effort control at all" — opencode's own
+ * `/config/providers` has no such signal for a custom `openai-compatible`
+ * provider unless `opencodeConfig.ts` puts a `variants` block in config
+ * first, which is what this is for. */
+export const modelSupportsThinking = async (modelName: string): Promise<boolean> => {
+  const cached = thinkingCache.get(modelName);
+  if (cached !== undefined) return cached;
+  const supports = await fetch(`${OLLAMA_BASE}/api/show`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: modelName }),
+  })
+    .then((r) => (r.ok ? (r.json() as Promise<{ capabilities?: string[] }>) : null))
+    .then((d) => d?.capabilities?.includes("thinking") ?? false)
+    .catch(() => false);
+  thinkingCache.set(modelName, supports);
+  return supports;
 };

@@ -4,10 +4,8 @@ import { useStorage } from "@/wigl/hooks";
 import { homeDir } from "@/wigl/utils";
 import { Sidebar } from "./components/Sidebar";
 import { SessionPanel } from "./components/SessionPanel";
-import { ServerStatusBar } from "./components/ServerStatusBar";
 import { DEFAULT_HOUSEKEEPER_MODEL, STORAGE_KEYS } from "./config";
 import { useModelCatalog } from "./useModelCatalog";
-import { useOllamaStatus } from "./ollama";
 import { useOpencodeServer } from "./useOpencodeServer";
 import { useSessions } from "./useSessions";
 import type { ModelSelection } from "./types";
@@ -15,8 +13,11 @@ import type { ModelSelection } from "./types";
 const LocalCodeWidget = () => {
   const [activeID, setActiveID] = useState<string | null>(null);
   const [defaultDir, setDefaultDir] = useStorage<string>("localcode_default_dir", "");
-  const { status: opencodeStatus, baseUrl, restart } = useOpencodeServer(defaultDir || null);
-  const ollamaOnline = useOllamaStatus();
+  // `status`/`restart` are unused now that ServerStatusBar is gone (see
+  // TODO.md's "status polling removed" entry) — `useOpencodeServer` still
+  // returns them for whenever the shared error-overlay component that
+  // entry describes gets built.
+  const { baseUrl } = useOpencodeServer(defaultDir || null);
   const { sessions, createSession, renameSession, togglePin, deleteSession } = useSessions(baseUrl, defaultDir || null);
   const catalog = useModelCatalog(baseUrl);
   const [housekeeperModel] = useStorage<ModelSelection>(STORAGE_KEYS.housekeeperModel, DEFAULT_HOUSEKEEPER_MODEL);
@@ -65,7 +66,6 @@ const LocalCodeWidget = () => {
         />
         <SessionPanel baseUrl={baseUrl} sessionID={activeID} catalog={catalog} housekeeper={housekeeper} />
       </div>
-      <ServerStatusBar opencodeStatus={opencodeStatus} ollamaOnline={ollamaOnline} onRestartOpencode={restart} />
     </Widget>
   );
 };
