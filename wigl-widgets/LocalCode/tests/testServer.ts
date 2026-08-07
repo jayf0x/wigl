@@ -6,12 +6,29 @@
 // plain helper is imported by the *.test.ts files in this folder without
 // being run as a suite itself.
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 const PORT_RE = /listening on http:\/\/127\.0\.0\.1:(\d+)/;
 const CONFIG_PATH = join(homedir(), ".config", "opencode", "opencode.jsonc");
 const OLLAMA_TAGS_URL = "http://localhost:11434/api/tags";
+
+// opencode's session store is one global SQLite DB shared by every `opencode
+// serve` invocation on the machine, keyed by project *directory* — not
+// per-server-instance or per-test-run (verified live: 30+ leftover test
+// sessions from writing this suite all showed up in the real widget's
+// sidebar, because it queried `/session` with no directory filter). Test
+// sessions must live under a directory nobody would ever point the real
+// widget at, and `client.ts`'s `listSessions(baseUrl, directory)` scopes the
+// real widget to its own working directory — so as long as this constant
+// and a real user's directory never collide, a leaked test session (this
+// suite still cleans up after itself; this is defense in depth) can never
+// show up next to real sessions.
+export const SCRATCH_DIRECTORY = join(tmpdir(), "wigl-localcode-e2e-tests");
+
+/** Creates `SCRATCH_DIRECTORY` on disk — opencode's session creation isn't
+ * guaranteed to work against a directory that doesn't exist. */
+export const ensureScratchDirectory = (): Promise<void> => mkdir(SCRATCH_DIRECTORY, { recursive: true }).then();
 
 // Fixed seed + greedy decoding + a small output cap: the point isn't
 // realistic chat behavior, it's a reply short and stable enough to assert
@@ -157,12 +174,22 @@ export interface TestServer {
   stop: () => void;
 }
 
-/** Spawns a real `opencode serve` on a random port (config must already be
- * in place — see `withDeterministicModels` — opencode.jsonc is read once at
- * startup, not hot-reloaded, confirmed live during the original build). */
+/** Spawns a real `opencode serve` on a random port, rooted at
+ * `SCRATCH_DIRECTORY` — config must already be in place (see
+ * `withDeterministicModels`, opencode.jsonc is read once at startup, not
+ * hot-reloaded) and the directory must already exist (see
+ * `ensureScratchDirectory`). `cwd` isn't cosmetic here: opencode ties every
+ * session created through this process to *this process's own working
+ * directory*, ignoring whatever `directory` a `POST /session` request body
+ * asks for — see serverProcess.ts's `startOpencodeServer` doc comment for
+ * the live trace that found this. Spawning without it would put every test
+ * session wherever `bun test` itself happened to be run from (this repo's
+ * root, in practice) — exactly the real-session pollution this file exists
+ * to prevent. */
 export const startTestServer = (timeoutMs = 15_000): Promise<TestServer> =>
   new Promise((resolve, reject) => {
     const proc = Bun.spawn(["opencode", "serve", "--port", "0", "--hostname", "127.0.0.1"], {
+      cwd: SCRATCH_DIRECTORY,
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -193,3 +220,45 @@ export const startTestServer = (timeoutMs = 15_000): Promise<TestServer> =>
       }
     })();
   });
+
+export interface E2eSuite {
+  ready: boolean;
+  server: TestServer | null;
+  teardown: () => Promise<void>;
+}
+
+/** Shared top-level-await setup for an e2e test file: checks the required
+ * Ollama models are pulled, and if so, polyfills `EventSource`, points
+ * `opencode.jsonc` at deterministic decoding for those models, and spawns a
+ * real `opencode serve` rooted at `SCRATCH_DIRECTORY`. Split into
+ * `opencode.session.e2e.test.ts` (CRUD/error-shape checks, no real
+ * generation, seconds) and `opencode.generation.e2e.test.ts` (real model
+ * output, up to ~90s/turn) specifically so a change that only touches
+ * session/CRUD logic doesn't need to pay for a real generation to verify —
+ * see the owner note in AGENTS.md's Testing section on suite cost. Must be
+ * called from top-level `await` in the test file, not from `beforeAll` —
+ * see either file for why. */
+export const setupE2eSuite = async (requiredModels: string[]): Promise<E2eSuite> => {
+  const available = await Promise.all(requiredModels.map(isOllamaModelAvailable));
+  const ready = available.every(Boolean);
+
+  if (!ready) {
+    const missing = requiredModels.filter((_, i) => !available[i]);
+    console.warn(`[LocalCode e2e] skipping — Ollama models missing (ollama pull ${missing.join(" && ollama pull ")})`);
+    return { ready, server: null, teardown: async () => {} };
+  }
+
+  installEventSourcePolyfill();
+  await ensureScratchDirectory();
+  const restoreConfig = await withDeterministicModels(requiredModels);
+  const server = await startTestServer();
+
+  return {
+    ready,
+    server,
+    teardown: async () => {
+      server.stop();
+      await restoreConfig();
+    },
+  };
+};

@@ -21,8 +21,19 @@ export interface OpencodeServerHandle {
 /** Spawns `opencode serve` on a random local port and resolves once it's
  * confirmed listening. Rejects if none of the candidate binaries start
  * within `timeoutMs` — the caller (useOpencodeServer) turns that into an
- * "offline" status rather than a crash. */
-export const startOpencodeServer = (timeoutMs = 8000): Promise<OpencodeServerHandle> =>
+ * "offline" status rather than a crash.
+ *
+ * `cwd` matters more than it looks: opencode ties every session created
+ * through a given `serve` process to *that process's own working
+ * directory* — verified live that the `directory` field in a `POST
+ * /session` request body is silently ignored; the session's real
+ * `directory` (and thus which project bucket in opencode's global session
+ * store it lands in — see client.ts's `listSessions` doc comment) always
+ * matches wherever `serve` itself was launched from, not anything the
+ * client asked for. Omitting `cwd` here would leave every session this
+ * widget creates pinned to wherever the wigl app process's own cwd happens
+ * to be (arbitrary, and not the directory the widget's UI shows/uses). */
+export const startOpencodeServer = (cwd: string, timeoutMs = 8000): Promise<OpencodeServerHandle> =>
   new Promise((resolve, reject) => {
     let settled = false;
     let stopFn: (() => Promise<void>) | null = null;
@@ -56,6 +67,7 @@ export const startOpencodeServer = (timeoutMs = 8000): Promise<OpencodeServerHan
               resolve({ baseUrl: `http://127.0.0.1:${match[1]}`, stop });
             }
           },
+          { cwd },
         );
         stopFn = stop;
       } catch {

@@ -13,6 +13,7 @@ export const Sidebar = ({
   onCreate,
   onRename,
   onTogglePin,
+  onDelete,
 }: {
   sessions: SessionView[];
   activeID: string | null;
@@ -20,6 +21,7 @@ export const Sidebar = ({
   onCreate: () => void;
   onRename: (id: string, title: string) => void;
   onTogglePin: (id: string) => void;
+  onDelete: (id: string) => void;
 }) => {
   const [filter, setFilter] = useState("");
   const visible = filter.trim()
@@ -51,6 +53,7 @@ export const Sidebar = ({
               onSelect={() => onSelect(s.id)}
               onRename={(title) => onRename(s.id, title)}
               onTogglePin={() => onTogglePin(s.id)}
+              onDelete={() => onDelete(s.id)}
             />
           ))}
           {visible.length === 0 && <p className="px-2 py-4 text-center text-[10.5px] opacity-40">no sessions</p>}

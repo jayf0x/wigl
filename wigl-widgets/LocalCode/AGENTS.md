@@ -88,6 +88,26 @@ the primitive to reuse — don't add a second one.
 
 ## Server lifecycle — known rough edges
 
+- **A session's `directory` comes from the `serve` process's own cwd, not
+  from the request.** Verified live: `POST /session`'s `directory` field is
+  silently ignored — the session that comes back always has `directory`
+  set to wherever `opencode serve` itself was launched from, regardless of
+  what the request body asked for. opencode's session store is one global
+  SQLite DB (`~/.local/share/opencode/opencode.db`) shared by *every*
+  `opencode serve` invocation on the machine, keyed by that directory —
+  found this by writing the e2e suite: 30+ leftover test sessions all
+  showed up in the real widget's sidebar, because `GET /session` with no
+  `directory` query param returns every session for every directory ever
+  used, and `useSessions.ts` wasn't filtering. Fixed on both sides:
+  `startOpencodeServer(cwd, ...)` in `serverProcess.ts` now spawns with
+  `cwd` set to the widget's `defaultDir` (threaded from `index.tsx` through
+  `useOpencodeServer(directory)`, gated so the server doesn't spawn until
+  `defaultDir` actually resolves from `homeDir()`), and `client.ts`'s
+  `listSessions(baseUrl, directory)` / `useSessions.ts` scope both the
+  initial fetch and live `session.*` SSE events to that same directory.
+  `runCmdBackground` (`src/wigl/utils/index.ts`) gained an optional 4th
+  `options` param (`{ cwd }`, Tauri's `Command.create`'s own 3rd argument)
+  to make this possible — it didn't support any spawn options before.
 - One `opencode serve` process for the widget's lifetime, started on
   mount, killed on unmount (`useOpencodeServer.ts`). It is **not** shared
   across monitors/windows — each screen's `Desktop` is its own JS realm
@@ -205,6 +225,34 @@ built — see `TODO.md`.
   functional-core/imperative-shell rule). If you add a new event case, add
   it to `applyEvent` and a case to `tests/eventReducer.test.ts`, not
   directly into the hook.
+- **Editing a message mid-reply must be blocked, not just caught.**
+  Verified live: `POST /session/{id}/revert` returns `409 SessionBusyError`
+  while the session is still generating — reverting to an earlier message
+  to "edit and resend" it makes no sense mid-turn anyway, but the old code
+  let you try, and `editAndResend`'s rejected promise went nowhere (no
+  `.catch`, no visible feedback — reported as "editing a question gave an
+  error"). Fixed two ways: `MessageList.tsx` disables the per-message edit
+  trigger whenever `session.busy` (mirrors `Composer`'s own disabled state),
+  and `editAndResend` in `useActiveSession.ts` now catches a revert failure
+  into `session.error` as defense in depth against the race (busy flips
+  true between a click and the call landing). Regression coverage:
+  `tests/opencode.e2e.test.ts`'s "editing a question mid-reply" case.
+- **Session-level actions that already existed in the hooks had no UI.**
+  `useActiveSession.ts`'s `abort()` and `useSessions.ts`'s `deleteSession()`
+  were both fully implemented and completely unwired — no button called
+  either one. Owner feedback: "the UI still feels lazy... I expected more
+  features to already be implemented." Fixed: `Composer.tsx` swaps the send
+  button for a stop button (`onAbort`) whenever `busy`; `SessionRow.tsx` got
+  a hover-revealed delete button (confirms via `window.confirm` before
+  calling through `Sidebar` → `index.tsx`'s `handleDelete`, which also
+  clears `activeID` if the deleted session was the active one). Also added
+  in the same pass: `MessageList.tsx` auto-scrolls to the bottom on new
+  content (there was no scroll-following at all — a streaming reply was
+  invisible unless you kept scrolling manually), and the reasoning-effort
+  `<Select>` in `Composer.tsx` is now always rendered (disabled + a
+  "thinking: n/a" placeholder for non-reasoning models) instead of
+  disappearing outright when a model has no `variants` — a control that
+  only sometimes exists reads as broken, not as "not applicable".
 - **No diff view.** `PartRenderer.tsx`'s `patch` case is a one-line "N
   files changed" — deliberately not OpenGUI's `DiffView.tsx`. Owner's
   framing: don't rebuild what a real editor/git tool already does well: "no
@@ -254,29 +302,26 @@ built — see `TODO.md`.
 ## Testing
 
 `wigl-widgets/LocalCode/tests/*.test.ts` (`wigl test widgets` or
-`bun test wigl-widgets/LocalCode/tests`), two files:
+`bun test wigl-widgets/LocalCode/tests`), split by cost — **don't rerun the
+two `*.e2e.test.ts` files after every small edit**, they hit a real local
+model; owner feedback was explicit about this being a real resource cost,
+not just token spend. Reach for `eventReducer.test.ts` (instant) or
+`opencode.session.e2e.test.ts` (seconds, no real generation) while
+iterating; save `opencode.generation.e2e.test.ts` (can take over a minute)
+for a final pass once changes are batched.
 
 - `eventReducer.test.ts` — pure, no server needed, runs anywhere. Feeds
   synthetic (but shape-accurate, copied from real captured frames) SSE
   events through `applyEvent` and asserts on the resulting state. This is
-  where a new event case's logic gets tested, not the e2e file.
-- `opencode.e2e.test.ts` — spins a **real** `opencode serve` against
-  **real** Ollama models (`qwen3.5:0.8b`, `smollm:135m` — pull both to
-  unskip locally). `test.skipIf`'s condition is evaluated at module load,
-  before any `beforeAll` runs, so the Ollama-availability check and server
-  startup happen via top-level `await` at the top of the file, not inside
-  `beforeAll` — a `beforeAll`-gated `skipIf` always sees the pre-check
-  value and skips everything, silently. `tests/testServer.ts` holds the
-  shared helpers: `withDeterministicModels()` temporarily writes
-  `temperature: 0, seed: 42, num_predict: 64` into the two test models'
-  `opencode.jsonc` entries (backs up and restores the file exactly,
-  including deleting it if it didn't exist — production code must never
-  see forced-greedy decoding, only this test run should), and
-  `installEventSourcePolyfill()`/`subscribeEventsViaFetch()` work around
-  `EventSource` not existing as a global under `bun test` (confirmed:
-  `typeof EventSource === "undefined"` even mid-suite, unlike the real
-  Tauri webview) by re-parsing the same `data: {...}\n\n` SSE framing over
-  a raw `fetch` stream.
+  where a new event case's logic gets tested, not either e2e file.
+- `opencode.session.e2e.test.ts` — real `opencode serve`, but only session
+  CRUD/directory-scoping/error-shape assertions that don't wait on a real
+  model generation (an unknown-model turn fails fast, before ever reaching
+  Ollama). Cheap enough to run while iterating on anything that isn't
+  reply-generation logic itself.
+- `opencode.generation.e2e.test.ts` — the expensive half: real
+  `qwen3.5:0.8b` (a real thinking model, so reasoning content can be
+  asserted on) and `smollm:135m` (the housekeeper default) generations.
   Content is deterministic given the fixed seed, but **wall-clock isn't**
   — the same exact generation measured ~6s to ~50s across runs on one dev
   machine (Ollama serializes generation per model, `-np 1`, so GPU
@@ -284,6 +329,26 @@ built — see `TODO.md`.
   90s-per-turn timeout and the `abortSession` call on that timeout, so an
   abandoned request doesn't sit in Ollama's queue and slow down whatever
   runs next.
+
+Both e2e files need real Ollama models pulled (`qwen3.5:0.8b`,
+`smollm:135m`) and skip (not fail) otherwise. `test.skipIf`'s condition is
+evaluated at module load, before any `beforeAll` runs, so the
+Ollama-availability check and server startup happen via top-level `await`
+at the top of each file, not inside `beforeAll` — a `beforeAll`-gated
+`skipIf` always sees the pre-check value and skips everything, silently.
+`tests/testServer.ts` holds the shared setup (`setupE2eSuite()`, one call
+per file — each file spins its own server process rather than sharing one
+across files, simpler than a cross-file singleton and the startup cost is
+a few seconds, not the expensive part) and helpers:
+`withDeterministicModels()` temporarily writes `temperature: 0, seed: 42,
+num_predict: 64` into the two test models' `opencode.jsonc` entries (backs
+up and restores the file exactly, including deleting it if it didn't exist
+— production code must never see forced-greedy decoding, only a test run
+should), and `installEventSourcePolyfill()`/`subscribeEventsViaFetch()`
+work around `EventSource` not existing as a global under `bun test`
+(confirmed: `typeof EventSource === "undefined"` even mid-suite, unlike the
+real Tauri webview) by re-parsing the same `data: {...}\n\n` SSE framing
+over a raw `fetch` stream.
 
 ## Backlog (real features, not yet built)
 

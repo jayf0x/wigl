@@ -23,20 +23,26 @@ const syncOllamaBeforeStart = async () => {
   if (models.length > 0) await syncOllamaModels(models).catch((e) => console.error("[LocalCode]", e));
 };
 
-export const useOpencodeServer = () => {
+// `directory` is where opencode's sessions actually get scoped — see
+// serverProcess.ts's `startOpencodeServer` doc comment: it's the server
+// process's own cwd, not anything the client requests per-session. The
+// widget can't spawn `serve` before it knows this, so the effect below
+// waits for a non-empty `directory` rather than starting eagerly on mount.
+export const useOpencodeServer = (directory: string | null) => {
   const [status, setStatus] = useState<ServerStatus>("connecting");
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
   const handleRef = useRef<OpencodeServerHandle | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    if (!directory) return;
     let cancelled = false;
     setStatus("connecting");
     syncOllamaBeforeStart()
       .catch(() => {})
       .then(() => {
         if (cancelled) return undefined;
-        return startOpencodeServer();
+        return startOpencodeServer(directory);
       })
       .then((handle) => {
         if (!handle) return;
@@ -57,7 +63,7 @@ export const useOpencodeServer = () => {
       handleRef.current?.stop().catch(() => {});
       handleRef.current = null;
     };
-  }, [attempt]);
+  }, [attempt, directory]);
 
   const restart = () => setAttempt((n) => n + 1);
 

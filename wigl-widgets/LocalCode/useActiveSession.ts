@@ -80,10 +80,22 @@ export const useActiveSession = (
   // Edit-and-resend: revert to the target message (undoes its effects
   // server-side per opencode's own semantics), then send the corrected text
   // as a new turn. There's no dedicated "edit" endpoint — see client.ts.
+  //
+  // opencode rejects a revert while the session is already generating
+  // (`409 SessionBusyError`, verified live) — `MessageList.tsx` disables
+  // the edit trigger whenever `busy` is true so this shouldn't normally be
+  // reachable, but the catch here is defense in depth against the race
+  // (busy flips true between a click and this call landing) rather than an
+  // unhandled rejection with no visible feedback.
   const editAndResend = useCallback(
     async (messageID: string, newText: string) => {
       if (!baseUrl || !sessionID) return;
-      await client.revertToMessage(baseUrl, sessionID, messageID);
+      try {
+        await client.revertToMessage(baseUrl, sessionID, messageID);
+      } catch (e) {
+        setState((prev) => ({ ...prev, error: e instanceof Error ? e.message : "failed to revert message" }));
+        return;
+      }
       setState((prev) => {
         const idx = prev.messages.findIndex((m) => m.info.id === messageID);
         return idx === -1 ? prev : { ...prev, messages: prev.messages.slice(0, idx) };

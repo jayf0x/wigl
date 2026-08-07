@@ -43,8 +43,9 @@ export const runCmdBackground = async (
   program: Parameters<typeof Command.create>[0],
   args: Parameters<typeof Command.create>[1],
   onLine: (line: string) => void,
+  options?: Parameters<typeof Command.create>[2],
 ): Promise<{ stop: () => Promise<void> }> => {
-  const cmd = Command.create(program, args);
+  const cmd = Command.create(program, args, options);
   cmd.stdout.on("data", (line) => onLine(line.replace(/[\r\n]+$/, "")));
   const child = await cmd.spawn();
   return { stop: () => child.kill() };

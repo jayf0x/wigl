@@ -13,12 +13,12 @@ import { useSessions } from "./useSessions";
 import type { ModelSelection } from "./types";
 
 const LocalCodeWidget = () => {
-  const { status: opencodeStatus, baseUrl, restart } = useOpencodeServer();
-  const ollamaOnline = useOllamaStatus();
-  const { sessions, createSession, renameSession, togglePin } = useSessions(baseUrl);
-  const catalog = useModelCatalog(baseUrl);
   const [activeID, setActiveID] = useState<string | null>(null);
   const [defaultDir, setDefaultDir] = useStorage<string>("localcode_default_dir", "");
+  const { status: opencodeStatus, baseUrl, restart } = useOpencodeServer(defaultDir || null);
+  const ollamaOnline = useOllamaStatus();
+  const { sessions, createSession, renameSession, togglePin, deleteSession } = useSessions(baseUrl, defaultDir || null);
+  const catalog = useModelCatalog(baseUrl);
   const [housekeeperModel] = useStorage<ModelSelection>(STORAGE_KEYS.housekeeperModel, DEFAULT_HOUSEKEEPER_MODEL);
 
   const activeSession = useMemo(() => sessions.find((s) => s.id === activeID) ?? null, [sessions, activeID]);
@@ -43,6 +43,11 @@ const LocalCodeWidget = () => {
     setActiveID(session.id);
   };
 
+  const handleDelete = async (id: string) => {
+    await deleteSession(id);
+    setActiveID((prev) => (prev === id ? null : prev));
+  };
+
   return (
     <Widget w={7} h={8} col={0} row={0}>
       <WidgetHeader>
@@ -56,6 +61,7 @@ const LocalCodeWidget = () => {
           onCreate={handleCreate}
           onRename={renameSession}
           onTogglePin={togglePin}
+          onDelete={handleDelete}
         />
         <SessionPanel baseUrl={baseUrl} sessionID={activeID} catalog={catalog} housekeeper={housekeeper} />
       </div>

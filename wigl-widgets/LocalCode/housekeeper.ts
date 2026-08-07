@@ -7,7 +7,15 @@
 import * as client from "./client";
 import type { ModelSelection } from "./types";
 
-const HOUSEKEEPER_TIMEOUT_MS = 15_000;
+// Fire-and-forget from the caller's perspective (a slow title just arrives
+// a bit late), so this errs generous rather than tight: local Ollama
+// per-token latency varies a lot with whatever else is using the GPU —
+// measured up to ~50s wall-clock for a *tiny* fixed-seed generation on one
+// dev machine (see AGENTS.md's Testing section) even though content stays
+// deterministic. 15s used to live here and silently ate real housekeeper
+// replies under load, indistinguishable from "Ollama is just slow" — not a
+// timeout, a lost title.
+const HOUSEKEEPER_TIMEOUT_MS = 45_000;
 
 /** Sends `prompt` to a throwaway session on `model` and resolves with the
  * assistant's full text response. Waits for `session.idle` (the turn is

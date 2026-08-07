@@ -10,9 +10,21 @@ const json = async <T>(res: Response): Promise<T> => {
   return res.json() as Promise<T>;
 };
 
-export const listSessions = (baseUrl: string): Promise<OpencodeSession[]> =>
-  fetch(`${baseUrl}/session`).then((r) => json(r));
+// `directory` matters: opencode's session store is global (one SQLite DB
+// shared by every `opencode serve` invocation on the machine, keyed by
+// project directory, not per-server-instance) — omitting it returns every
+// session ever created for every project/directory anyone has ever pointed
+// opencode at, not just this widget's own working directory. Verified live
+// against a real opencode.db with 30+ sessions across multiple directories.
+export const listSessions = (baseUrl: string, directory?: string): Promise<OpencodeSession[]> =>
+  fetch(`${baseUrl}/session${directory ? `?directory=${encodeURIComponent(directory)}` : ""}`).then((r) => json(r));
 
+// `opts.directory` is part of opencode's documented request shape but
+// verified live to be silently ignored — the created session's real
+// `directory` always matches the `serve` process's own cwd instead (see
+// serverProcess.ts's `startOpencodeServer` doc comment). Still passed
+// through here since the API declares it and a future opencode version
+// may honor it; don't rely on it actually steering where a session lands.
 export const createSession = (baseUrl: string, opts: { directory?: string; title?: string }): Promise<OpencodeSession> =>
   fetch(`${baseUrl}/session`, {
     method: "POST",

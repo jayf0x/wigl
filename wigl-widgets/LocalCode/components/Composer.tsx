@@ -3,7 +3,7 @@
 // (see AGENTS.md — "thinking effort comes from the model, not a fixed
 // enum") so this never shows a control the model can't honor.
 import { useEffect, useMemo, useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +19,7 @@ export const Composer = ({
   onAgentChange,
   onVariantChange,
   onSend,
+  onAbort,
   disabled,
 }: {
   agents: AgentDef[];
@@ -30,6 +31,7 @@ export const Composer = ({
   onAgentChange: (a: string) => void;
   onVariantChange: (v: string | undefined) => void;
   onSend: (text: string) => void;
+  onAbort: () => void;
   disabled?: boolean;
 }) => {
   const [text, setText] = useState("");
@@ -91,20 +93,27 @@ export const Composer = ({
           </SelectContent>
         </Select>
 
-        {variantOptions.length > 0 && (
-          <Select value={variant ?? undefined} onValueChange={(v) => onVariantChange(String(v))}>
-            <SelectTrigger className="h-6 w-auto max-w-28 px-2 text-[10.5px]">
-              <SelectValue placeholder="effort" />
-            </SelectTrigger>
-            <SelectContent>
-              {variantOptions.map((v) => (
-                <SelectItem key={v} value={v}>
-                  {v}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        {/* Always visible, not conditionally rendered — a control that only
+            appears for some models reads as broken, not as "not
+            applicable". Disabled + a placeholder explaining why communicates
+            "this model has no reasoning-effort control" instead of hiding
+            the concept outright. */}
+        <Select
+          value={variantOptions.length > 0 ? (variant ?? undefined) : undefined}
+          onValueChange={(v) => onVariantChange(String(v))}
+          disabled={variantOptions.length === 0}
+        >
+          <SelectTrigger className="h-6 w-auto max-w-28 px-2 text-[10.5px]">
+            <SelectValue placeholder={variantOptions.length > 0 ? "thinking: effort" : "thinking: n/a"} />
+          </SelectTrigger>
+          <SelectContent>
+            {variantOptions.map((v) => (
+              <SelectItem key={v} value={v}>
+                thinking: {v}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="flex items-end gap-1.5">
@@ -122,9 +131,15 @@ export const Composer = ({
           disabled={disabled}
           className="min-h-8 flex-1 text-[11.5px]"
         />
-        <Button size="icon-sm" onClick={submit} disabled={disabled || !text.trim()}>
-          <Send className="size-3.5" />
-        </Button>
+        {disabled ? (
+          <Button size="icon-sm" variant="destructive" title="stop generating" onClick={onAbort}>
+            <Square className="size-3" />
+          </Button>
+        ) : (
+          <Button size="icon-sm" onClick={submit} disabled={!text.trim()}>
+            <Send className="size-3.5" />
+          </Button>
+        )}
       </div>
     </div>
   );

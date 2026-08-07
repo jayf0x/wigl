@@ -31,7 +31,7 @@ export const SessionPanel = ({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <PermissionBar requests={session.permissions} onReply={session.replyPermission} />
-      <MessageList messages={session.messages} onResend={session.editAndResend} />
+      <MessageList messages={session.messages} onResend={session.editAndResend} busy={session.busy} />
       {session.error && (
         <div className="flex items-center gap-2 border-destructive/30 border-t bg-destructive/10 px-2 py-1.5 text-[10.5px] text-destructive">
           <span className="flex-1 truncate">{session.error}</span>
@@ -50,6 +50,7 @@ export const SessionPanel = ({
         onAgentChange={session.setLastAgent}
         onVariantChange={(v) => session.setLastVariant(v ?? null)}
         onSend={(text) => session.send(text)}
+        onAbort={session.abort}
         disabled={session.busy}
       />
     </div>

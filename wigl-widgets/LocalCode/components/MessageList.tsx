@@ -2,7 +2,7 @@
 // resend, see AGENTS.md's "edit and resend" note); assistant messages just
 // render their parts. No virtualization yet — see AGENTS.md's backlog for
 // why that's deliberately deferred rather than half-built.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pencil, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,9 +14,11 @@ import { PartRenderer } from "./PartRenderer";
 const EditableUserMessage = ({
   message,
   onResend,
+  disabled,
 }: {
   message: MessageWithParts;
   onResend: (newText: string) => void;
+  disabled: boolean;
 }) => {
   const originalText = message.parts.find((p) => p.type === "text")?.text ?? "";
   const [editing, setEditing] = useState(false);
@@ -57,12 +59,13 @@ const EditableUserMessage = ({
       <button
         type="button"
         data-no-drag
-        title="edit and resend"
+        title={disabled ? "wait for the current reply to finish" : "edit and resend"}
+        disabled={disabled}
         onClick={() => {
           setDraft(originalText);
           setEditing(true);
         }}
-        className="shrink-0 opacity-0 hover:opacity-90 group-hover:opacity-40"
+        className="shrink-0 opacity-0 hover:opacity-90 group-hover:opacity-40 disabled:pointer-events-none disabled:opacity-0"
       >
         <Pencil className="size-3" />
       </button>
@@ -73,33 +76,49 @@ const EditableUserMessage = ({
 export const MessageList = ({
   messages,
   onResend,
+  busy,
 }: {
   messages: MessageWithParts[];
   onResend: (messageID: string, newText: string) => void;
-}) => (
-  <ScrollArea className="flex-1">
-    <div className="flex flex-col gap-2 px-2.5 py-2">
-      {messages.map((m) => (
-        <div
-          key={m.info.id}
-          className={cn(
-            "max-w-[92%] rounded-lg px-2.5 py-1.5",
-            m.info.role === "user" ? "ml-auto bg-primary/10" : "mr-auto bg-muted/60",
-          )}
-        >
-          {m.info.role === "user" ? (
-            <EditableUserMessage message={m} onResend={(text) => onResend(m.info.id, text)} />
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              {m.parts.map((part) => (
-                <PartRenderer key={part.id} part={part} />
-              ))}
-              {m.info.error && <p className="text-[10.5px] text-destructive/80">{m.info.error.message}</p>}
-            </div>
-          )}
-        </div>
-      ))}
-      {messages.length === 0 && <p className="px-1 py-6 text-center text-[11px] opacity-40">no messages yet</p>}
-    </div>
-  </ScrollArea>
-);
+  busy: boolean;
+}) => {
+  // Follows new content to the bottom — a streaming reply (parts arriving
+  // one SSE event at a time) is otherwise invisible unless the user keeps
+  // scrolling manually. `messages` gets a new array/object identity on
+  // every applied event (see eventReducer.ts), so this fires on every
+  // token, not just once per turn — `scrollIntoView` with no smooth
+  // behavior is cheap enough for that.
+  const bottomRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
+
+  return (
+    <ScrollArea className="flex-1">
+      <div className="flex flex-col gap-2 px-2.5 py-2">
+        {messages.map((m) => (
+          <div
+            key={m.info.id}
+            className={cn(
+              "max-w-[92%] rounded-lg px-2.5 py-1.5",
+              m.info.role === "user" ? "ml-auto bg-primary/10" : "mr-auto bg-muted/60",
+            )}
+          >
+            {m.info.role === "user" ? (
+              <EditableUserMessage message={m} onResend={(text) => onResend(m.info.id, text)} disabled={busy} />
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {m.parts.map((part) => (
+                  <PartRenderer key={part.id} part={part} />
+                ))}
+                {m.info.error && <p className="text-[10.5px] text-destructive/80">{m.info.error.message}</p>}
+              </div>
+            )}
+          </div>
+        ))}
+        {messages.length === 0 && <p className="px-1 py-6 text-center text-[11px] opacity-40">no messages yet</p>}
+        <div ref={bottomRef} />
+      </div>
+    </ScrollArea>
+  );
+};
