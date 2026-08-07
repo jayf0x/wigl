@@ -155,6 +155,18 @@ Init already ran once (`components.json`, `@/*` path alias in `tsconfig.json` + 
 
 Reach for semantic color tokens (`bg-card`, `border-border`, `text-muted-foreground`, `bg-popover`, `bg-input`, ...), never a literal Tailwind color (`bg-neutral-900`, `border-white/10`, `text-cyan-400` for anything but a genuinely fixed status/icon color) or an inline hex/rgba — a theme (`src/wigl/theme/`) rewrites the CSS vars those tokens read from, and a literal color silently opts a widget out of every future theme. Status-style icon colors that carry fixed meaning regardless of theme (a green "success" check, a red-vs-amber severity gradient) are the one legitimate exception — see `wigl-widgets/repos/Row.tsx`'s `releaseScoreClass` for the pattern.
 
+## Testing
+
+A widget can add a `tests/` folder (or colocated `*.test.ts`/`*.test.tsx` files) using `bun:test` — no framework to install, no config, nothing `plugin:build`/`plugin:install` needs to know about (they only ever touch `index.tsx`/`index.ts`, `package.json`, and the built `.wigl/` entry, so test files are invisible to the build regardless of where they live). Run them through the root `wigl` CLI (`scripts/wigl.ts`, aliased globally in `.bashrc`), not `bun test` directly — it scopes discovery so a stray `.test.ts` elsewhere in the repo doesn't get swept in:
+
+```bash
+wigl test              # everything: wigl-widgets/*/tests + src/wigl
+wigl test widgets      # only wigl-widgets/<name>/tests/**/*.test.ts(x)
+wigl test shared       # only src/wigl/**/*.test.ts(x)
+```
+
+Best suited to pure logic (parsing, formatting, grid math — see `src/wigl/grid/math.test.ts`) since there's no DOM/Tauri runtime in the test process; a widget's rendered behavior is still verified by hand per `docs/debugging.md`, not automated.
+
 ## Window chrome
 
 A widget never sets its own window chrome — it isn't a window (see `docs/architecture.md`). The standard flags (transparent, undecorated, no shadow, always-on-bottom, skip-taskbar, non-resizable) are set once per monitor window in `src-tauri/src/lib.rs`'s `setup()`. `tauri.conf.json` only declares the hidden `main` bootstrap window. App-level prerequisites, set once: `macOSPrivateApi: true` in `tauri.conf.json` (required for transparency) and the matching `macos-private-api` Cargo feature in `src-tauri/Cargo.toml`.
