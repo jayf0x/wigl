@@ -116,7 +116,10 @@ export type OpencodeEvent =
   | { type: "session.updated"; properties: { info: OpencodeSession } }
   | { type: "session.deleted"; properties: { info: OpencodeSession } }
   | { type: "session.idle"; properties: { sessionID: string } }
-  | { type: "session.error"; properties: { sessionID?: string; error?: { message: string } } }
+  | {
+      type: "session.error";
+      properties: { sessionID?: string; error?: { name?: string; data?: { message?: string } } };
+    }
   | { type: "message.updated"; properties: { info: OpencodeMessage } }
   | { type: "message.removed"; properties: { sessionID: string; messageID: string } }
   | { type: "message.part.updated"; properties: { part: MessagePart; delta?: string } }

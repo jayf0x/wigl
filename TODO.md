@@ -26,66 +26,41 @@ existing coss-ui primitives (`Button`, `Input`, `Select`, `Textarea`,
 wigl's token contract (no hardcoded colors) — the redesign must stay inside
 that, not introduce ad-hoc colors.
 
-## 2. Regression tests against opencode API drift
-
-**Not started — owner explicitly flagged this as delegate-worthy**, not
-something to fold into a feature session: "need to write tests for basics
-so that we are certain the widget does not break on OpenCode updates. This
-sounds also like a delegated task to me."
-
-Context for whoever picks this up: `wigl-widgets/LocalCode/client.ts` is a
-thin `fetch`/`EventSource` wrapper over opencode's HTTP API. There's no
-official TypeScript SDK dependency here — the shapes in `types.ts` were
-hand-verified against a **live `opencode serve` v1.18.15** instance during
-the original build (see AGENTS.md's "Where the API shapes come from"). A
-future `opencode` upgrade silently changing a field name or endpoint shape
-would break this widget with no compile-time signal, since `types.ts` is
-just asserted, not generated or checked against anything real.
-
-What "tests for basics" should mean here: a small script (repo convention:
-`scripts/`, one-line `package.json` entry, see `calendar:add`/`repos:scan`
-for the pattern) that spins up a real local `opencode serve`, exercises the
-same endpoints `client.ts` calls (create/list/rename/delete session, send a
-prompt to a trivial model, read it back, revert), and asserts the response
-shapes match what `types.ts` expects. Needs a real model to prompt against
-— `ollama/smollm:135m` (see below) is the obvious cheap/local choice, no
-API key, no cost. This is closer to an integration smoke test than a unit
-test suite; there's nothing to meaningfully mock here since the entire risk
-is "does the real API still look like we think it does."
-
-## 3. Housekeeper model — remaining consumers
+## 2. Housekeeper model — remaining consumers
 
 **Partially done.** `wigl-widgets/LocalCode/housekeeper.ts` now exists:
-`runHousekeeperPrompt(baseUrl, model, prompt, directory)` runs a prompt
-against a throwaway session on a small model (default
+`runHousekeeperPrompt(baseUrl, model, prompt, directory, agent?)` runs a
+prompt against a throwaway session on a small model (default
 `ollama/smollm:135m`, configurable via the `localcode_housekeeper_model`
 storage key, `DEFAULT_HOUSEKEEPER_MODEL` in `config.ts`) and returns the
-text response, cleaning up the scratch session afterward.
+text response, cleaning up the scratch session afterward. Pass a toolless
+native `agent` (e.g. `"title"`) for any plain text-in/text-out task — a
+session with no `agent` defaults to `"build"`, which always attaches
+opencode's tool schema, and small models without function-calling support
+(`smollm:135m` included) 400 with "does not support tools" — see the doc
+comment on `runHousekeeperPrompt`.
 
 **Wired today**: session auto-naming — `generateSessionTitle()` fires on a
 session's first user message (`useActiveSession.ts`'s `send()`), renames
 the session in place once it resolves. Fire-and-forget; a slow/failed
 housekeeper call just leaves the truncated-prompt fallback title.
+Regression/e2e coverage against a real housekeeper-model call lives in
+`wigl-widgets/LocalCode/tests/opencode.e2e.test.ts` (`wigl test widgets`).
 
 **Not wired yet** (owner's own list: "generating a greeting message, naming
-sessions, other possible small tasks and to run e2e tests" — naming is
-done, the rest isn't):
+sessions, other possible small tasks" — naming is done, the rest isn't):
 
 - **Greeting message** — no concrete spec for what this greets on (widget
   mount? new empty session?) or where it renders. Needs a product decision
   before it's a coding task, not just a missing function call.
 - **Other small tasks** — genuinely unspecified by the owner ("other
   possible small tasks"). Don't invent scope; wait for a concrete ask.
-- **E2e test runner using the housekeeper model** — this likely overlaps
-  heavily with item 2 above (regression tests would want a cheap local
-  model to prompt against, which is exactly what the housekeeper model is
-  for). Worth doing as one piece of work, not two.
 - **Housekeeper model picker in the UI** — right now it's configurable only
   by editing the `localcode_housekeeper_model` key directly (`useStorage`,
   shared sqlite `kv` table — see `docs/widgets.md`). No UI control exists.
   Low priority until someone actually wants a non-default housekeeper model.
 
-## 4. Ollama model catalog — remaining rough edges
+## 3. Ollama model catalog — remaining rough edges
 
 **Mostly done.** `wigl-widgets/LocalCode/opencodeConfig.ts` now syncs
 Ollama's installed models into `~/.config/opencode/opencode.jsonc` before
@@ -104,7 +79,7 @@ model list periodically, diff against what's already synced, and call
 now because it adds a polling+diffing path for a case (pulling a new model
 mid-session) that's easy enough to work around manually today.
 
-## 5. Everything else already logged
+## 4. Everything else already logged
 
 The rest of the known-deferred work was captured in
 `wigl-widgets/LocalCode/AGENTS.md`'s "Backlog" section when the widget was

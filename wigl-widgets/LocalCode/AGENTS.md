@@ -160,6 +160,16 @@ whatever model the user is actually working with. `housekeeper.ts`'s
 same event this widget already subscribes to for real sessions, no
 polling) and returns the text response.
 
+**Pass a toolless `agent`.** A session with no `agent` defaults to
+`"build"`, which always attaches opencode's full tool schema to the
+completion request — verified live that Ollama 400s with "does not support
+tools" for models that don't support function-calling at all, and
+`smollm:135m` (the housekeeper default) is one of them. `generateSessionTitle`
+passes `agent: "title"` (opencode's own hidden, toolless, purpose-built
+title-generation agent) for exactly this reason. Any new housekeeper
+consumer needs the same treatment — omitting `agent` isn't a safe default
+here the way it might look.
+
 **Wired today**: `generateSessionTitle()`, fired from `useActiveSession.ts`'s
 `send()` on a session's first user message — fire-and-forget, a slow/failed
 call just leaves the truncated-prompt fallback title in place. Other
@@ -168,6 +178,33 @@ built — see `TODO.md`.
 
 ## Decisions log (so they don't get re-litigated from scratch)
 
+- **`session.error` must be handled, not just typed.** Found live: a failed
+  turn (unknown model, or a tool-incapable model under the default `"build"`
+  agent — see "Housekeeper model" above) produces a `session.error` event
+  and *no* assistant `message.updated` at all — nothing else signals the
+  failure. Before this was handled, that event fell through
+  `useActiveSession`'s event switch's `default` case and did nothing: no
+  assistant bubble, no error, and (once a busy/loading flag existed) it
+  would've stayed stuck — this was very likely the concrete report behind
+  "prompt → loading → no reply ever shown". The fix: `useActiveSession`'s
+  event handling moved into a pure `applyEvent` reducer
+  (`eventReducer.ts`) that sets `state.error`/clears `state.busy` on
+  `session.error`, `SessionPanel.tsx` renders `session.error` as a
+  dismissible banner, and `Composer`'s `disabled` prop (previously never
+  wired from `SessionPanel`) is now driven by `session.busy`. Regression
+  coverage: `tests/eventReducer.test.ts` (synthetic events) and
+  `tests/opencode.e2e.test.ts` (a real unknown-model turn against a live
+  server).
+- **Event-application logic is a pure reducer, not inline `setState` in the
+  hook.** `eventReducer.ts`'s `applyEvent(state, event, sessionID)` is the
+  entire "what does this SSE event do to the transcript" decision —
+  `useActiveSession.ts` is just `setState(prev => applyEvent(prev, event,
+  sessionID))` plus the subscribe/unsubscribe glue. Done specifically so
+  this logic — the exact code that decides whether a reply becomes visible
+  — is unit-testable without a React runtime (`docs/principles.md`'s
+  functional-core/imperative-shell rule). If you add a new event case, add
+  it to `applyEvent` and a case to `tests/eventReducer.test.ts`, not
+  directly into the hook.
 - **No diff view.** `PartRenderer.tsx`'s `patch` case is a one-line "N
   files changed" — deliberately not OpenGUI's `DiffView.tsx`. Owner's
   framing: don't rebuild what a real editor/git tool already does well: "no
@@ -214,11 +251,45 @@ built — see `TODO.md`.
   connections ever becomes a real problem (it won't at the scale of "one
   widget, one server").
 
+## Testing
+
+`wigl-widgets/LocalCode/tests/*.test.ts` (`wigl test widgets` or
+`bun test wigl-widgets/LocalCode/tests`), two files:
+
+- `eventReducer.test.ts` — pure, no server needed, runs anywhere. Feeds
+  synthetic (but shape-accurate, copied from real captured frames) SSE
+  events through `applyEvent` and asserts on the resulting state. This is
+  where a new event case's logic gets tested, not the e2e file.
+- `opencode.e2e.test.ts` — spins a **real** `opencode serve` against
+  **real** Ollama models (`qwen3.5:0.8b`, `smollm:135m` — pull both to
+  unskip locally). `test.skipIf`'s condition is evaluated at module load,
+  before any `beforeAll` runs, so the Ollama-availability check and server
+  startup happen via top-level `await` at the top of the file, not inside
+  `beforeAll` — a `beforeAll`-gated `skipIf` always sees the pre-check
+  value and skips everything, silently. `tests/testServer.ts` holds the
+  shared helpers: `withDeterministicModels()` temporarily writes
+  `temperature: 0, seed: 42, num_predict: 64` into the two test models'
+  `opencode.jsonc` entries (backs up and restores the file exactly,
+  including deleting it if it didn't exist — production code must never
+  see forced-greedy decoding, only this test run should), and
+  `installEventSourcePolyfill()`/`subscribeEventsViaFetch()` work around
+  `EventSource` not existing as a global under `bun test` (confirmed:
+  `typeof EventSource === "undefined"` even mid-suite, unlike the real
+  Tauri webview) by re-parsing the same `data: {...}\n\n` SSE framing over
+  a raw `fetch` stream.
+  Content is deterministic given the fixed seed, but **wall-clock isn't**
+  — the same exact generation measured ~6s to ~50s across runs on one dev
+  machine (Ollama serializes generation per model, `-np 1`, so GPU
+  contention with anything else running matters) — hence the generous
+  90s-per-turn timeout and the `abortSession` call on that timeout, so an
+  abandoned request doesn't sit in Ollama's queue and slow down whatever
+  runs next.
+
 ## Backlog (real features, not yet built)
 
 Full list with context lives in `TODO.md` at the repo root (UI redesign,
-regression tests, remaining housekeeper-model consumers, Ollama
-hot-reload). Items only summarized here, not duplicated in detail:
+remaining housekeeper-model consumers, Ollama hot-reload). Items only
+summarized here, not duplicated in detail:
 
 1. **Branching** — fork instead of revert (`/session/{id}/fork` exists,
    unused). Explicitly called out as "a nice addon" in scoping, not core.

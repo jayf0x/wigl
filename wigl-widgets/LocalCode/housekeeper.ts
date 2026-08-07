@@ -13,12 +13,21 @@ const HOUSEKEEPER_TIMEOUT_MS = 15_000;
  * assistant's full text response. Waits for `session.idle` (the turn is
  * fully done, not just started) rather than polling — same event this
  * widget already subscribes to for real sessions. Always cleans up the
- * scratch session, even on timeout/error. */
+ * scratch session, even on timeout/error.
+ *
+ * `agent` matters more than it looks: a session with no `agent` defaults to
+ * `"build"`, which always attaches opencode's full tool schema to the
+ * completion request — verified live that Ollama 400s with "does not
+ * support tools" for small models that don't support function-calling at
+ * all (`smollm:135m`, the housekeeper default, is one of them). Callers
+ * doing a plain text-in/text-out task should pass a toolless native agent
+ * (`"title"`, `"summary"`, ...) rather than leaving this unset. */
 export const runHousekeeperPrompt = async (
   baseUrl: string,
   model: ModelSelection,
   prompt: string,
   directory: string,
+  agent?: string,
 ): Promise<string | null> => {
   const session = await client.createSession(baseUrl, { directory });
   try {
@@ -50,7 +59,7 @@ export const runHousekeeperPrompt = async (
           finish(null);
         }
       });
-      client.sendPrompt(baseUrl, session.id, { text: prompt, model }).catch(() => finish(null));
+      client.sendPrompt(baseUrl, session.id, { text: prompt, model, agent }).catch(() => finish(null));
     });
     return result;
   } finally {
@@ -69,7 +78,9 @@ export const generateSessionTitle = async (
   directory: string,
 ): Promise<string | null> => {
   const instruction = `Summarize the following request as a short title, 3 to 6 words, no punctuation, no quotes, plain text only:\n\n${firstPrompt}`;
-  const raw = await runHousekeeperPrompt(baseUrl, model, instruction, directory);
+  // opencode's own hidden "title" agent — toolless (see runHousekeeperPrompt's
+  // doc comment) and already prompted for exactly this job.
+  const raw = await runHousekeeperPrompt(baseUrl, model, instruction, directory, "title");
   if (!raw) return null;
   const cleaned = raw
     .replace(/["'*_`]/g, "")
