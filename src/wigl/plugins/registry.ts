@@ -10,12 +10,14 @@ import * as Button from "@/components/ui/button";
 import * as Checkbox from "@/components/ui/checkbox";
 import * as Input from "@/components/ui/input";
 import * as Progress from "@/components/ui/progress";
+import * as ScrollArea from "@/components/ui/scroll-area";
 import * as Select from "@/components/ui/select";
 import * as Separator from "@/components/ui/separator";
 import * as Slider from "@/components/ui/slider";
 import * as Switch from "@/components/ui/switch";
 import * as Table from "@/components/ui/table";
 import * as Tabs from "@/components/ui/tabs";
+import * as Textarea from "@/components/ui/textarea";
 import type { HostModuleId } from "./host-modules";
 import type { WidgetPermission } from "./types";
 
@@ -73,19 +75,27 @@ const HOST_MODULES: Record<HostModuleId, HostModule> = {
   },
   "@/wigl/utils": {
     value: WiglUtils,
-    members: { runCmd: "command", runCmdStreaming: "command", isMacos: "command", homeDir: "filesystem" },
+    members: {
+      runCmd: "command",
+      runCmdStreaming: "command",
+      runCmdBackground: "command",
+      isMacos: "command",
+      homeDir: "filesystem",
+    },
   },
   "@/components/ui/badge": { value: Badge },
   "@/components/ui/button": { value: Button },
   "@/components/ui/checkbox": { value: Checkbox },
   "@/components/ui/input": { value: Input },
   "@/components/ui/progress": { value: Progress },
+  "@/components/ui/scroll-area": { value: ScrollArea },
   "@/components/ui/select": { value: Select },
   "@/components/ui/separator": { value: Separator },
   "@/components/ui/slider": { value: Slider },
   "@/components/ui/switch": { value: Switch },
   "@/components/ui/table": { value: Table },
   "@/components/ui/tabs": { value: Tabs },
+  "@/components/ui/textarea": { value: Textarea },
 };
 
 class PluginPermissionError extends Error {}

@@ -31,6 +31,25 @@ export const runCmdStreaming = (
   });
 };
 
+/** Spawns a long-lived process (a local server, not a one-shot command) and
+ * hands back a `stop()` to kill it later — the mediated equivalent of
+ * `Command.create(...).spawn()` that returns the `Child` handle itself.
+ * Unlike `runCmdStreaming`, the returned promise never resolves on its own;
+ * callers own the process's lifetime and must call `stop()` when done with
+ * it (widget unmount, a "disconnect" action, ...). Use this only for
+ * processes that don't exit by themselves — `runCmdStreaming` is still
+ * right for anything that finishes on its own (builds, clones, ...). */
+export const runCmdBackground = async (
+  program: Parameters<typeof Command.create>[0],
+  args: Parameters<typeof Command.create>[1],
+  onLine: (line: string) => void,
+): Promise<{ stop: () => Promise<void> }> => {
+  const cmd = Command.create(program, args);
+  cmd.stdout.on("data", (line) => onLine(line.replace(/[\r\n]+$/, "")));
+  const child = await cmd.spawn();
+  return { stop: () => child.kill() };
+};
+
 /** The user's home directory, trailing slash stripped so callers can always
  * join with a plain template string (this app targets macOS/Linux only, so
  * `/` is always the right separator — no path-joining host module needed).

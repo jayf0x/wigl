@@ -25,12 +25,14 @@ export const HOST_MODULE_IDS = [
   "@/components/ui/checkbox",
   "@/components/ui/input",
   "@/components/ui/progress",
+  "@/components/ui/scroll-area",
   "@/components/ui/select",
   "@/components/ui/separator",
   "@/components/ui/slider",
   "@/components/ui/switch",
   "@/components/ui/table",
   "@/components/ui/tabs",
+  "@/components/ui/textarea",
 ] as const;
 
 export type HostModuleId = (typeof HOST_MODULE_IDS)[number];
