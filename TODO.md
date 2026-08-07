@@ -19,6 +19,48 @@ pending indicator while a turn generates. The rules that came out of it live
 in `wigl-widgets/LocalCode/AGENTS.md`'s "UI shape (post-redesign)" section —
 read that before adding any control. What's left is below.
 
+### `/think off` doesn't actually stop the model thinking
+
+**Reported live by the owner: "I set it to off and it still thought."** The
+UI half is doing what it says — `off` clears `variant`, so the prompt goes
+out with no reasoning-effort override at all. That's the bug: *no override*
+is not *thinking disabled*. A thinking-capable Ollama model reasons by
+default, and nothing in the request tells it otherwise.
+
+Ollama's own API has the switch (`"think": false` on `/api/chat`). The open
+question is whether opencode's generic `openai-compatible` provider forwards
+anything that reaches it — the same doubt already logged against
+`reasoningEffort` in `AGENTS.md`'s "Not verified live" note, which this makes
+concrete: if High vs. Low is also silently dropped, `/think` is decorative
+for every Ollama model and should be removed rather than lie.
+
+**How to settle it** (one session, needs no widget code to start): put a
+reverse proxy between opencode and Ollama, run the same seeded prompt three
+times through `POST /session/{id}/message` — no `variant`, `variant: "high"`,
+and with an `off` variant declared as `{ think: false }` in
+`opencode.jsonc` — and diff the request bodies the proxy captures. Whichever
+key survives the trip is what `opencodeConfig.ts`'s `syncOllamaModels()`
+should write for the off/low/high variants. If nothing survives, delete
+`/think` from `commands.ts` and say so in AGENTS.md.
+
+### Composer editor: evaluate CodeMirror 6
+
+Owner's suggestion after Milkdown was rejected: `@uiw/react-codemirror` +
+`@codemirror/lang-markdown` + `@codemirror/language-data`. Unlike Crepe this
+is *mechanically* viable — CodeMirror injects its styles from JS, so the
+plugin bundler's lack of a CSS pipeline (the blocker that killed Milkdown,
+see AGENTS.md) doesn't apply.
+
+Not built, because it argues with the same review's other feedback ("still
+too much detail... LESS IS MORE") and nothing about the current textarea was
+reported as broken. What it would actually buy: markdown syntax highlighting
+while typing, real soft-wrap/indent behaviour, and a proper multi-line
+editing model for long prompts. What it costs: a few hundred KB in the
+widget bundle, and the slash palette has to move into a CodeMirror keymap at
+high precedence (CodeMirror owns the keyboard once focused — the arrow/tab/
+enter handling in `Composer.tsx` would not survive as-is). Worth doing if
+long prompts become the normal case; not worth it for one-liners.
+
 ### needs a real shared error surface
 
 

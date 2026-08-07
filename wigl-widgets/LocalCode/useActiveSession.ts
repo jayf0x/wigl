@@ -10,6 +10,7 @@ import * as client from "./client";
 import { STORAGE_KEYS } from "./config";
 import { applyEvent, emptySessionState, type SessionState } from "./eventReducer";
 import { generateSessionTitle } from "./housekeeper";
+import { endsInLoop } from "./repetition";
 import type { MessageWithParts, ModelSelection } from "./types";
 
 export interface HousekeeperContext {
@@ -119,6 +120,26 @@ export const useActiveSession = (
   }, [baseUrl, sessionID]);
 
   const dismissError = useCallback(() => setState((prev) => ({ ...prev, error: null })), []);
+
+  // Runaway-loop guard. A small local model that starts restating the same
+  // phrase generally never stops on its own (see TODO.md's `build`-agent hang
+  // entry for a related failure) — it just burns GPU until someone notices.
+  // `endsInLoop` is deliberately strict (see repetition.ts) because the
+  // consequence here is killing a real turn. Reasoning text counts: that's
+  // where the spiral usually happens, and it's collapsed by default, so
+  // nobody would see it.
+  useEffect(() => {
+    if (!state.busy) return;
+    const last = state.messages.at(-1);
+    if (last?.info.role !== "assistant") return;
+    const streamed = last.parts
+      .filter((p) => p.type === "text" || p.type === "reasoning")
+      .map((p) => p.text ?? "")
+      .join("\n");
+    if (!endsInLoop(streamed)) return;
+    abort();
+    setState((prev) => ({ ...prev, busy: false, error: "stopped — the model was repeating itself" }));
+  }, [state.messages, state.busy, abort]);
 
   return {
     messages: state.messages,

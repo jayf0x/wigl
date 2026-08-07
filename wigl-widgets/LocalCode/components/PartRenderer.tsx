@@ -6,8 +6,53 @@
 import { type ReactNode, useState } from "react";
 import { ChevronRight, Loader2, ListTodo, Sparkles, Terminal } from "lucide-react";
 import { cn } from "@/wigl/utils";
+import { splitAtRepeat } from "../repetition";
 import type { MessagePart } from "../types";
 import { Markdown } from "./Markdown";
+
+/** opencode emits an answer as many small `text`/`reasoning` parts, one per
+ * flush — rendering each as its own block is what made a reply look like "a
+ * long list of darker cells". Consecutive same-type parts are one block. */
+export const mergeParts = (parts: MessagePart[]): MessagePart[] => {
+  const merged: MessagePart[] = [];
+  for (const part of parts) {
+    const prev = merged.at(-1);
+    const mergeable = part.type === "text" || part.type === "reasoning";
+    if (prev && mergeable && prev.type === part.type) {
+      merged[merged.length - 1] = {
+        ...prev,
+        text: `${prev.text ?? ""}${part.text ?? ""}`,
+        time: { start: prev.time?.start, end: part.time?.end },
+      };
+    } else {
+      merged.push(part);
+    }
+  }
+  return merged;
+};
+
+/** The answer, with a repetition spiral folded away — see repetition.ts. */
+const AnswerText = ({ text }: { text: string }) => {
+  const [showAll, setShowAll] = useState(false);
+  const { head, repeated } = splitAtRepeat(text);
+  if (!repeated) return <Markdown text={text} />;
+
+  const lines = repeated.split("\n").filter((l) => l.trim()).length;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {head && <Markdown text={head} />}
+      <button
+        type="button"
+        data-no-drag
+        onClick={() => setShowAll((v) => !v)}
+        className="self-start text-[10.5px] text-muted-foreground/60 transition-colors duration-150 hover:text-foreground"
+      >
+        {showAll ? "hide" : `${lines} repeated line${lines === 1 ? "" : "s"}`}
+      </button>
+      {showAll && <Markdown text={repeated} className="opacity-50" />}
+    </div>
+  );
+};
 
 const Trace = ({
   icon: Icon,
@@ -56,7 +101,7 @@ const duration = (time?: { start?: number; end?: number }) => {
 export const PartRenderer = ({ part }: { part: MessagePart }) => {
   switch (part.type) {
     case "text":
-      return part.text?.trim() ? <Markdown text={part.text} /> : null;
+      return part.text?.trim() ? <AnswerText text={part.text} /> : null;
 
     case "reasoning":
       if (!part.text?.trim()) return null;

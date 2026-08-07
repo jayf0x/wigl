@@ -310,6 +310,26 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
   surface, is still in `TODO.md` for exactly that reason.
 - **Theme tokens only.** The old `PermissionBar` amber literal is gone; every
   color is a semantic token. Check any new class against `docs/theming.md`.
+- **No per-message metadata.** No role labels, no model name, no timestamps
+  in the transcript — an accent rule down the left of a prompt is the entire
+  turn marker. Owner review: "still too much detail in messages... LESS IS
+  MORE". If you're about to add a badge to a message, don't.
+- **Consecutive same-type parts render as one block** (`mergeParts` in
+  `PartRenderer.tsx`). opencode flushes an answer as many small `text`/
+  `reasoning` parts; rendering each on its own is what made a reply look like
+  "a long list of darker cells". Code fences are one flat surface now, no
+  border, no language chrome, for the same reason.
+- **Runaway repetition is handled twice, on purpose** (`repetition.ts`,
+  tested): `splitAtRepeat` folds a repeated tail behind a "N repeated lines"
+  toggle so a spiral doesn't bury the useful part of an answer, and
+  `endsInLoop` aborts the turn outright when the same ≥24-char phrase lands
+  three times back-to-back. Local models don't recover from these on their
+  own. The abort rule is the strict one because killing a live turn is the
+  expensive mistake; the fold is loose because being wrong there costs a
+  click. The fold idea comes from the chatWidget in `jayf0x.github.io`.
+- **The busy indicator runs for the whole turn**, not just the gap before the
+  first token — a reply streaming into a collapsed reasoning trace is
+  indistinguishable from a frozen widget otherwise.
 
 ## Decisions log (so they don't get re-litigated from scratch)
 

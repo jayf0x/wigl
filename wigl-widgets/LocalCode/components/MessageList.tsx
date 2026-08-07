@@ -14,15 +14,16 @@ import { Check, Pencil, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/wigl/utils";
 import type { MessageWithParts } from "../types";
-import { PartRenderer } from "./PartRenderer";
+import { mergeParts, PartRenderer } from "./PartRenderer";
 
 const RENDER_WINDOW = 40;
 
-const Turn = ({ label, children, className }: { label: string; children: ReactNode; className?: string }) => (
-  <div className={cn("flex flex-col gap-1.5", className)}>
-    <span className="text-[9.5px] tracking-[0.14em] text-muted-foreground/50 uppercase">{label}</span>
-    {children}
-  </div>
+// No role labels, no model name, no timestamp. The accent rule down the left
+// of a prompt is the only marker a turn needs — everything else was chrome
+// competing with the text. ("still too much detail in messages... LESS IS
+// MORE" — keep it that way when adding anything here.)
+const Turn = ({ children, className }: { children: ReactNode; className?: string }) => (
+  <div className={cn("flex flex-col gap-1.5", className)}>{children}</div>
 );
 
 const UserTurn = ({
@@ -39,7 +40,7 @@ const UserTurn = ({
 
   if (draft !== null) {
     return (
-      <Turn label="you">
+      <Turn>
         <textarea
           data-no-drag
           autoFocus
@@ -76,7 +77,7 @@ const UserTurn = ({
   }
 
   return (
-    <Turn label="you" className="group">
+    <Turn className="group">
       <div className="flex items-start gap-2">
         <p className="flex-1 whitespace-pre-wrap break-words border-primary/40 border-l-2 pl-2.5 text-[12.5px] leading-relaxed text-foreground/85">
           {original}
@@ -117,10 +118,6 @@ export const MessageList = ({
 
   const hidden = expanded ? 0 : Math.max(0, messages.length - RENDER_WINDOW);
   const visible = hidden ? messages.slice(hidden) : messages;
-  // A turn is "pending" from send until the assistant part actually arrives —
-  // without this the transcript looks frozen for however long the model takes
-  // to emit its first token.
-  const pending = busy && messages.at(-1)?.info.role !== "assistant";
 
   return (
     <ScrollArea className="min-h-0 flex-1">
@@ -140,9 +137,9 @@ export const MessageList = ({
           m.info.role === "user" ? (
             <UserTurn key={m.info.id} message={m} onResend={(text) => onResend(m.info.id, text)} busy={busy} />
           ) : (
-            <Turn key={m.info.id} label={m.info.modelID ?? "agent"}>
+            <Turn key={m.info.id}>
               <div className="flex flex-col gap-2">
-                {m.parts.map((part) => (
+                {mergeParts(m.parts).map((part) => (
                   <PartRenderer key={part.id} part={part} />
                 ))}
                 {m.info.error && <p className="text-[11.5px] text-destructive/90">{m.info.error.message}</p>}
@@ -151,21 +148,22 @@ export const MessageList = ({
           ),
         )}
 
-        {pending && (
-          <Turn label="agent">
-            <span className="inline-flex h-3 w-8 items-center gap-1">
-              {[0, 150, 300].map((delay) => (
-                <span
-                  key={delay}
-                  style={{ animationDelay: `${delay}ms` }}
-                  className="size-1 animate-pulse rounded-full bg-muted-foreground/60"
-                />
-              ))}
-            </span>
-          </Turn>
+        {/* Shown for the *whole* generating turn, not just the gap before the
+            first token — a reply that streams silently into a collapsed
+            reasoning trace looked identical to a frozen widget. */}
+        {busy && (
+          <span className="inline-flex h-3 w-8 items-center gap-1">
+            {[0, 150, 300].map((delay) => (
+              <span
+                key={delay}
+                style={{ animationDelay: `${delay}ms` }}
+                className="size-1 animate-pulse rounded-full bg-muted-foreground/60"
+              />
+            ))}
+          </span>
         )}
 
-        {messages.length === 0 && !pending && (
+        {messages.length === 0 && !busy && (
           <p className="py-16 text-center text-[11.5px] text-muted-foreground/40">
             type a prompt, or <span className="text-muted-foreground/70">/</span> for commands
           </p>

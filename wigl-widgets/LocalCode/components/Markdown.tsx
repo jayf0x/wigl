@@ -45,13 +45,11 @@ const BlockView = ({ block }: { block: Block }) => {
   switch (block.kind) {
     case "code":
       return (
-        <div className="group/code relative overflow-hidden rounded-lg border border-border/60 bg-background/60">
-          {block.lang && (
-            <span className="absolute top-1 right-2 text-[9px] tracking-wider text-muted-foreground/50 uppercase">
-              {block.lang}
-            </span>
-          )}
-          <pre className="overflow-x-auto p-2.5 font-mono text-[11px] leading-relaxed">
+        // One surface, no border, no language chrome — a reply full of short
+        // fences was reading as "a long list of darker cells" with a frame
+        // around each one.
+        <div className="overflow-hidden rounded-md bg-muted/40">
+          <pre className="overflow-x-auto p-2 font-mono text-[11px] leading-relaxed">
             <code>{block.content}</code>
           </pre>
         </div>
