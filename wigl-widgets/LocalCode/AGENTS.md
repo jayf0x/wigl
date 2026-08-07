@@ -3,7 +3,9 @@
 Read this before touching the widget. It's not a tour of the folder — read
 the code for that — it's the decisions and gotchas that don't survive
 reading the code cold. Product framing lives in `sketch.md` (kept from the
-research pass); this file is dev-facing only.
+research pass); this file is dev-facing only. Deferred/delegated work lives
+in `TODO.md` at the repo root, not here — this file is decisions and
+gotchas for code that already exists.
 
 ## What this actually talks to
 
@@ -107,6 +109,63 @@ the primitive to reuse — don't add a second one.
   formula, apt package, ...), add it to that list the same way
   `commands.ts`'s `openInEditor` layers candidates for VS Code.
 
+## Model catalog: why `opencodeConfig.ts` exists
+
+opencode has **no dynamic Ollama discovery** — verified live: a custom
+`openai-compatible` provider (the only way to point opencode at Ollama's
+local API) must list every model explicitly under `provider.<id>.models`
+in `~/.config/opencode/opencode.jsonc`; `opencode models ollama` returned
+`Provider not found: ollama` until a `models` block existed, even with
+Ollama itself running and reachable. `opencodeConfig.ts`'s
+`syncOllamaModels()` closes that gap by writing whatever `ollama.ts`'s
+`listOllamaModels()` (hits Ollama's own `/api/tags`) reports into that
+config file — that's what makes the model picker track installed Ollama
+models instead of being a list someone typed once.
+
+**Config is not hot-reloaded** — verified live: editing `opencode.jsonc`
+while a `serve` instance was already running had zero effect until
+restart. So the sync must run *before* `startOpencodeServer()`, not after
+— `useOpencodeServer.ts` does exactly that, best-effort and time-boxed
+(`OLLAMA_SYNC_TIMEOUT_MS`, currently 2s) so a not-yet-running Ollama never
+blocks the widget from starting. A model pulled mid-session needs a manual
+restart (the button in `ServerStatusBar.tsx`) to show up — see `TODO.md`
+for the auto-detect-and-restart follow-up.
+
+`opencodeConfig.ts` uses plain `JSON.parse`/`stringify`, not a real JSONC
+parser — no widget bundles its own npm dependency yet (every widget's
+`package.json` "dependencies" has been empty so far) and adding one just
+for this felt like the wrong precedent to set for a narrow internal tool.
+This fails safe: a config file containing real `//` comments won't parse
+and the sync is skipped (logged, not thrown) rather than risking a
+corrupting rewrite. If that ever actually bites someone, `jsonc-parser`
+(small, MIT, what VS Code itself uses) is the fix — `bun add` it inside
+`wigl-widgets/LocalCode/` to get a local `node_modules` the bundler will
+pick up, same as any other widget-bundled dependency would.
+
+The model picker itself is scoped to `ALLOWED_PROVIDER_IDS` in `config.ts`
+(currently just `["ollama"]`) — opencode's `opencode` (Zen) provider is
+active out of the box with zero setup, which is what made model selection
+read as "predefined" rather than "reliant on Ollama" before this existed.
+Add Claude Code (or any other backend) to that list, not a special case,
+when it's wired up.
+
+## Housekeeper model
+
+A small/fast/local model (default `ollama/smollm:135m`, `config.ts`'s
+`DEFAULT_HOUSEKEEPER_MODEL`, overridable via the `localcode_housekeeper_model`
+storage key) for internal tasks that shouldn't cost a real turn against
+whatever model the user is actually working with. `housekeeper.ts`'s
+`runHousekeeperPrompt()` runs a prompt against a throwaway session
+(created, waited on via the `session.idle` SSE event, read back, deleted —
+same event this widget already subscribes to for real sessions, no
+polling) and returns the text response.
+
+**Wired today**: `generateSessionTitle()`, fired from `useActiveSession.ts`'s
+`send()` on a session's first user message — fire-and-forget, a slow/failed
+call just leaves the truncated-prompt fallback title in place. Other
+consumers (greeting text, other small tasks) are unspecified scope, not
+built — see `TODO.md`.
+
 ## Decisions log (so they don't get re-litigated from scratch)
 
 - **No diff view.** `PartRenderer.tsx`'s `patch` case is a one-line "N
@@ -114,12 +173,13 @@ the primitive to reuse — don't add a second one.
   framing: don't rebuild what a real editor/git tool already does well: "no
   fancy features like transcribe or audio... don't repeat what other apps
   already solve."
-- **No LLM-based session auto-titling.** `useSessions.ts`'s `autoTitle`
-  just truncates the first prompt to `AUTO_TITLE_LENGTH` chars — same
-  fallback opencode's own `--title` flag uses. A "tiny model summarizes the
-  prompt" feature was in the original brief but costs a second model call
-  per new session for a cosmetic win; revisit only if truncation reads
-  badly in practice.
+- **Session auto-titling uses the housekeeper model, not the user's model.**
+  Originally deferred as "costs a second model call for a cosmetic win" —
+  revisited once a free/local housekeeper model (`ollama/smollm:135m`)
+  existed to QA against, which changes that cost calculus to ~zero. See
+  "Housekeeper model" above. `useSessions.ts`'s `autoTitle` (plain
+  truncation) is still the fallback used if the housekeeper call fails or
+  times out.
 - **No virtualization yet**, despite it being explicitly asked for.
   `MessageList.tsx` renders every message unconditionally inside a plain
   `ScrollArea`. Deliberately deferred, not skipped — the owner's own
@@ -156,7 +216,9 @@ the primitive to reuse — don't add a second one.
 
 ## Backlog (real features, not yet built)
 
-Roughly in the order they'd be worth picking up:
+Full list with context lives in `TODO.md` at the repo root (UI redesign,
+regression tests, remaining housekeeper-model consumers, Ollama
+hot-reload). Items only summarized here, not duplicated in detail:
 
 1. **Branching** — fork instead of revert (`/session/{id}/fork` exists,
    unused). Explicitly called out as "a nice addon" in scoping, not core.

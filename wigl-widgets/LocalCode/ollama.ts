@@ -18,6 +18,20 @@ export const checkOllamaOnline = async (): Promise<boolean> => {
   }
 };
 
+/** Names as Ollama itself reports them (e.g. `"smollm:135m"`) — these are
+ * exactly the ids opencodeConfig.ts's `syncOllamaModels` needs, since a
+ * custom `openai-compatible` provider addresses models by that same tag. */
+export const listOllamaModels = async (): Promise<string[]> => {
+  try {
+    const res = await fetch(`${OLLAMA_BASE}/api/tags`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { models?: Array<{ name: string }> };
+    return (data.models ?? []).map((m) => m.name);
+  } catch {
+    return [];
+  }
+};
+
 export const useOllamaStatus = () => {
   const [online, setOnline] = useState<boolean | null>(null);
   const mounted = useRef(true);

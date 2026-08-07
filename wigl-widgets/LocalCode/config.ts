@@ -6,10 +6,22 @@ export const STORAGE_KEYS = {
   lastModel: "localcode_last_model", // ModelSelection | null — sticky across sessions
   lastAgent: "localcode_last_agent", // string | null
   lastVariant: "localcode_last_variant", // string | null
+  housekeeperModel: "localcode_housekeeper_model", // ModelSelection — see housekeeper.ts
 } as const;
 
-// First ~40 chars of the first prompt, cleaned up — the same "no value ⇒
-// truncated prompt" default `opencode run --title` already uses server-side
-// when we don't pass one ourselves. See AGENTS.md for why this isn't an
-// LLM call.
+// Fallback if the housekeeper call fails/times out, and the ceiling applied
+// to whatever it returns — same "no value ⇒ truncated prompt" default
+// `opencode run --title` uses server-side. Not an LLM call by itself.
 export const AUTO_TITLE_LENGTH = 40;
+
+// Only providers in this list are offered anywhere in the UI (model picker,
+// housekeeper default) — explicit owner scoping: "We only work with Ollama
+// for now, later we will add claude code." Extend this list, not a
+// special-case branch, when that happens.
+export const ALLOWED_PROVIDER_IDS = ["ollama"];
+
+// smollm:135m — small/fast/free, run entirely local via Ollama. Used for
+// housekeeping (session titles, and whatever else lands in housekeeper.ts)
+// so those never cost a real model call. Configurable later via
+// STORAGE_KEYS.housekeeperModel; this is only the seed default.
+export const DEFAULT_HOUSEKEEPER_MODEL = { providerID: "ollama", modelID: "smollm:135m" };

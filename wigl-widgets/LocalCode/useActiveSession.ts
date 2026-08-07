@@ -4,13 +4,24 @@
 // after that is applied from SSE events — see AGENTS.md's "durable vs.
 // transient" note for why parts are updated in place rather than replayed
 // wholesale on every event.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStorage } from "@/wigl/hooks";
 import * as client from "./client";
 import { STORAGE_KEYS } from "./config";
+import { generateSessionTitle } from "./housekeeper";
 import type { MessagePart, MessageWithParts, ModelSelection, PermissionRequest, Todo } from "./types";
 
-export const useActiveSession = (baseUrl: string | null, sessionID: string | null) => {
+export interface HousekeeperContext {
+  model: ModelSelection;
+  directory: string;
+  onTitle: (sessionID: string, title: string) => void;
+}
+
+export const useActiveSession = (
+  baseUrl: string | null,
+  sessionID: string | null,
+  housekeeper?: HousekeeperContext,
+) => {
   const [messages, setMessages] = useState<MessageWithParts[]>([]);
   const [permissions, setPermissions] = useState<PermissionRequest[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
@@ -92,6 +103,14 @@ export const useActiveSession = (baseUrl: string | null, sessionID: string | nul
     });
   }, [baseUrl, sessionID]);
 
+  // Mirrors `messages` for `send()` to read synchronously without becoming
+  // a dependency of it (an array that gets a new reference on every SSE
+  // event would otherwise recreate `send` constantly).
+  const messagesRef = useRef<MessageWithParts[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
   const send = useCallback(
     async (text: string, opts?: { model?: ModelSelection; agent?: string; variant?: string }) => {
       if (!baseUrl || !sessionID || !text.trim()) return;
@@ -101,9 +120,17 @@ export const useActiveSession = (baseUrl: string | null, sessionID: string | nul
       if (opts?.model) setLastModel(opts.model);
       if (opts?.agent) setLastAgent(opts.agent);
       if (opts?.variant !== undefined) setLastVariant(opts.variant);
+      const isFirstMessage = messagesRef.current.length === 0;
       await client.sendPrompt(baseUrl, sessionID, { text, model, agent, variant });
+      // Fire-and-forget: a title arriving a few seconds late is fine, the
+      // turn itself must never wait on the housekeeper model.
+      if (isFirstMessage && housekeeper) {
+        generateSessionTitle(baseUrl, housekeeper.model, text, housekeeper.directory)
+          .then((title) => title && housekeeper.onTitle(sessionID, title))
+          .catch((e) => console.error("[LocalCode] session auto-title failed", e));
+      }
     },
-    [baseUrl, sessionID, lastModel, lastAgent, lastVariant, setLastModel, setLastAgent, setLastVariant],
+    [baseUrl, sessionID, lastModel, lastAgent, lastVariant, setLastModel, setLastAgent, setLastVariant, housekeeper],
   );
 
   // Edit-and-resend: revert to the target message (undoes its effects

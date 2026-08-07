@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Widget, WidgetHeader } from "@/wigl";
 import { useStorage } from "@/wigl/hooks";
 import { homeDir } from "@/wigl/utils";
 import { Sidebar } from "./components/Sidebar";
 import { SessionPanel } from "./components/SessionPanel";
 import { ServerStatusBar } from "./components/ServerStatusBar";
+import { DEFAULT_HOUSEKEEPER_MODEL, STORAGE_KEYS } from "./config";
 import { useModelCatalog } from "./useModelCatalog";
 import { useOllamaStatus } from "./ollama";
 import { useOpencodeServer } from "./useOpencodeServer";
 import { useSessions } from "./useSessions";
+import type { ModelSelection } from "./types";
 
 const LocalCodeWidget = () => {
   const { status: opencodeStatus, baseUrl, restart } = useOpencodeServer();
@@ -17,6 +19,16 @@ const LocalCodeWidget = () => {
   const catalog = useModelCatalog(baseUrl);
   const [activeID, setActiveID] = useState<string | null>(null);
   const [defaultDir, setDefaultDir] = useStorage<string>("localcode_default_dir", "");
+  const [housekeeperModel] = useStorage<ModelSelection>(STORAGE_KEYS.housekeeperModel, DEFAULT_HOUSEKEEPER_MODEL);
+
+  const activeSession = useMemo(() => sessions.find((s) => s.id === activeID) ?? null, [sessions, activeID]);
+  const housekeeper = useMemo(
+    () =>
+      baseUrl && activeSession
+        ? { model: housekeeperModel, directory: activeSession.directory, onTitle: renameSession }
+        : undefined,
+    [baseUrl, activeSession, housekeeperModel, renameSession],
+  );
 
   // Seeds the default directory from $HOME exactly once — deliberately
   // `[]`, not `[defaultDir]`: a value already present (including one the
@@ -45,7 +57,7 @@ const LocalCodeWidget = () => {
           onRename={renameSession}
           onTogglePin={togglePin}
         />
-        <SessionPanel baseUrl={baseUrl} sessionID={activeID} catalog={catalog} />
+        <SessionPanel baseUrl={baseUrl} sessionID={activeID} catalog={catalog} housekeeper={housekeeper} />
       </div>
       <ServerStatusBar opencodeStatus={opencodeStatus} ollamaOnline={ollamaOnline} onRestartOpencode={restart} />
     </Widget>

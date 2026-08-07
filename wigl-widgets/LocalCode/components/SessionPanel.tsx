@@ -1,3 +1,4 @@
+import type { HousekeeperContext } from "../useActiveSession";
 import { useActiveSession } from "../useActiveSession";
 import type { useModelCatalog } from "../useModelCatalog";
 import { Composer } from "./Composer";
@@ -8,12 +9,14 @@ export const SessionPanel = ({
   baseUrl,
   sessionID,
   catalog,
+  housekeeper,
 }: {
   baseUrl: string | null;
   sessionID: string | null;
   catalog: ReturnType<typeof useModelCatalog>;
+  housekeeper?: HousekeeperContext;
 }) => {
-  const session = useActiveSession(baseUrl, sessionID);
+  const session = useActiveSession(baseUrl, sessionID, housekeeper);
 
   if (!sessionID) {
     return (

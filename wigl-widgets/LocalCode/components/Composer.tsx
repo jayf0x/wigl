@@ -2,7 +2,7 @@
 // Effort is only offered when the selected model actually has `variants`
 // (see AGENTS.md — "thinking effort comes from the model, not a fixed
 // enum") so this never shows a control the model can't honor.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,6 +40,15 @@ export const Composer = ({
   );
   const selectedModel = modelOptions.find((m) => m.providerID === model?.providerID && m.id === model?.modelID);
   const variantOptions = selectedModel?.variants ? Object.keys(selectedModel.variants) : [];
+
+  // With ALLOWED_PROVIDER_IDS scoped to Ollama alone, there's often exactly
+  // one model available — don't make the user pick it every session.
+  useEffect(() => {
+    if (!model && modelOptions.length === 1) {
+      const only = modelOptions[0];
+      onModelChange({ providerID: only.providerID, modelID: only.id });
+    }
+  }, [model, modelOptions, onModelChange]);
 
   const submit = () => {
     if (!text.trim()) return;
