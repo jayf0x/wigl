@@ -12,7 +12,8 @@
 // bundling everything into the one plugin file.
 //
 // Feature surface is stripped to a chat composer, not a document editor: only
-// list-item, cursor, and placeholder are added. The required stylesheet is
+// list-item and placeholder are added (see the mount effect for why cursor is
+// off and heading formatting is removed). The required stylesheet is
 // `composer.css` (imported by Composer.tsx), written against wigl's own theme
 // tokens; Crepe's shipped color themes are never imported.
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
@@ -69,12 +70,17 @@ export const CrepeField = ({
       // basicSetup, dompurify, …) whether enabled or not, ballooning this
       // repo's non-tree-shaking single-file bundle to ~17MB. The builder pulls
       // only what we addFeature.
-      const [{ CrepeBuilder }, { cursor }, { listItem }, { placeholder: placeholderFeature }, core, state, utils] =
+      // No `cursor` feature: it layers a `prosemirror-virtual-cursor` (a fake
+      // caret element) on top of the native contentEditable caret, which shows
+      // as a duplicated/ghost cursor — badly misplaced inside code blocks. The
+      // native caret is theme-visible on its own via `caret-color` in
+      // composer.css, so the virtual one is pure downside here.
+      const [{ CrepeBuilder }, { listItem }, { placeholder: placeholderFeature }, commonmark, core, state, utils] =
         await Promise.all([
           import("@milkdown/crepe/builder"),
-          import("@milkdown/crepe/feature/cursor"),
           import("@milkdown/crepe/feature/list-item"),
           import("@milkdown/crepe/feature/placeholder"),
+          import("@milkdown/kit/preset/commonmark"),
           import("@milkdown/kit/core"),
           import("@milkdown/kit/prose/state"),
           import("@milkdown/kit/utils"),
@@ -83,7 +89,6 @@ export const CrepeField = ({
 
       const crepe = new CrepeBuilder({ root: containerRef.current, defaultValue: initialValueRef.current })
         .addFeature(listItem)
-        .addFeature(cursor)
         .addFeature(placeholderFeature, { text: placeholderRef.current, mode: "block" });
       crepe.on((api: { markdownUpdated: (fn: (ctx: unknown, md: string) => void) => void }) => {
         api.markdownUpdated((_ctx, markdown) => {
@@ -91,6 +96,12 @@ export const CrepeField = ({
           onChangeRef.current(markdown);
         });
       });
+      // Kill heading formatting: typing `# ` should stay literal text in a
+      // chat prompt, not become a title. Remove the input rule (the `# `
+      // trigger) and the heading keymap (Ctrl-Alt-N shortcuts). The heading
+      // node stays in the schema so pasted markdown still round-trips, but
+      // nothing in the editor turns text into a heading on its own.
+      await crepe.editor.remove([commonmark.wrapInHeadingInputRule, commonmark.headingKeymap]);
 
       loadedRef.current = {
         editor: crepe.editor,

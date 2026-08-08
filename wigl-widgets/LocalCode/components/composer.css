@@ -11,14 +11,15 @@
  *
  * The CSS is bundled + injected by the host's plugin CSS pipeline
  * (docs/plugins.md "CSS"); this file is imported from Composer.tsx. */
-/* Only the pieces the three enabled features need — NOT the umbrella
+/* Only the pieces the enabled features need — NOT the umbrella
  * `common/style.css`, which pulls toolbar/table/latex/ai/image CSS (icon
- * fonts, katex assets) we don't render, ~1.5MB of dead stylesheet. */
+ * fonts, katex assets) we don't render, ~1.5MB of dead stylesheet. No
+ * cursor.css: the virtual-cursor feature is off (it ghosted a second caret),
+ * so the native caret + `caret-color` below is the only cursor. */
 @import "@milkdown/crepe/theme/common/reset.css";
 @import "@milkdown/crepe/theme/common/prosemirror.css";
 @import "@milkdown/crepe/theme/common/list-item.css";
 @import "@milkdown/crepe/theme/common/placeholder.css";
-@import "@milkdown/crepe/theme/common/cursor.css";
 
 /* Token bridge — Crepe's structural CSS reads these; we point them at wigl
  * theme tokens so preset/parametric theme changes flow through. Scoped to the
@@ -96,10 +97,11 @@
   white-space: pre-wrap;
 }
 
-/* The caret is drawn by prosemirror-virtual-cursor as a colored element, not
- * the native caret — the same trap CodeMirror had (invisible-black on dark
- * themes). Force it to a theme token so it's visible against every wigl
- * theme. */
-.composer-editor .milkdown .ProseMirror {
-  --prosemirror-virtual-cursor-color: var(--foreground);
+/* List markers (bullets and numbers) ship at `--crepe-color-outline`
+ * (≈ --border) — too faint against the prompt text. Bring them up to the text
+ * color at 80% so a list reads as clearly as what's in it. */
+.composer-editor .milkdown .milkdown-list-item-block li .label-wrapper,
+.composer-editor .milkdown .milkdown-list-item-block li .label-wrapper svg {
+  color: color-mix(in oklab, var(--foreground) 80%, transparent);
+  fill: color-mix(in oklab, var(--foreground) 80%, transparent);
 }

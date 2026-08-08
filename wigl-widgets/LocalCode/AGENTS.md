@@ -304,7 +304,7 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
     `@codemirror/language-data`, codemirror `basicSetup`, dompurify, …) whether
     enabled or not; in this repo's non-tree-shaking single-file plugin bundle
     that's ~17MB. The builder pulls only what you `addFeature` — here just
-    `list-item`, `cursor`, `placeholder`. Bundle lands ~5.8MB (up from the
+    `list-item` and `placeholder`. Bundle lands ~5.6MB (up from the
     CodeMirror era's ~3.8MB; the delta is Vue + ProseMirror, the price of a
     real WYSIWYG editor, and was accepted deliberately). Crepe's own
     code-block CodeMirror feature is left off for the same language-data bloat
@@ -323,15 +323,22 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
     high-precedence PM keymap and does the same job. `⌘/Ctrl/⌥+Enter` sends
     through the same handler; plain `Enter` is never intercepted, so
     Enter-never-submits holds.
-  - **Cursor visibility:** the caret is drawn by `prosemirror-virtual-cursor`
-    (a colored element, not the native caret) — the same invisible-on-dark
-    trap CodeMirror had. `composer.css` forces
-    `--prosemirror-virtual-cursor-color: var(--foreground)`.
+  - **No headings from typing:** the `wrapInHeadingInputRule` and
+    `headingKeymap` are `crepe.editor.remove(...)`'d right after build (before
+    `create()`), so `# ` stays literal text in a prompt instead of becoming a
+    title. The heading node stays in the schema so pasted markdown still
+    round-trips; nothing turns text into a heading on its own.
+  - **Cursor:** the `cursor` feature (which layers `prosemirror-virtual-cursor`,
+    a fake caret element, on top of the native one) is left OFF — it ghosted a
+    duplicate caret, worst inside code blocks. The native contentEditable caret
+    is the only one, made theme-visible via `caret-color: var(--foreground)` in
+    `composer.css` (no `cursor.css` import).
   - **Theming:** Crepe's shipped color themes are never imported (hardcoded
     colors, banned). `composer.css` imports only the structural common CSS the
-    three features need and bridges Crepe's `--crepe-color-*` variables to
+    enabled features need and bridges Crepe's `--crepe-color-*` variables to
     wigl tokens, plus compactness overrides so a document editor reads as a
-    chat box.
+    chat box. List markers are bumped from the faint `--crepe-color-outline` to
+    `--foreground`/80% so they read as clearly as the text.
 - **Everything stays widget-local.** Nothing here was promoted into
   `src/wigl/` despite the "make it reusable" ask: the repo rule is that
   nothing becomes shared until a *second* widget concretely needs it, and no
