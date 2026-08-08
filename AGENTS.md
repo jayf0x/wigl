@@ -60,6 +60,43 @@ For the owner's own fast build-and-look iteration (not for the agent to run unpr
 
 New debug/CLI scripts that operate on the whole repo (widget data scanners, seed scripts, anything you'd otherwise inline as a big shell string) go in `scripts/` and get a one-line root `package.json` entry, same shape as `tw-colors`/`check:eager`. A script that only makes sense for one widget (e.g. the calendar CLI) lives inside that widget's own folder instead, with its own `scripts` entry in *that* folder's `package.json` (invoked as `bun run --cwd wigl-widgets/<name> <script>`) — root `package.json` stays a thin index of repo-wide commands, not a registry of every widget's tooling.
 
+## Working tips
+
+- **Evaluating an unfamiliar library or CLI tool?** Clone it into `.idea/`
+  (the owner's gitignored reference folder — see "History" below) rather
+  than guessing at its API from memory or a half-remembered blog post. Read
+  its actual README, and skim the source for the feature you care about,
+  before writing code against it. `.idea/` already exists for exactly this
+  ("backup/reference folder, not code") — a cloned repo for research fits
+  the same role a saved spec document does.
+- **Testing a flow by hand, more than once?** Put the script in
+  `scripts/dev/` (bash/python/AppleScript/whatever fits — see its own
+  README) instead of re-typing a shell one-liner from scratch each time or
+  writing a full automated test for something that doesn't need one. This is
+  for manual QA loops ("does drag still work", "does the composer still
+  stream"), not CI — a lightweight, rerunnable, predictable way to check
+  something without the overhead of a real test suite.
+- **Installing something globally** (not into this repo's own
+  `node_modules`) **to make a widget or script work?** Add a line to
+  `global-deps.md` — what it is, how it's installed, what depends on it.
+  That's what makes "can this be uninstalled" and "is there already
+  something on this machine for X" answerable later instead of guesswork.
+- **Writing documentation**: default to extending this file or the relevant
+  `docs/*.md` owner (see the table above), not creating a new doc file. Too
+  many docs, or too much upfront architecture, is often more confusing than
+  helpful — a new file is one more place for ground truth to go stale
+  unnoticed. Keep it to the basics that actually save the next reader time.
+- **Commit after finishing a major change**, not just at the very end of a
+  long session. Small, real checkpoints mean nothing is ever lost and any
+  step can be backtracked to if a later one goes wrong — don't let a long
+  session accumulate into one uncommitted pile.
+- **Hit something genuinely blocking** — a real ambiguity, a decision only
+  the owner can make, something that looks impossible given the constraints
+  here? **Stop and ask**, rather than guessing, working around it silently,
+  or spinning on the same approach repeatedly. Minimize wasted effort: a
+  clarifying question costs one round-trip; a wrong guess acted on costs
+  the time to notice it, explain why it was wrong, and redo the work.
+
 ## History
 
 The original build spec lives at `.idea/INIT.md` (fulfilled, kept for rationale); `.idea/full-conversation.md` is early exploration describing a rejected platform-scale design — don't build toward it. `.idea/` is the owner's gitignored backup/reference folder, not code — the docs must (and do) stand alone without it.

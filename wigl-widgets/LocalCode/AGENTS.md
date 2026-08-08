@@ -291,21 +291,17 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
   their text so `2 * 3 * 4` and glob patterns stop turning into italics.
   The `dangerouslySetInnerHTML` ban (see Hard rules) is why a real markdown
   library is not an option.
-- **Milkdown/Crepe was considered for the composer and rejected**, despite
-  being requested by name. Two blockers, in order: the plugin build has no
-  CSS pipeline at all (`scripts/plugin.ts` emits a single JS bundle the
-  loader evaluates — nothing injects a stylesheet, so Crepe's required theme
-  CSS would silently not load), and that theme is a large sheet of hardcoded
-  colors, which `docs/theming.md` bans for widgets outright. A ProseMirror
-  editor also swallows the keyboard, which fights the slash palette.
-  **First blocker is now closed** — `docs/plugins.md`'s "CSS" section:
-  `plugin:build`/`install`/`loadPlugins()` now carry a plugin's own
-  `import "*.css"` through to a real injected `<style>` tag, added while
-  building the CodeMirror composer below, for a reason unrelated to
-  Milkdown itself. The second blocker (Crepe's theme is hardcoded colors,
-  not wigl tokens) is still real and still unmapped — swapping to
-  Milkdown/Crepe now would be a themeing project on top of an editor swap,
-  not a `bun add`, and hasn't been decided; don't do it speculatively.
+- **Milkdown/Crepe was rejected once, on a blocker that's since closed —
+  the composer is moving to it anyway.** The original blocker: the plugin
+  build had no CSS pipeline at all, so Crepe's required theme stylesheet
+  would silently not load. That's fixed — `docs/plugins.md`'s "CSS" section:
+  a plugin's own `import "*.css"` now gets bundled, installed, and injected
+  as a real `<style>` tag. `TODO.md` has the full, current spec for
+  replacing the composer's editor with Crepe, including the still-real
+  requirement that Crepe's shipped theme (hardcoded colors) can't be used
+  as-is and needs a custom stylesheet written against wigl's own tokens.
+  Read `TODO.md` rather than this bullet before touching the composer's
+  editor — this is a decision-log note, not the current spec.
 - **The composer field is CodeMirror 6, not a plain `<textarea>`** —
   `components/CodeMirrorField.tsx` (a hand-rolled controlled wrapper over
   bare `@codemirror/view`, not `@uiw/react-codemirror` — that package's
@@ -515,28 +511,15 @@ work around `EventSource` not existing as a global under `bun test`
 real Tauri webview) by re-parsing the same `data: {...}\n\n` SSE framing
 over a raw `fetch` stream.
 
-## Backlog (real features, not yet built)
+## Backlog
 
-Full list with context lives in `TODO.md` at the repo root (UI redesign,
-remaining housekeeper-model consumers, Ollama hot-reload). Items only
-summarized here, not duplicated in detail:
-
-1. **Branching** — fork instead of revert (`/session/{id}/fork` exists,
-   unused). Explicitly called out as "a nice addon" in scoping, not core.
-2. **Skills — confirmed, then disabled.** Superseded by the dedicated
-   "Skills — disabled for now" section above: opencode's own `SKILL.md`
-   discovery is confirmed live (no widget code needed for that part, as
-   originally hoped), but small local models handle those skills badly, so
-   `opencodeConfig.ts` now disables the skill tool globally until the
-   skill-matching-a-small-model design question above has an answer.
-3. **Sub-agent visibility beyond the inline `subtask` part.**
-   `/session/{id}/children` (child sessions spawned by the current one) is
-   in `client.ts`'s reach but nothing calls it — a real sub-agent view
-   would show children as nested/linked sessions in the sidebar, not just
-   the one-line badge `PartRenderer.tsx` renders inline today.
-4. ~~Virtualization~~ — answered by the render window, see decisions log.
-5. **Multi-monitor server sharing** — see "Server lifecycle" above.
-6. **Ollama start/stop** — see decisions log above.
+Open, not-yet-built work for this widget (branching, sub-agent visibility,
+multi-monitor server sharing, Ollama start/stop) lives in root `backlog.md`,
+not here — that's the one canonical backlog for the whole repo (see root
+`AGENTS.md`'s docs table). The composer-editor rewrite is different: it's
+current, actionable work, so it's in root `TODO.md` instead. Skills are not
+backlog material — see "Skills — disabled for now" above for that decision's
+actual current state.
 
 ## Hard rules specific to this widget
 
