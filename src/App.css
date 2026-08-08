@@ -22,7 +22,7 @@ body,
    own background (image, solid color, whatever) by just overriding this
    var. Default: a faint dark radial gradient fading to transparent. */
 :root {
-  --wigl-windowed-bg: radial-gradient(ellipse at center, rgb(11 11 12 / 0.55) 0%, rgb(11 11 12 / 0) 100%);
+  --wigl-windowed-bg: radial-gradient(ellipse at center, rgb(11 11 12 / 0.95) 0%, rgb(11 11 12 / 0) 100%);
   --destructive-foreground: var(--color-red-700);
   --info: var(--color-blue-500);
   --info-foreground: var(--color-blue-700);
@@ -119,6 +119,11 @@ html.wigl-windowed #root {
     transform 0.5s var(--wigl-spring, cubic-bezier(0.22, 1.3, 0.36, 1)),
     filter 0.25s ease;
   touch-action: none;
+  /* .wigl-desktop disables selection app-wide so drag/menu gestures don't
+     accidentally select text; widget content opts back in so a widget's own
+     text (notes, logs, ...) can be selected/copied normally. */
+  user-select: text;
+  -webkit-user-select: text;
 }
 .wigl-widget.lifted {
   transition: filter 0.25s ease;
@@ -190,6 +195,10 @@ html.wigl-windowed #root {
 .wigl-menu button:hover {
   background: var(--accent);
   color: var(--accent-foreground);
+}
+.wigl-menu-separator {
+  margin: 4px 2px;
+  border-top: 1px solid var(--border);
 }
 
 /* The anchor field: cross marks on cell corners (Desktop.tsx builds the

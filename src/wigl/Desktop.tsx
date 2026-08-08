@@ -31,12 +31,17 @@ import {
 } from "./grid/math";
 import { useGlobalActions, useRegisterGlobalAction, useStorage } from "./hooks";
 import { ThemeSettingsPopover } from "./ThemeSettingsPopover";
-import { type WidgetGridReport, WidgetSlotProvider } from "./widget";
+import { type WidgetGridReport, WidgetSlotProvider, type WidgetSlotValue } from "./widget";
 
 // Clicks on these inside a drag handle stay clicks; everything else drags.
 const INTERACTIVE = "button, a, input, select, textarea, [data-no-drag]";
 
-type SavedPositions = Record<string, { col: number; row: number; m?: number }>;
+// `closed`/`minimized` ride in the same per-id record as position — one
+// storage key, one broadcast, no separate sync path to keep in sync with
+// drag/drop. `closed` maps straight onto GridItem.hidden (already "not
+// rendered, not reflowed, not hit-tested" — see widget.tsx), just driven by
+// the header/menu instead of a widget's own report.
+type SavedPositions = Record<string, { col: number; row: number; m?: number; closed?: boolean; minimized?: boolean }>;
 
 interface MonitorRect {
   x: number;
@@ -221,7 +226,14 @@ export const Desktop = ({
       if (mon !== monitorIndex) continue;
       const { w, h } = TILING.defaultSize;
       const pos = validPos ? s : autoPlace(items, w, h, cols);
-      items.push({ id, w, h, col: Math.max(0, Math.min(pos.col, cols - w)), row: Math.max(0, pos.row) });
+      items.push({
+        id,
+        w,
+        h,
+        col: Math.max(0, Math.min(pos.col, cols - w)),
+        row: Math.max(0, pos.row),
+        hidden: !!s?.closed,
+      });
       if (!validPos) pendingReports.current.add(id);
     }
     // Saved/default positions can conflict after code changes — settle them.
@@ -266,14 +278,41 @@ export const Desktop = ({
   // every Desktop render) that always calls the latest reportGrid closure.
   const reportGridRef = useRef(reportGrid);
   reportGridRef.current = reportGrid;
-  const slots = useRef<Map<string, (report: WidgetGridReport) => void>>(new Map());
-  const getSlot = (id: string) => {
-    let slot = slots.current.get(id);
-    if (!slot) {
-      slot = (report) => reportGridRef.current(id, report);
-      slots.current.set(id, slot);
-    }
-    return slot;
+
+  // Close drives the same GridItem.hidden a widget's own report can set
+  // (see widget.tsx's WidgetGridProps) — once hidden, <Component> below
+  // isn't rendered at all, so nothing but this setter (or reopening from the
+  // menu) can ever bring it back.
+  const setClosed = useCallback(
+    (id: string, closed: boolean) => {
+      setSaved({ ...savedRef.current, [id]: { ...savedRef.current[id], closed } });
+      setLayout((prev) => (prev ? prev.map((it) => (it.id === id ? { ...it, hidden: closed } : it)) : prev));
+    },
+    [setSaved],
+  );
+  const toggleMinimize = useCallback(
+    (id: string) => {
+      const minimized = !savedRef.current[id]?.minimized;
+      setSaved({ ...savedRef.current, [id]: { ...savedRef.current[id], minimized } });
+    },
+    [setSaved],
+  );
+
+  // One WidgetSlotValue per id, recreated only when its minimized flag
+  // actually flips — not on every Desktop render (a drag fires plenty of
+  // those), so <Widget>'s effect deps stay stable in between.
+  const slots = useRef<Map<string, { value: WidgetSlotValue; minimized: boolean }>>(new Map());
+  const getSlot = (id: string, minimized: boolean): WidgetSlotValue => {
+    const cached = slots.current.get(id);
+    if (cached && cached.minimized === minimized) return cached.value;
+    const value: WidgetSlotValue = {
+      report: (report) => reportGridRef.current(id, report),
+      minimized,
+      onClose: () => setClosed(id, true),
+      onToggleMinimize: () => toggleMinimize(id),
+    };
+    slots.current.set(id, { value, minimized });
+    return value;
   };
 
   // Positions are applied imperatively so the dragged card's per-frame inline
@@ -378,7 +417,11 @@ export const Desktop = ({
   const persist = (items: GridItem[]) => {
     const merged = {
       ...savedRef.current,
-      ...Object.fromEntries(items.map((it) => [it.id, { col: it.col, row: it.row, m: monitorIndex }])),
+      // Spread the existing record first: a plain {col,row,m} here would
+      // wipe closed/minimized every time a widget is dragged.
+      ...Object.fromEntries(
+        items.map((it) => [it.id, { ...savedRef.current[it.id], col: it.col, row: it.row, m: monitorIndex }]),
+      ),
     };
     // useStorage's own set() broadcasts this to every other window
     // (`wigl-kv`) — no bespoke layout-specific event needed.
@@ -386,9 +429,13 @@ export const Desktop = ({
   };
 
   // --- global actions (right-click menu on any widget) -------------------------
-  // The menu can extend past the widget's hit-rects, so the click-through
-  // poller is paused while it's open (same trick as dragging).
+  // Scoped to a widget's header (data-widget-header, see widget.tsx) — right-
+  // clicking a widget's own body falls through to the normal browser/webview
+  // context menu instead (so e.g. pasting into a textarea still works). The
+  // menu can extend past the widget's hit-rects, so the click-through poller
+  // is paused while it's open (same trick as dragging).
   const openMenu = (e: React.MouseEvent) => {
+    if (!(e.target as HTMLElement).closest("[data-widget-header]")) return;
     e.preventDefault();
     menuPos.current = { x: e.clientX, y: e.clientY };
     setMenu({ x: e.clientX, y: e.clientY });
@@ -654,6 +701,12 @@ export const Desktop = ({
 
   if (!layout) return null;
 
+  // Every monitor's menu offers every closed widget, not just ones native to
+  // this screen — `saved` is shared storage, and reopening resolves the same
+  // `m` (monitor) the widget last lived on regardless of which window's menu
+  // was used (see the layout-build effect above).
+  const closedIds = Object.keys(widgets).filter((id) => saved[id]?.closed);
+
   return (
     <div className="wigl-desktop" onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag}>
       <svg ref={field} className="wigl-field" aria-hidden="true">
@@ -696,7 +749,7 @@ export const Desktop = ({
             onContextMenu={openMenu}
           >
             <WidgetErrorBoundary id={it.id}>
-              <WidgetSlotProvider value={getSlot(it.id)}>
+              <WidgetSlotProvider value={getSlot(it.id, !!saved[it.id]?.minimized)}>
                 <Suspense fallback={null}>
                   <Component />
                 </Suspense>
@@ -725,6 +778,22 @@ export const Desktop = ({
                 {a.label}
               </button>
             ))}
+            {closedIds.length > 0 && (
+              <>
+                <div className="wigl-menu-separator" />
+                {closedIds.map((id) => (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      closeMenu();
+                      setClosed(id, false);
+                    }}
+                  >
+                    Show {id}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         </div>
       )}

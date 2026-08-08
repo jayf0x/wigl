@@ -64,14 +64,17 @@ Everything shared lives behind exactly three barrels — widgets never deep-impo
 
 **Read each barrel's `index.ts` for the current list**; each module carries its own doc comment. The two you'll always use from `@/wigl`:
 
-- **`Widget`** — the dark rounded panel (also forces the `dark` class coss ui needs). Override looks via `className`. Children + `className` only, per the philosophy above.
-- **`WidgetHeader`** — a drag handle, and *only* a drag handle. Its single job is making window-drag and clicking coexist: mousedown on anything interactive (`button, a, input, select, textarea`, or any element carrying `data-no-drag`) passes through to the element; mousedown anywhere else starts the window drag. Content is whatever children you pass — a title span, status info, buttons (`ml-auto` to right-align them), nothing at all. **Never** attach `onMouseDown`/`stopPropagation` workarounds inside it, and never import the drag module directly in a widget — if a click is being eaten, add `data-no-drag` to that element instead.
+- **`Widget`** — the dark rounded panel (also forces the `dark` class coss ui needs). Override looks via `className`. Children + `className` only, per the philosophy above — with one exception: `minimizedIcon?: ReactNode`, shown centered in the 1x1 minimized view in place of the default `•` (see below). This is per-widget content, not a style override, which is why it's a named prop rather than something `className` could express.
+- **`WidgetHeader`** — a title bar, plus two fixed controls every widget gets for free: close and minimize (top-left, macOS traffic-light order), before your own children, synced to storage and driven by `<Widget>`/`Desktop.tsx` — nothing to wire up. Close unmounts the widget entirely (no render, no reflow, no hit-testing) until it's reopened from the "closed widgets" section of the desktop's right-click menu. Minimize forces the widget to 1x1 and swaps its body for `minimizedIcon` (or `•`) plus an expand button; the widget itself keeps rendering underneath (state, polling, etc. all keep running), it just isn't shown. Dragging lives on a small grip at the header's top-left corner (`data-drag-handle`), not the header at large — the rest of the header (title, your own buttons) is ordinary interactive content, so text stays selectable and a click on a header button never gets mistaken for a drag; this also leaves the header free for a future resize handle without the two fighting over the same surface. The header as a whole still carries `data-widget-header`, which is what scopes the desktop's right-click global-commands menu — right-clicking a widget's *body* falls through to the normal browser/webview context menu (so pasting into a textarea works) rather than opening global commands. Content is whatever children you pass — a title span, status info, your own buttons (`ml-auto` to right-align them), nothing at all. **Never** attach `onMouseDown`/`stopPropagation` workarounds inside it, and never import the drag module directly in a widget. Don't add your own close/minimize button — these two are already there.
 
 ```tsx
-<WidgetHeader className="bg-emerald-950/40">
-  <span className="px-1 text-[10px] tracking-widest opacity-40">REPOS</span>
-  <div className="ml-auto flex items-center gap-0.5">{/* buttons — clicks just work */}</div>
-</WidgetHeader>
+<Widget minimizedIcon={<CalendarIcon className="size-4" />}>
+  <WidgetHeader className="bg-emerald-950/40">
+    <span className="px-1 text-[10px] tracking-widest opacity-40">REPOS</span>
+    <div className="ml-auto flex items-center gap-0.5">{/* your own buttons — clicks just work */}</div>
+  </WidgetHeader>
+  {/* body */}
+</Widget>
 ```
 
 Before writing a utility inside your widget folder, skim the barrels — the helper you need (e.g. live relative-time labels, persisted state) may already exist. Conversely, don't add to `src/wigl/` for a single widget's needs; the promotion threshold is in `docs/architecture.md`.
