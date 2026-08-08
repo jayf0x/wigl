@@ -8,13 +8,12 @@
 // Enter never submits. ⌘/Ctrl/⌥+Enter does. Owner's call, and the right one
 // for a field you're expected to write real multi-line prompts in.
 //
-// The field itself is CodeMirror (`composerEditor.ts`), not a `<textarea>`
-// — light markdown syntax highlighting while typing, and Tab/Shift+Tab to
-// nest/unnest a list line. See composerEditor.ts's header comment for why
-// CodeMirror specifically (Milkdown/MDXEditor both need a stylesheet the
-// plugin bundler has no way to load).
+// The field itself is Milkdown's Crepe editor (`CrepeField.tsx`), not a
+// `<textarea>` — WYSIWYG markdown, with native Tab/Shift+Tab list nesting and
+// Enter-continues/exits-a-list. Its stylesheet (`composer.css`) rides the
+// host's plugin CSS pipeline. Enter never submits; the slash palette owns its
+// keys via a capture-phase handler that beats ProseMirror to them.
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { EditorView } from "@codemirror/view";
 import { ArrowUp, Bot, Brain, Cpu, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/wigl/utils";
@@ -28,8 +27,8 @@ import {
   resolveCommand,
 } from "../commands";
 import type { AgentDef, ModelSelection, ProviderCatalogEntry } from "../types";
-import { CodeMirrorField } from "./CodeMirrorField";
-import { composerExtensions, setPlaceholder } from "./composerEditor";
+import { CrepeField, type CrepeHandle } from "./CrepeField";
+import "./composer.css";
 
 const Chip = ({
   icon: Icon,
@@ -87,7 +86,7 @@ export const Composer = ({
 }) => {
   const [text, setText] = useState("");
   const [cursor, setCursor] = useState(0); // highlighted palette row
-  const viewRef = useRef<EditorView | null>(null);
+  const crepeRef = useRef<CrepeHandle | null>(null);
   const pendingFocusRef = useRef(false);
 
   const models = useMemo(
@@ -173,65 +172,61 @@ export const Composer = ({
     setText("");
   };
 
-  // Focus (and, for a non-empty prefix, caret-to-end) after `type()`/`apply()`
-  // sets `text` programmatically — deferred to an effect because the
-  // CodeMirror view only picks up the new controlled `value` once its own
-  // (child) effect has run, which happens before this one on the same commit.
+  // Focus (caret to end) after `type()`/`apply()` sets `text` programmatically
+  // — deferred to an effect because CrepeField only picks up the new `value`
+  // once its own (child) sync effect has run, which happens before this one on
+  // the same commit.
   useEffect(() => {
     if (!pendingFocusRef.current) return;
     pendingFocusRef.current = false;
-    const view = viewRef.current;
-    if (!view) return;
-    view.dispatch({ selection: { anchor: view.state.doc.length } });
-    view.focus();
+    crepeRef.current?.focusEnd();
   }, [text]);
 
-  // Extension list built once — palette nav/apply/clear and submit read
-  // through refs (mirrored below) so the editor's own state (undo history,
-  // selection) survives every keystroke instead of being torn down.
-  const paletteOpenRef = useRef(paletteOpen);
-  const optionsRef = useRef(options);
-  const indexRef = useRef(index);
-  const applyFnRef = useRef(apply);
-  const submitFnRef = useRef(submit);
-  paletteOpenRef.current = paletteOpen;
-  optionsRef.current = options;
-  indexRef.current = index;
-  applyFnRef.current = apply;
-  submitFnRef.current = submit;
+  const moveDown = () => setCursor((c) => (Math.min(c, options.length - 1) + 1) % options.length);
+  const moveUp = () =>
+    setCursor((c) => (Math.min(c, options.length - 1) + options.length - 1) % options.length);
 
-  const { extensions, placeholderCompartment } = useMemo(
-    () =>
-      composerExtensions({
-        isOpen: () => paletteOpenRef.current,
-        moveDown: () =>
-          setCursor((c) => (Math.min(c, optionsRef.current.length - 1) + 1) % optionsRef.current.length),
-        moveUp: () =>
-          setCursor(
-            (c) =>
-              (Math.min(c, optionsRef.current.length - 1) + optionsRef.current.length - 1) %
-              optionsRef.current.length,
-          ),
-        apply: () => {
-          const o = optionsRef.current[indexRef.current];
-          if (o) applyFnRef.current(o);
-        },
-        clear: () => setText(""),
-        onSubmit: () => submitFnRef.current(),
-        placeholder: busy ? "…" : "ask, or / for commands",
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-
-  // `placeholder` above only seeds the initial compartment value — later
-  // busy-state flips update it in place via `setPlaceholder` instead of
-  // rebuilding the whole extension list (which would tear down history).
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) return;
-    setPlaceholder(view, placeholderCompartment, busy ? "…" : "ask, or / for commands");
-  }, [busy, placeholderCompartment]);
+  // The slash palette (and Mod/Alt-Enter send) must beat ProseMirror to these
+  // keys. A capture-phase handler on the editor's wrapper runs before
+  // ProseMirror's own keydown listener on the inner contentEditable; calling
+  // stopPropagation there halts the descent so Milkdown never sees the key.
+  const onKeyDownCapture = (e: React.KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey || e.altKey) && e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      submit();
+      return;
+    }
+    if (!paletteOpen) return;
+    const take = () => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    switch (e.key) {
+      case "ArrowDown":
+        take();
+        moveDown();
+        break;
+      case "ArrowUp":
+        take();
+        moveUp();
+        break;
+      case "Tab":
+        take();
+        e.shiftKey ? moveUp() : moveDown();
+        break;
+      case "Enter": {
+        take();
+        const o = options[index];
+        if (o) apply(o);
+        break;
+      }
+      case "Escape":
+        take();
+        setText("");
+        break;
+    }
+  };
 
   return (
     <div className="relative shrink-0 px-4 pb-3">
@@ -260,17 +255,16 @@ export const Composer = ({
         data-no-drag
         className="rounded-xl border border-border bg-background/40 transition-colors duration-200 focus-within:border-ring/60"
       >
-        <CodeMirrorField
+        <CrepeField
           value={text}
           onChange={(value) => {
             setText(value);
             setCursor(0);
           }}
-          extensions={extensions}
-          onCreateEditor={(view) => {
-            viewRef.current = view;
-          }}
-          className="w-full"
+          placeholder={busy ? "…" : "ask, or / for commands"}
+          handleRef={crepeRef}
+          onKeyDownCapture={onKeyDownCapture}
+          className="composer-editor w-full"
         />
 
         <div className="flex items-center gap-0.5 px-1.5 pb-1.5">

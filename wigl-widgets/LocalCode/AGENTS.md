@@ -291,43 +291,47 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
   their text so `2 * 3 * 4` and glob patterns stop turning into italics.
   The `dangerouslySetInnerHTML` ban (see Hard rules) is why a real markdown
   library is not an option.
-- **Milkdown/Crepe was rejected once, on a blocker that's since closed —
-  the composer is moving to it anyway.** The original blocker: the plugin
-  build had no CSS pipeline at all, so Crepe's required theme stylesheet
-  would silently not load. That's fixed — `docs/plugins.md`'s "CSS" section:
-  a plugin's own `import "*.css"` now gets bundled, installed, and injected
-  as a real `<style>` tag. `TODO.md` has the full, current spec for
-  replacing the composer's editor with Crepe, including the still-real
-  requirement that Crepe's shipped theme (hardcoded colors) can't be used
-  as-is and needs a custom stylesheet written against wigl's own tokens.
-  Read `TODO.md` rather than this bullet before touching the composer's
-  editor — this is a decision-log note, not the current spec.
-- **The composer field is CodeMirror 6, not a plain `<textarea>`** —
-  `components/CodeMirrorField.tsx` (a hand-rolled controlled wrapper over
-  bare `@codemirror/view`, not `@uiw/react-codemirror` — that package's
-  `getDefaultExtensions.js` unconditionally imports its light/dark theme and
-  full `basicSetup` bundle regardless of props, which this repo's unminified
-  plugin build can't tree-shake away) + `components/composerEditor.ts`
-  (extensions: markdown syntax highlighting via theme tokens, Tab/Shift+Tab
-  list nesting, Enter-continues-a-list-line, and the slash palette's own nav
-  in a `Prec.highest` keymap so it still wins while open). Chosen over
-  Milkdown/MDXEditor for the same reason Milkdown was rejected above:
-  CodeMirror injects its styles from JS (`EditorView.theme`/
-  `HighlightStyle`), so the missing CSS pipeline never becomes a blocker.
-  Deliberately not full per-language code-fence highlighting —
-  `@codemirror/language-data`'s grammars are meant to be dynamically
-  imported, and this bundler can't split them out, so pulling it in inflated
-  the build from ~300KB-class to ~9MB; fenced code renders as plain
-  monospace instead. See `TODO.md`'s (now-closed) CodeMirror entry for the
-  full before/after and the ~3.8MB bundle-size tradeoff that's still there.
-  **The blinking cursor needs its own theme rule, not just `caretColor`** —
-  found live (owner report: invisible on a dark wigl theme). It's a
-  synthetic `.cm-cursor` div from `drawSelection()`, not the native caret, so
-  `caretColor` on `.cm-content` never touches it; CodeMirror's own baseTheme
-  hardcodes it black unless the view is flagged `dark: true`, which nothing
-  here does (wigl's theme is runtime CSS vars, not a fixed light/dark split).
-  Fixed with an explicit `.cm-cursor, .cm-dropCursor { borderLeftColor:
-  "var(--foreground)" }` in `composerEditor.ts`'s `chatTheme`.
+- **The composer field is Milkdown's Crepe editor, not a plain `<textarea>`
+  (and no longer CodeMirror).** WYSIWYG markdown with native list handling —
+  `- `/`1. ` start lists, `Tab`/`Shift+Tab` nest/unnest (the hard requirement
+  that drove the choice), `Enter` continues/exits a list. Two files:
+  `components/CrepeField.tsx` (a controlled React wrapper: create once, sync
+  external `value` in via `replaceAll`, forward edits out via Crepe's
+  `markdownUpdated` listener) and `components/composer.css` (the required
+  stylesheet). Three things that are load-bearing, not incidental:
+  - **`CrepeBuilder` from `@milkdown/crepe/builder`, never the `Crepe`
+    umbrella.** The umbrella statically imports *every* feature (katex,
+    `@codemirror/language-data`, codemirror `basicSetup`, dompurify, …) whether
+    enabled or not; in this repo's non-tree-shaking single-file plugin bundle
+    that's ~17MB. The builder pulls only what you `addFeature` — here just
+    `list-item`, `cursor`, `placeholder`. Bundle lands ~5.8MB (up from the
+    CodeMirror era's ~3.8MB; the delta is Vue + ProseMirror, the price of a
+    real WYSIWYG editor, and was accepted deliberately). Crepe's own
+    code-block CodeMirror feature is left off for the same language-data bloat
+    reason the old CodeMirror pass documented — fenced code stays plain.
+  - **The editor libs load via dynamic `import()` inside the mount effect, not
+    static top-level imports.** Milkdown's Vue/ProseMirror modules touch
+    `document` at evaluation time, which crashes `plugin:check`'s headless
+    render. Deferring the import to the browser-only effect keeps the module
+    import-safe; Bun inlines the dynamic imports into the one bundle (no
+    chunks), so it still loads through the blob loader.
+  - **The slash palette owns its keys via a capture-phase `onKeyDownCapture`
+    in `Composer.tsx`, not a ProseMirror keymap.** A capture handler on the
+    editor wrapper runs before ProseMirror's own keydown on the inner
+    contentEditable; `preventDefault` + `stopPropagation` there stops the
+    descent so Milkdown never sees the key. Simpler than injecting a
+    high-precedence PM keymap and does the same job. `⌘/Ctrl/⌥+Enter` sends
+    through the same handler; plain `Enter` is never intercepted, so
+    Enter-never-submits holds.
+  - **Cursor visibility:** the caret is drawn by `prosemirror-virtual-cursor`
+    (a colored element, not the native caret) — the same invisible-on-dark
+    trap CodeMirror had. `composer.css` forces
+    `--prosemirror-virtual-cursor-color: var(--foreground)`.
+  - **Theming:** Crepe's shipped color themes are never imported (hardcoded
+    colors, banned). `composer.css` imports only the structural common CSS the
+    three features need and bridges Crepe's `--crepe-color-*` variables to
+    wigl tokens, plus compactness overrides so a document editor reads as a
+    chat box.
 - **Everything stays widget-local.** Nothing here was promoted into
   `src/wigl/` despite the "make it reusable" ask: the repo rule is that
   nothing becomes shared until a *second* widget concretely needs it, and no

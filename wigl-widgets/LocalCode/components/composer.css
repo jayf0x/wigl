@@ -1,0 +1,105 @@
+/* Composer editor styling for Milkdown/Crepe.
+ *
+ * Crepe ships visual themes that are sheets of literal hardcoded colors —
+ * banned for widgets (docs/theming.md: every color must be a var(--token)).
+ * So we import only Crepe's *common* stylesheet (structure + list/placeholder
+ * layout, which is authored entirely against `--crepe-color-*` variables) and
+ * define those variables here in terms of wigl's own semantic tokens. No
+ * Crepe color theme is imported. This is the "write a custom stylesheet" the
+ * TODO entry called for — a token bridge plus a handful of compactness
+ * overrides so a document editor reads as a chat box.
+ *
+ * The CSS is bundled + injected by the host's plugin CSS pipeline
+ * (docs/plugins.md "CSS"); this file is imported from Composer.tsx. */
+/* Only the pieces the three enabled features need — NOT the umbrella
+ * `common/style.css`, which pulls toolbar/table/latex/ai/image CSS (icon
+ * fonts, katex assets) we don't render, ~1.5MB of dead stylesheet. */
+@import "@milkdown/crepe/theme/common/reset.css";
+@import "@milkdown/crepe/theme/common/prosemirror.css";
+@import "@milkdown/crepe/theme/common/list-item.css";
+@import "@milkdown/crepe/theme/common/placeholder.css";
+@import "@milkdown/crepe/theme/common/cursor.css";
+
+/* Token bridge — Crepe's structural CSS reads these; we point them at wigl
+ * theme tokens so preset/parametric theme changes flow through. Scoped to the
+ * composer so nothing leaks into the rest of the widget. */
+.composer-editor {
+  --crepe-color-background: transparent;
+  --crepe-color-on-background: var(--foreground);
+  --crepe-color-surface: var(--popover);
+  --crepe-color-surface-low: var(--muted);
+  --crepe-color-on-surface: var(--foreground);
+  --crepe-color-on-surface-variant: var(--muted-foreground);
+  --crepe-color-outline: var(--border);
+  --crepe-color-primary: var(--primary);
+  --crepe-color-secondary: var(--secondary);
+  --crepe-color-on-secondary: var(--secondary-foreground);
+  --crepe-color-inverse: var(--foreground);
+  --crepe-color-on-inverse: var(--background);
+  --crepe-color-inline-code: var(--accent-foreground);
+  --crepe-color-inline-area: var(--accent);
+  --crepe-color-error: var(--destructive);
+  --crepe-color-hover: var(--accent);
+  --crepe-color-selected: color-mix(in oklab, var(--ring) 30%, transparent);
+  --crepe-shadow-1: none;
+  --crepe-shadow-2: none;
+  --crepe-font-title: inherit;
+  --crepe-font-default: inherit;
+  --crepe-font-code: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --crepe-base-font-size: 12.5px;
+}
+
+/* Compactness: strip the document-editor chrome. The Crepe reset scales
+ * headings to 2.6em and adds page-sized margins — wrong for a one-to-nine-line
+ * prompt box. Flatten it to near-body sizing while keeping enough hierarchy to
+ * see structure. */
+.composer-editor .milkdown {
+  padding: 0;
+}
+
+.composer-editor .milkdown .ProseMirror {
+  padding: 10px 12px 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  outline: none;
+  line-height: 1.625;
+  caret-color: var(--foreground);
+}
+
+.composer-editor .milkdown .ProseMirror :is(h1, h2, h3, h4, h5, h6) {
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0.4em 0 0.2em;
+}
+.composer-editor .milkdown .ProseMirror h1 { font-size: 1.4em; }
+.composer-editor .milkdown .ProseMirror h2 { font-size: 1.25em; }
+.composer-editor .milkdown .ProseMirror h3 { font-size: 1.1em; }
+.composer-editor .milkdown .ProseMirror :is(h4, h5, h6) { font-size: 1em; }
+
+.composer-editor .milkdown .ProseMirror > :first-child { margin-top: 0; }
+.composer-editor .milkdown .ProseMirror p { margin: 0; }
+.composer-editor .milkdown .ProseMirror blockquote {
+  margin: 0.3em 0;
+  padding-left: 0.75em;
+  border-left: 2px solid var(--border);
+  color: var(--muted-foreground);
+}
+.composer-editor .milkdown .ProseMirror pre {
+  font-family: var(--crepe-font-code);
+  font-size: 0.9em;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin: 0.3em 0;
+  white-space: pre-wrap;
+}
+
+/* The caret is drawn by prosemirror-virtual-cursor as a colored element, not
+ * the native caret — the same trap CodeMirror had (invisible-black on dark
+ * themes). Force it to a theme token so it's visible against every wigl
+ * theme. */
+.composer-editor .milkdown .ProseMirror {
+  --prosemirror-virtual-cursor-color: var(--foreground);
+}
