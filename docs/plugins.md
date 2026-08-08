@@ -196,6 +196,29 @@ doesn't verify it's inside a `Widget`); a widget author misusing the API past
 what `plugin:check` catches is their own call to get wrong, not something
 worth extra runtime ceremony to prevent.
 
+## CSS
+
+A plugin can `import "./whatever.css"` from its own source (not through a
+host module — those are externalized, see above) and it works: `Bun.build`'s
+built-in CSS loader bundles every such import into one sibling asset next to
+the entry point (`index.js` → `index.css`, verified against a live build —
+no `naming`/loader config needed), `plugin:install` copies that sibling
+alongside `index.js` the same way it already copies `package.json`, and
+`loadPlugins()` (`src/wigl/plugins/loader.ts`) reads it as text (same `sh -c
+cat` path as the JS) and injects it as a `<style>` tag — keyed and de-duped
+by plugin id so a second load/monitor-realm never doubles it up. `.textContent`,
+not `dangerouslySetInnerHTML`: the CSS is build-time plugin source, not
+runtime/user content, so the hard rule against unescaped HTML doesn't apply
+to it.
+
+This closed what used to be a real gap — an editor library that ships a
+required stylesheet (Milkdown/Crepe was the concrete case, see
+`wigl-widgets/LocalCode/AGENTS.md`) had nothing to load its CSS through,
+since the loader only ever evaluated one JS blob. A widget still owes itself
+the same theming discipline as everywhere else — `docs/theming.md`'s
+semantic-token rule doesn't stop applying just because real CSS is now
+possible — but the *mechanism* is no longer the blocker.
+
 ## NODE_ENV is part of the contract
 
 `plugin:build` and `plugin:check` refuse to run unless `NODE_ENV=production`

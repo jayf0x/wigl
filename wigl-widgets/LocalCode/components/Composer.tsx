@@ -1,12 +1,20 @@
-// The composer: one auto-growing text field, a slash-command palette, and a
-// single line of tiny status chips. No dropdowns — model/agent/effort are all
-// `/model`, `/agent`, `/think` (see commands.ts for why). The chips are both
-// the current-state readout *and* the discovery path: clicking one types its
-// command for you, so nothing needs a menu to be findable.
+// The composer: one auto-growing markdown-aware editor, a slash-command
+// palette, and a single line of tiny status chips. No dropdowns —
+// model/agent/effort are all `/model`, `/agent`, `/think` (see commands.ts
+// for why). The chips are both the current-state readout *and* the
+// discovery path: clicking one types its command for you, so nothing needs
+// a menu to be findable.
 //
 // Enter never submits. ⌘/Ctrl/⌥+Enter does. Owner's call, and the right one
 // for a field you're expected to write real multi-line prompts in.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+//
+// The field itself is CodeMirror (`composerEditor.ts`), not a `<textarea>`
+// — light markdown syntax highlighting while typing, and Tab/Shift+Tab to
+// nest/unnest a list line. See composerEditor.ts's header comment for why
+// CodeMirror specifically (Milkdown/MDXEditor both need a stylesheet the
+// plugin bundler has no way to load).
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { EditorView } from "@codemirror/view";
 import { ArrowUp, Bot, Brain, Cpu, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/wigl/utils";
@@ -20,6 +28,8 @@ import {
   resolveCommand,
 } from "../commands";
 import type { AgentDef, ModelSelection, ProviderCatalogEntry } from "../types";
+import { CodeMirrorField } from "./CodeMirrorField";
+import { composerExtensions, setPlaceholder } from "./composerEditor";
 
 const Chip = ({
   icon: Icon,
@@ -77,7 +87,8 @@ export const Composer = ({
 }) => {
   const [text, setText] = useState("");
   const [cursor, setCursor] = useState(0); // highlighted palette row
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const pendingFocusRef = useRef(false);
 
   const models = useMemo(
     () =>
@@ -132,20 +143,10 @@ export const Composer = ({
   const paletteOpen = Boolean(parsed) && options.length > 0;
   const index = Math.min(cursor, options.length - 1);
 
-  // Grow with the content up to a ceiling, then scroll — a prompt worth
-  // writing is usually more than one line, and a field that stays one line
-  // tall is the main reason chat inputs feel like an afterthought.
-  useLayoutEffect(() => {
-    const el = inputRef.current;
-    if (!el) return;
-    el.style.height = "0px";
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
-  }, [text]);
-
   const type = (prefix: string) => {
     setText(prefix);
     setCursor(0);
-    inputRef.current?.focus();
+    pendingFocusRef.current = true;
   };
 
   const apply = (option: CommandOption) => {
@@ -163,7 +164,7 @@ export const Composer = ({
     }
     setText("");
     setCursor(0);
-    inputRef.current?.focus();
+    pendingFocusRef.current = true;
   };
 
   const submit = () => {
@@ -171,6 +172,66 @@ export const Composer = ({
     onSend(text);
     setText("");
   };
+
+  // Focus (and, for a non-empty prefix, caret-to-end) after `type()`/`apply()`
+  // sets `text` programmatically — deferred to an effect because the
+  // CodeMirror view only picks up the new controlled `value` once its own
+  // (child) effect has run, which happens before this one on the same commit.
+  useEffect(() => {
+    if (!pendingFocusRef.current) return;
+    pendingFocusRef.current = false;
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+    view.focus();
+  }, [text]);
+
+  // Extension list built once — palette nav/apply/clear and submit read
+  // through refs (mirrored below) so the editor's own state (undo history,
+  // selection) survives every keystroke instead of being torn down.
+  const paletteOpenRef = useRef(paletteOpen);
+  const optionsRef = useRef(options);
+  const indexRef = useRef(index);
+  const applyFnRef = useRef(apply);
+  const submitFnRef = useRef(submit);
+  paletteOpenRef.current = paletteOpen;
+  optionsRef.current = options;
+  indexRef.current = index;
+  applyFnRef.current = apply;
+  submitFnRef.current = submit;
+
+  const { extensions, placeholderCompartment } = useMemo(
+    () =>
+      composerExtensions({
+        isOpen: () => paletteOpenRef.current,
+        moveDown: () =>
+          setCursor((c) => (Math.min(c, optionsRef.current.length - 1) + 1) % optionsRef.current.length),
+        moveUp: () =>
+          setCursor(
+            (c) =>
+              (Math.min(c, optionsRef.current.length - 1) + optionsRef.current.length - 1) %
+              optionsRef.current.length,
+          ),
+        apply: () => {
+          const o = optionsRef.current[indexRef.current];
+          if (o) applyFnRef.current(o);
+        },
+        clear: () => setText(""),
+        onSubmit: () => submitFnRef.current(),
+        placeholder: busy ? "…" : "ask, or / for commands",
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // `placeholder` above only seeds the initial compartment value — later
+  // busy-state flips update it in place via `setPlaceholder` instead of
+  // rebuilding the whole extension list (which would tear down history).
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    setPlaceholder(view, placeholderCompartment, busy ? "…" : "ask, or / for commands");
+  }, [busy, placeholderCompartment]);
 
   return (
     <div className="relative shrink-0 px-4 pb-3">
@@ -195,47 +256,21 @@ export const Composer = ({
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-background/40 transition-colors duration-200 focus-within:border-ring/60">
-        <textarea
-          ref={inputRef}
-          data-no-drag
-          rows={1}
+      <div
+        data-no-drag
+        className="rounded-xl border border-border bg-background/40 transition-colors duration-200 focus-within:border-ring/60"
+      >
+        <CodeMirrorField
           value={text}
-          placeholder={busy ? "…" : "ask, or / for commands"}
-          onChange={(e) => {
-            setText(e.target.value);
+          onChange={(value) => {
+            setText(value);
             setCursor(0);
           }}
-          onKeyDown={(e) => {
-            if (paletteOpen) {
-              if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
-                e.preventDefault();
-                setCursor((c) => (Math.min(c, options.length - 1) + 1) % options.length);
-                return;
-              }
-              if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
-                e.preventDefault();
-                setCursor((c) => (Math.min(c, options.length - 1) + options.length - 1) % options.length);
-                return;
-              }
-              if (e.key === "Enter") {
-                e.preventDefault();
-                apply(options[index]);
-                return;
-              }
-              if (e.key === "Escape") {
-                e.preventDefault();
-                setText("");
-                return;
-              }
-            }
-            // Enter is a newline, always. Only a modifier sends.
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey || e.altKey)) {
-              e.preventDefault();
-              submit();
-            }
+          extensions={extensions}
+          onCreateEditor={(view) => {
+            viewRef.current = view;
           }}
-          className="max-h-[200px] w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[12.5px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
+          className="w-full"
         />
 
         <div className="flex items-center gap-0.5 px-1.5 pb-1.5">

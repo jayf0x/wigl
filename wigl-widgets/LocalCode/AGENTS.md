@@ -297,9 +297,41 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
   loader evaluates — nothing injects a stylesheet, so Crepe's required theme
   CSS would silently not load), and that theme is a large sheet of hardcoded
   colors, which `docs/theming.md` bans for widgets outright. A ProseMirror
-  editor also swallows the keyboard, which fights the slash palette. Revisit
-  only if the host gains a way to serve plugin CSS *and* someone maps Crepe's
-  theme onto wigl tokens — both are real projects, not a `bun add`.
+  editor also swallows the keyboard, which fights the slash palette.
+  **First blocker is now closed** — `docs/plugins.md`'s "CSS" section:
+  `plugin:build`/`install`/`loadPlugins()` now carry a plugin's own
+  `import "*.css"` through to a real injected `<style>` tag, added while
+  building the CodeMirror composer below, for a reason unrelated to
+  Milkdown itself. The second blocker (Crepe's theme is hardcoded colors,
+  not wigl tokens) is still real and still unmapped — swapping to
+  Milkdown/Crepe now would be a themeing project on top of an editor swap,
+  not a `bun add`, and hasn't been decided; don't do it speculatively.
+- **The composer field is CodeMirror 6, not a plain `<textarea>`** —
+  `components/CodeMirrorField.tsx` (a hand-rolled controlled wrapper over
+  bare `@codemirror/view`, not `@uiw/react-codemirror` — that package's
+  `getDefaultExtensions.js` unconditionally imports its light/dark theme and
+  full `basicSetup` bundle regardless of props, which this repo's unminified
+  plugin build can't tree-shake away) + `components/composerEditor.ts`
+  (extensions: markdown syntax highlighting via theme tokens, Tab/Shift+Tab
+  list nesting, Enter-continues-a-list-line, and the slash palette's own nav
+  in a `Prec.highest` keymap so it still wins while open). Chosen over
+  Milkdown/MDXEditor for the same reason Milkdown was rejected above:
+  CodeMirror injects its styles from JS (`EditorView.theme`/
+  `HighlightStyle`), so the missing CSS pipeline never becomes a blocker.
+  Deliberately not full per-language code-fence highlighting —
+  `@codemirror/language-data`'s grammars are meant to be dynamically
+  imported, and this bundler can't split them out, so pulling it in inflated
+  the build from ~300KB-class to ~9MB; fenced code renders as plain
+  monospace instead. See `TODO.md`'s (now-closed) CodeMirror entry for the
+  full before/after and the ~3.8MB bundle-size tradeoff that's still there.
+  **The blinking cursor needs its own theme rule, not just `caretColor`** —
+  found live (owner report: invisible on a dark wigl theme). It's a
+  synthetic `.cm-cursor` div from `drawSelection()`, not the native caret, so
+  `caretColor` on `.cm-content` never touches it; CodeMirror's own baseTheme
+  hardcodes it black unless the view is flagged `dark: true`, which nothing
+  here does (wigl's theme is runtime CSS vars, not a fixed light/dark split).
+  Fixed with an explicit `.cm-cursor, .cm-dropCursor { borderLeftColor:
+  "var(--foreground)" }` in `composerEditor.ts`'s `chatTheme`.
 - **Everything stays widget-local.** Nothing here was promoted into
   `src/wigl/` despite the "make it reusable" ask: the repo rule is that
   nothing becomes shared until a *second* widget concretely needs it, and no

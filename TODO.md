@@ -43,23 +43,38 @@ key survives the trip is what `opencodeConfig.ts`'s `syncOllamaModels()`
 should write for the off/low/high variants. If nothing survives, delete
 `/think` from `commands.ts` and say so in AGENTS.md.
 
-### Composer editor: evaluate CodeMirror 6
+### ~~Composer editor: evaluate CodeMirror 6~~ — done
 
-Owner's suggestion after Milkdown was rejected: `@uiw/react-codemirror` +
-`@codemirror/lang-markdown` + `@codemirror/language-data`. Unlike Crepe this
-is *mechanically* viable — CodeMirror injects its styles from JS, so the
-plugin bundler's lack of a CSS pipeline (the blocker that killed Milkdown,
-see AGENTS.md) doesn't apply.
+Built: `Composer.tsx`'s textarea is now bare `@codemirror/view` (a hand-rolled
+controlled wrapper, `components/CodeMirrorField.tsx` — not
+`@uiw/react-codemirror`, whose default-extension bundle isn't tree-shakeable
+under this repo's unminified plugin build and cost ~600KB dead weight) +
+`@codemirror/lang-markdown`, wired in `components/composerEditor.ts`.
+Markdown syntax gets a light theme-token highlight while typing; Tab/
+Shift+Tab nests/unnests a list line (`indentMore`/`indentLess`); Enter
+continues a `-`/`*`/`+`/`1.` list line with the same marker, or exits an
+empty one — the slash palette's own nav (arrows/Tab/Enter/Escape) sits in a
+`Prec.highest` keymap so it still wins over CodeMirror's defaults while open.
+⌘/Ctrl/⌥+Enter still sends; plain Enter is still never a submit.
 
-Not built, because it argues with the same review's other feedback ("still
-too much detail... LESS IS MORE") and nothing about the current textarea was
-reported as broken. What it would actually buy: markdown syntax highlighting
-while typing, real soft-wrap/indent behaviour, and a proper multi-line
-editing model for long prompts. What it costs: a few hundred KB in the
-widget bundle, and the slash palette has to move into a CodeMirror keymap at
-high precedence (CodeMirror owns the keyboard once focused — the arrow/tab/
-enter handling in `Composer.tsx` would not survive as-is). Worth doing if
-long prompts become the normal case; not worth it for one-liners.
+**Left out on purpose, not full WYSIWYG**: no embedded per-language code-fence
+highlighting (`@codemirror/language-data`'s grammars are meant to be
+dynamically imported; `scripts/plugin.ts`'s Bun.build emits one
+non-splittable file, so they'd all get eagerly inlined — was ~9MB before this
+was dropped, fenced code now renders as plain monospace). Milkdown/MDXEditor
+were not reconsidered — AGENTS.md's rejection reasoning (no CSS pipeline for
+a required stylesheet) still applies to both; CodeMirror was chosen
+specifically because it injects styles from JS instead.
+
+**Known cost, not chased further**: the built bundle is ~3.8MB unminified
+(vs. ~300KB for a dependency-light widget like calendar) — `@codemirror/lang-
+markdown` hard-depends on `@codemirror/lang-html` for embedded-HTML parsing,
+which pulls `lang-javascript`/`lang-css`/`lint` in turn. All CodeMirror's own
+styles/theme are JS-injected (`EditorView.theme`/`HighlightStyle`), so
+nothing here needs the CSS pipeline that killed Milkdown. One-time parse cost
+at plugin load, not a render-loop cost; revisit (e.g. drop to raw
+`@lezer/markdown` and skip `lang-markdown`'s HTML-embedding convenience) only
+if that load time is ever actually reported as a problem.
 
 ### needs a real shared error surface
 

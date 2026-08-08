@@ -12,9 +12,11 @@ import {
 
 // How an installed plugin actually gets into the running app:
 //
-//   ~/.local/share/<identifier>/plugins/<id>/{package.json?,.wigl/index.js}
+//   ~/.local/share/<identifier>/plugins/<id>/
+//     {package.json?, .wigl/index.js, .wigl/index.css?}
 //        ↓ read as text (sh -c cat — same "shell out, no new Rust" rule as
 //          storage; no asset-protocol config, no new capability entry)
+//        ↓ index.css, if present, → injectStyle() → a <style> tag
 //   source string + a per-plugin header binding __wigl_host
 //        ↓ Blob + createObjectURL
 //   dynamic import()  →  module.default  →  a React component
@@ -57,12 +59,33 @@ const tryReadFile = async (path: string): Promise<string | null> => {
  * app-data dir, so "everything wigl owns on disk" stays one folder. */
 export const pluginsDir = async () => join(await appDataDir(), "plugins");
 
+/** A plugin's own `import "./x.css"` builds to a sibling `index.css` next to
+ * `index.js` (`scripts/plugin.ts`'s `cssSibling`) — installed alongside it,
+ * so a real stylesheet works despite the plugin loading as one JS blob with
+ * no bundler-level CSS pipeline of its own. Injected as a `<style>` tag
+ * (never a widget's job to do this itself): the text is build-time plugin
+ * source, not runtime/user-controlled content, so `.textContent` — not
+ * `dangerouslySetInnerHTML` — is the right tool and carries none of that
+ * ban's risk. Keyed by plugin id and de-duped so reloading (or a second
+ * monitor's own JS realm re-running `loadPlugins`) never doubles it up. */
+const injectStyle = (id: string, css: string) => {
+  const key = `data-wigl-plugin-style-${id}`;
+  if (document.head.querySelector(`style[${key}]`)) return;
+  const style = document.createElement("style");
+  style.setAttribute(key, "");
+  style.textContent = css;
+  document.head.appendChild(style);
+};
+
 const loadOne = async (dir: string, folder: string): Promise<LoadedPlugin> => {
   if (RESERVED_PLUGIN_IDS.has(folder)) throw new Error(`"${folder}" is a reserved id`);
 
   const pkgRaw = await tryReadFile(await join(dir, "package.json"));
   const { id, entry, permissions } = resolvePluginConfig(folder, pkgRaw);
-  const code = await readFile(await join(dir, entry));
+  const entryPath = await join(dir, entry);
+  const code = await readFile(entryPath);
+  const css = await tryReadFile(entryPath.replace(/\.js$/, ".css"));
+  if (css) injectStyle(id, css);
 
   // Imported lazily, not at module top level: the registry holds a live
   // reference to every host module it can serve — including the whole of

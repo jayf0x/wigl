@@ -130,9 +130,22 @@ const build = async (dir: string) => {
     );
   }
   const size = (await stat(outPath)).size;
-  console.log(`✓ built ${config.id} → ${config.entry} (${(size / 1024).toFixed(1)}kb)`);
+  // A plain `import "./foo.css"` anywhere in the plugin's own source (never
+  // through a host module — those are externalized) is handled by Bun.build's
+  // built-in CSS loader: it bundles every such import into one sibling asset
+  // named after the entry point, `index.js` → `index.css`, no config needed
+  // (verified against a live Bun.build run, not assumed from docs). `install`
+  // copies it alongside the JS, and `loader.ts` injects it as a `<style>` tag
+  // at load time — see docs/plugins.md's "CSS" section.
+  const cssPath = cssSibling(outPath);
+  const hasCss = await Bun.file(cssPath).exists();
+  console.log(`✓ built ${config.id} → ${config.entry}${hasCss ? " (+ css)" : ""} (${(size / 1024).toFixed(1)}kb)`);
   return config;
 };
+
+/** `index.js` → `index.css` — Bun.build's own naming for a CSS asset
+ * sibling of an entry point, given the entry's basename has no other dot. */
+const cssSibling = (jsPath: string) => jsPath.replace(/\.js$/, ".css");
 
 const install = async (dir: string) => {
   const config = await readPluginConfig(dir);
@@ -143,13 +156,18 @@ const install = async (dir: string) => {
   }
 
   const target = join(installRoot(), built.id);
-  // Only package.json and the entry file are installed — the plugin's other
-  // source, node_modules and tsconfig are build-time concerns with no
-  // business sitting in a user's app-data dir.
+  // Only package.json, the entry file, and its CSS sibling (if the build
+  // produced one) are installed — the plugin's other source, node_modules
+  // and tsconfig are build-time concerns with no business sitting in a
+  // user's app-data dir.
   await rm(target, { recursive: true, force: true });
   await mkdir(dirname(join(target, built.entry)), { recursive: true });
   if (built.pkgRaw) await Bun.write(join(target, "package.json"), built.pkgRaw);
   await Bun.write(join(target, built.entry), Bun.file(entryPath));
+  const cssSrc = cssSibling(entryPath);
+  if (await Bun.file(cssSrc).exists()) {
+    await Bun.write(join(target, cssSibling(built.entry)), Bun.file(cssSrc));
+  }
   console.log(`✓ installed ${built.id} → ${target}`);
   console.log("  restart wigl (bun run verify) to see it.");
 };
