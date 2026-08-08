@@ -101,21 +101,15 @@ export const Widget = ({
 // global-commands menu only fires from inside the header, so a right-click
 // on a widget's own body (e.g. to paste into a textarea) gets the normal
 // browser/webview context menu instead. Dragging is scoped even tighter —
-// only the grip below carries data-drag-handle — so the rest of the header
-// (title, custom buttons) is ordinary interactive/selectable content, and a
-// future resize handle has somewhere to live without fighting drag.
+// only the grip at the top-right corner carries data-drag-handle — so the
+// rest of the header (close/minimize, title, custom buttons) is ordinary
+// interactive/selectable content, and a future resize handle has somewhere
+// (the opposite corner) to live without fighting drag.
 export const WidgetHeader = ({ className, children }: { className?: string; children?: ReactNode }) => {
   const slot = useContext(WidgetSlotContext);
   return (
-    <div data-widget-header className={cn("flex items-center gap-1 border-b border-border px-2 py-1", className)}>
-      <div
-        data-drag-handle
-        title="Drag"
-        className="-my-1 -ml-2 flex size-6 shrink-0 cursor-grab items-center justify-center text-card-foreground/25 hover:text-card-foreground/50 active:cursor-grabbing"
-      >
-        <Grip className="size-3" />
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
+    <div data-widget-header className={cn("flex items-center gap-1 border-b border-border py-1 pr-1 pl-2", className)}>
+      <div className="mr-1 flex shrink-0 items-center gap-1 border-r border-border pr-2">
         <button
           type="button"
           onClick={slot?.onClose}
@@ -134,6 +128,13 @@ export const WidgetHeader = ({ className, children }: { className?: string; chil
         </button>
       </div>
       <div className="flex min-w-0 flex-1 items-center gap-1">{children}</div>
+      <div
+        data-drag-handle
+        title="Drag"
+        className="flex size-6 shrink-0 cursor-grab items-center justify-center text-card-foreground/25 hover:text-card-foreground/50 active:cursor-grabbing"
+      >
+        <Grip className="size-3" />
+      </div>
     </div>
   );
 };
