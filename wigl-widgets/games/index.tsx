@@ -22,6 +22,7 @@ const GamesWidget = () => {
       h={4}
       col={0}
       row={6}
+      minimizedClassNames="bg-[🚀] bg-red"
       headerContent={
         <>
           <span className="px-1 text-[10px] tracking-widest opacity-40">

@@ -52,12 +52,12 @@ export const Widget = ({
   col,
   row,
   hidden,
-  minimizedIcon = null,
+  minimizedClassNames,
   headerContent = null,
 }: {
   className?: string;
   children: ReactNode;
-  minimizedIcon?: ReactNode;
+  minimizedClassNames?: string;
   headerContent?: ReactNode;
 } & WidgetGridProps) => {
   const slot = useContext(WidgetSlotContext);
@@ -113,15 +113,16 @@ export const Widget = ({
             </div>
           </div> */}
 
-          <WidgetHeader>
-            <div className="flex flex-1 items-center justify-center pb-1 text-lg leading-none text-card-foreground/70">
-              {minimizedIcon ?? "◈"}
-            </div>
-          </WidgetHeader>
+          <WidgetHeader
+            slot={slot}
+            className={minimizedClassNames}
+          ></WidgetHeader>
         </div>
       ) : (
         <>
-          <WidgetHeader>{headerContent}</WidgetHeader>
+          <WidgetHeader slot={slot} className={minimizedClassNames}>
+            {headerContent}
+          </WidgetHeader>
           {children}
         </>
       )}
@@ -139,46 +140,53 @@ export const Widget = ({
 // (the opposite corner) to live without fighting drag.
 const WidgetHeader = ({
   className,
-  children,
+  children = null,
+  slot,
 }: {
   className?: string;
   children?: ReactNode;
-}) => {
-  const slot = useContext(WidgetSlotContext);
-  return (
-    <div
-      data-widget-header
-      className={cn(
-        "flex items-center gap-1 border-b border-border py-1 pr-1 pl-2",
-        className,
-      )}
-    >
-      <div className="mr-1 flex shrink-0 items-center gap-1 border-r border-border pr-2">
+  slot?: WidgetSlotValue | null;
+}) => (
+  <div
+    data-widget-header
+    className={cn(
+      "flex items-center gap-1 border-b border-border py-1 pr-1 pl-2",
+      className,
+    )}
+  >
+    <div className="mr-1 flex shrink-0 items-center gap-1 border-r border-border pr-2">
+      {!!slot?.onClose && (
         <button
           type="button"
-          onClick={slot?.onClose}
+          onClick={slot.onClose}
           title="Close"
           className="text-card-foreground/40 hover:text-destructive"
         >
           <CircleX className="size-3.5" />
         </button>
+      )}
+      {!!slot?.onToggleMinimize && (
         <button
           type="button"
-          onClick={slot?.onToggleMinimize}
+          onClick={slot.onToggleMinimize}
           title="Minimize"
           className="text-card-foreground/40 hover:text-card-foreground"
         >
-          <Minimize2 className="size-3" />
+          {slot.minimized ? (
+            <Expand className="size-3" />
+          ) : (
+            <Minimize2 className="size-3" />
+          )}
         </button>
-      </div>
-      <div className="flex min-w-0 flex-1 items-center gap-1">{children}</div>
-      <div
-        data-drag-handle
-        title="Drag"
-        className="flex size-6 shrink-0 cursor-grab items-center justify-center text-card-foreground/25 hover:text-card-foreground/50 active:cursor-grabbing"
-      >
-        <Grip className="size-3" />
-      </div>
+      )}
     </div>
-  );
-};
+    <div className="flex min-w-0 flex-1 items-center gap-1">{children}</div>
+    <div
+      data-drag-handle
+      title="Drag"
+      className="flex size-6 shrink-0 cursor-grab items-center justify-center text-card-foreground/25 hover:text-card-foreground/50 active:cursor-grabbing"
+    >
+      <Grip className="size-3" />
+    </div>
+  </div>
+);

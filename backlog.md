@@ -37,6 +37,7 @@ Rules for keeping this file real:
 - [ ] **Plugin storage keys aren't namespaced** — `useStorage`/`useQuery` write into one shared kv table keyed by whatever string the caller passes, so two plugins picking the same key silently share (and clobber) state, with nothing scoping a key to the plugin that owns it. Harmless with today's hand-installed plugins; a real bug the first time two independently-authored ones collide. Fix shape: have the registry hand each plugin a `useStorage` pre-bound to a `<plugin-id>:` prefix rather than the raw hook — the registry already builds a per-plugin view of `@/wigl/hooks`, so there's a natural place for it with no new concept.
 - [ ] **The plugin registry chunk carries all of `lucide-react`** — `registry.ts` holds a live reference to every module it can serve, so the whole icon set lands in one chunk (~618kb unminified). It's dynamically imported and only paid once a plugin is actually installed, which is why this isn't urgent. Trigger: someone notices first-plugin-load latency. Fix shape: serve icons through a lazy per-icon lookup instead of a namespace import, which also removes the "host must ship every icon a plugin might want" coupling.
 - [ ] **`useQuery`'s SQL cache never evicts** — `src/wigl/storage/useQuery.ts`'s `useSql: true` path writes `query_<key>` rows into the shared kv table but nothing ever deletes one, so a renamed or retired query key leaves a dead row behind forever (harmless, just clutter). Trigger: enough renamed/retired query keys to notice in the DB. Fix shape: none needed until then — a manual `DELETE FROM kv WHERE key LIKE 'query_%'` sweep is enough when it does.
+- [ ] prop "minimizedClassNames" in component <Widget /> works but not sure if it's the right idea. I was thinking of having some kind of way to have a background for a widget. Adding classes created inconsistency again, where the goal was not full flexibility, but something to make the minimized component still recognizable from other minimized icons. Maybe we could auto import a `PATH_TO_SOME_WIDGET/bg.png` so that if the user adds an icon it's auto picked up. But that's a lot of complexity maybe? 
 
 ## Features
 
@@ -51,9 +52,9 @@ Rules for keeping this file real:
 
 
 ## General cleanup post features/bugs
-- all files with +400 LOC should be revisited to see if we can make them more clean.
 
 ### 80/20 focus
+TL;DR: All files with +400 LOC should be revisited to see if we can make them more clean.
 
 General rule is 80/20 focus. 80% is focus on core file function (eg. a component that's exported), where 20% is extra (small utils or a small sub component).
 Large files (+400LOC) likely are ~40% core component and 60% like forms, form validation, states of things that could be a sub component, utils... The goal here is to make sure that files respect this rule
@@ -69,6 +70,18 @@ Examples expected outcome of a file:
 - Component: 1 large export of component, some small imports, some extra utils and some type definitions
 - Types: a file full of exported types and typing utils that bring focus to other file(s). No conflicting names.
 
+
+### Too much future proofing
+A lot of features, of which some already have been implemented might contain future proofing. Some future proofing is good, but we should minize having modular logic that ends up doing a single task anyways.
+
+A good example is the "house keeper" (wigl-widgets/LocalCode/housekeeper.ts). Makes sense on the surface, but we don't really many uses cases and the current renaming flow is already sketchy. So I wonder if we need this house keeper at all for any other feature that would require this modular setup. Maybe the house keeper is a general small agent that could be called, but that's a Wigl hook, not a 
+
+just like the 80/20 rule, I'd say 20% future proofing is acceptable if we are certain future features will use it. But examples like the "house keeper" are build with a mindset that almost creates another sub project on it's own and this is very bad for maintaince. 
+
+### File / var naming
+Currently widgets are synonymous for plugins in scripts, code, file names... I prefer using widgets as plugins is less accurate.
+
+This is one example, but it's sure there are plenty more cases like this. The goal would be to have consistent naming across the whole project.
 
 ## Raw ideas to backlog
 Some idea's for possible backlog items that eed confirmation research:
