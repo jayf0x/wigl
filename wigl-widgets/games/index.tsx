@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Widget, WidgetHeader } from "@/wigl";
+import { Widget } from "@/wigl";
 import Breakout from "./breakout";
 import Snake from "./snake";
 import Tetris from "./tetris";
@@ -17,19 +17,28 @@ const GamesWidget = () => {
   const [active, setActive] = useState<(typeof GAMES)[number] | null>(null);
 
   return (
-    <Widget w={4} h={4} col={0} row={6}>
-      <WidgetHeader>
-        <span className="px-1 text-[10px] tracking-widest opacity-40">GAMES{active ? ` · ${active.name}` : ""}</span>
-        {active && (
-          <button
-            data-no-drag
-            onClick={() => setActive(null)}
-            className="ml-auto rounded px-1.5 text-[10px] tracking-widest opacity-40 hover:bg-accent hover:opacity-80"
-          >
-            MENU
-          </button>
-        )}
-      </WidgetHeader>
+    <Widget
+      w={4}
+      h={4}
+      col={0}
+      row={6}
+      headerContent={
+        <>
+          <span className="px-1 text-[10px] tracking-widest opacity-40">
+            GAMES{active ? ` · ${active.name}` : ""}
+          </span>
+          {active && (
+            <button
+              data-no-drag
+              onClick={() => setActive(null)}
+              className="ml-auto rounded px-1.5 text-[10px] tracking-widest opacity-40 hover:bg-accent hover:opacity-80"
+            >
+              MENU
+            </button>
+          )}
+        </>
+      }
+    >
       {active ? (
         <active.Game onExit={() => setActive(null)} />
       ) : (

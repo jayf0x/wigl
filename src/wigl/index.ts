@@ -6,4 +6,4 @@
 export { Desktop } from "./Desktop";
 export { TILING } from "./grid/config";
 export type { WidgetGridProps } from "./widget";
-export { Widget, WidgetHeader } from "./widget";
+export { Widget } from "./widget";

@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useMemo, useState } from "react";
-import { Widget, WidgetHeader } from "@/wigl";
+import { Widget } from "@/wigl";
 import { useStorage } from "@/wigl/hooks";
 import { cn } from "@/wigl/utils";
 import {
@@ -28,15 +28,23 @@ import {
 import { Sidebar } from "./Sidebar";
 
 const CalendarWidget = () => {
-  const [events, setEvents] = useStorage<CalendarEvent[]>(EVENTS_STORAGE_KEY, []);
+  const [events, setEvents] = useStorage<CalendarEvent[]>(
+    EVENTS_STORAGE_KEY,
+    [],
+  );
   const [view, setView] = useState<"month" | "week">("month");
   const [anchor, setAnchor] = useState(() => new Date());
   // selectedId set: sidebar edits that event. null: sidebar is a new-event form.
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Draft>(() => emptyDraft(format(new Date(), "yyyy-MM-dd")));
+  const [draft, setDraft] = useState<Draft>(() =>
+    emptyDraft(format(new Date(), "yyyy-MM-dd")),
+  );
 
   const selected = events.find((e) => e.id === selectedId) ?? null;
-  const dirty = !sameDraft(draft, selected ? draftFrom(selected) : emptyDraft(draft.date));
+  const dirty = !sameDraft(
+    draft,
+    selected ? draftFrom(selected) : emptyDraft(draft.date),
+  );
   const canSave = dirty && draft.title.trim() !== "" && draft.date !== "";
 
   const eventsByDate = useMemo(() => {
@@ -46,16 +54,23 @@ const CalendarWidget = () => {
       list.push(ev);
       map.set(ev.date, list);
     }
-    for (const list of map.values()) list.sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
+    for (const list of map.values())
+      list.sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
     return map;
   }, [events]);
 
   const days = useMemo(() => {
     const start = startOfWeek(view === "month" ? startOfMonth(anchor) : anchor);
-    return eachDayOfInterval({ start, end: addDays(start, view === "month" ? 41 : 6) });
+    return eachDayOfInterval({
+      start,
+      end: addDays(start, view === "month" ? 41 : 6),
+    });
   }, [view, anchor]);
 
-  const go = (delta: number) => setAnchor(view === "month" ? addMonths(anchor, delta) : addWeeks(anchor, delta));
+  const go = (delta: number) =>
+    setAnchor(
+      view === "month" ? addMonths(anchor, delta) : addWeeks(anchor, delta),
+    );
 
   const startNew = (date: string) => {
     setSelectedId(null);
@@ -76,7 +91,9 @@ const CalendarWidget = () => {
       description: draft.description.trim() || undefined,
     };
     if (selected) {
-      setEvents(events.map((e) => (e.id === selected.id ? { ...e, ...data } : e)));
+      setEvents(
+        events.map((e) => (e.id === selected.id ? { ...e, ...data } : e)),
+      );
     } else {
       const ev = { ...data, id: crypto.randomUUID() };
       setEvents([...events, ev]);
@@ -91,37 +108,53 @@ const CalendarWidget = () => {
   };
 
   return (
-    <Widget w={6} h={5} col={8} row={0}>
-      <WidgetHeader>
-        <span className="px-1 text-[10px] tracking-widest opacity-40">CALENDAR</span>
-        <div className="ml-auto flex items-center gap-0.5">
-          {(["month", "week"] as const).map((v) => (
+    <Widget
+      w={6}
+      h={5}
+      col={8}
+      row={0}
+      headerContent={
+        <>
+          <span className="px-1 text-[10px] tracking-widest opacity-40">
+            CALENDAR
+          </span>
+          <div className="ml-auto flex items-center gap-0.5">
+            {(["month", "week"] as const).map((v) => (
+              <Button
+                key={v}
+                variant="ghost"
+                size="xs"
+                onClick={() => setView(v)}
+                className={cn(
+                  "h-5 px-1.5 text-[10px] capitalize",
+                  view === v ? "opacity-90" : "opacity-40",
+                )}
+              >
+                {v}
+              </Button>
+            ))}
             <Button
-              key={v}
               variant="ghost"
               size="xs"
-              onClick={() => setView(v)}
-              className={cn("h-5 px-1.5 text-[10px] capitalize", view === v ? "opacity-90" : "opacity-40")}
+              className="h-5 px-1.5 text-[10px] opacity-40 hover:opacity-90"
+              onClick={() => setAnchor(new Date())}
             >
-              {v}
+              now
             </Button>
-          ))}
-          <Button
-            variant="ghost"
-            size="xs"
-            className="h-5 px-1.5 text-[10px] opacity-40 hover:opacity-90"
-            onClick={() => setAnchor(new Date())}
-          >
-            now
-          </Button>
-        </div>
-      </WidgetHeader>
-
+          </div>
+        </>
+      }
+    >
       <div className="flex min-h-0 flex-1">
         {/* Calendar side */}
         <div className="flex min-w-0 flex-1 flex-col px-2 pb-2">
           <div className="flex items-center justify-between py-1">
-            <Button variant="ghost" size="xs" className="h-5 w-5 p-0 opacity-50" onClick={() => go(-1)}>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-5 w-5 p-0 opacity-50"
+              onClick={() => go(-1)}
+            >
               <ChevronLeft size={12} />
             </Button>
             {view === "month" ? (
@@ -129,7 +162,12 @@ const CalendarWidget = () => {
             ) : (
               <span className="text-[11px] opacity-70">{`Week of ${format(days[0], "MMM d")}`}</span>
             )}
-            <Button variant="ghost" size="xs" className="h-5 w-5 p-0 opacity-50" onClick={() => go(1)}>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-5 w-5 p-0 opacity-50"
+              onClick={() => go(1)}
+            >
               <ChevronRight size={12} />
             </Button>
           </div>
@@ -142,7 +180,12 @@ const CalendarWidget = () => {
             ))}
           </div>
 
-          <div className={cn("grid min-h-0 flex-1 grid-cols-7", view === "month" ? "grid-rows-6" : "grid-rows-1")}>
+          <div
+            className={cn(
+              "grid min-h-0 flex-1 grid-cols-7",
+              view === "month" ? "grid-rows-6" : "grid-rows-1",
+            )}
+          >
             {days.map((d) => {
               const key = format(d, "yyyy-MM-dd");
               const dayEvents = eventsByDate.get(key) ?? [];
@@ -214,7 +257,13 @@ export default CalendarWidget;
 
 // Month/year label: double-click either part to type a target ("january",
 // "jan", "1" for month; a number for year); blur or Enter navigates.
-const MonthYearLabel = ({ anchor, setAnchor }: { anchor: Date; setAnchor: (d: Date) => void }) => {
+const MonthYearLabel = ({
+  anchor,
+  setAnchor,
+}: {
+  anchor: Date;
+  setAnchor: (d: Date) => void;
+}) => {
   const [editing, setEditing] = useState<"month" | "year" | null>(null);
   const [text, setText] = useState("");
 
@@ -224,7 +273,8 @@ const MonthYearLabel = ({ anchor, setAnchor }: { anchor: Date; setAnchor: (d: Da
       if (m !== null) setAnchor(new Date(anchor.getFullYear(), m, 1));
     } else if (editing === "year") {
       const y = Number(text.trim());
-      if (Number.isInteger(y) && y >= 1000 && y <= 9999) setAnchor(new Date(y, anchor.getMonth(), 1));
+      if (Number.isInteger(y) && y >= 1000 && y <= 9999)
+        setAnchor(new Date(y, anchor.getMonth(), 1));
     }
     setEditing(null);
   };
@@ -235,7 +285,9 @@ const MonthYearLabel = ({ anchor, setAnchor }: { anchor: Date; setAnchor: (d: Da
   };
 
   const edit = (which: "month" | "year") => {
-    setText(which === "month" ? format(anchor, "MMMM") : format(anchor, "yyyy"));
+    setText(
+      which === "month" ? format(anchor, "MMMM") : format(anchor, "yyyy"),
+    );
     setEditing(which);
   };
 
@@ -254,7 +306,11 @@ const MonthYearLabel = ({ anchor, setAnchor }: { anchor: Date; setAnchor: (d: Da
           className={cn(inputCls, "w-16")}
         />
       ) : (
-        <span onDoubleClick={() => edit("month")} title="Double-click to edit" className="cursor-text">
+        <span
+          onDoubleClick={() => edit("month")}
+          title="Double-click to edit"
+          className="cursor-text"
+        >
           {format(anchor, "MMMM")}
         </span>
       )}
@@ -268,7 +324,11 @@ const MonthYearLabel = ({ anchor, setAnchor }: { anchor: Date; setAnchor: (d: Da
           className={cn(inputCls, "w-10")}
         />
       ) : (
-        <span onDoubleClick={() => edit("year")} title="Double-click to edit" className="cursor-text">
+        <span
+          onDoubleClick={() => edit("year")}
+          title="Double-click to edit"
+          className="cursor-text"
+        >
           {format(anchor, "yyyy")}
         </span>
       )}

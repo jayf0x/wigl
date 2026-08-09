@@ -1,4 +1,9 @@
-import { createContext, type ReactNode, useContext, useLayoutEffect } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+} from "react";
 import { cn } from "@/wigl/utils";
 import { CircleX, Expand, Grip, Minimize2 } from "lucide-react";
 import { TILING } from "./grid/config";
@@ -47,8 +52,14 @@ export const Widget = ({
   col,
   row,
   hidden,
-  minimizedIcon,
-}: { className?: string; children: ReactNode; minimizedIcon?: ReactNode } & WidgetGridProps) => {
+  minimizedIcon = null,
+  headerContent = null,
+}: {
+  className?: string;
+  children: ReactNode;
+  minimizedIcon?: ReactNode;
+  headerContent?: ReactNode;
+} & WidgetGridProps) => {
   const slot = useContext(WidgetSlotContext);
   const minimized = !!slot?.minimized;
   // Layout effect, not a plain effect: this must resolve (and Desktop must
@@ -57,7 +68,13 @@ export const Widget = ({
   // un-minimizing just reports the real props again next render, and the
   // desktop's existing reflow puts it back where it fits.
   useLayoutEffect(() => {
-    slot?.report({ w: minimized ? 1 : w, h: minimized ? 1 : h, col, row, hidden });
+    slot?.report({
+      w: minimized ? 1 : w,
+      h: minimized ? 1 : h,
+      col,
+      row,
+      hidden,
+    });
   }, [slot, minimized, w, h, col, row, hidden]);
 
   return (
@@ -76,22 +93,37 @@ export const Widget = ({
       )}
     >
       {minimized ? (
-        <div data-drag-handle className="flex h-full w-full flex-col">
-          <button
-            type="button"
-            data-no-drag
-            onClick={slot?.onToggleMinimize}
-            title="Expand"
-            className="p-1 text-card-foreground/40 hover:text-card-foreground"
-          >
-            <Expand className="size-3" />
-          </button>
-          <div className="flex flex-1 items-center justify-center pb-1 text-lg leading-none text-card-foreground/70">
-            {minimizedIcon ?? "•"}
-          </div>
+        <div className="h-full w-full p-2">
+          {/* <div className="flex h-5 w-full flex-row justify-between items-center">
+            <button
+              type="button"
+              data-no-drag
+              onClick={slot?.onToggleMinimize}
+              title="Expand"
+              className="p-1 text-card-foreground/40 hover:text-card-foreground"
+            >
+              <Expand className="size-3" />
+            </button>
+
+            <div
+              data-drag-handle
+              className="flex flex-1 items-center justify-center pb-1 text-lg leading-none text-card-foreground/70"
+            >
+              {":)"}
+            </div>
+          </div> */}
+
+          <WidgetHeader>
+            <div className="flex flex-1 items-center justify-center pb-1 text-lg leading-none text-card-foreground/70">
+              {minimizedIcon ?? "◈"}
+            </div>
+          </WidgetHeader>
         </div>
       ) : (
-        children
+        <>
+          <WidgetHeader>{headerContent}</WidgetHeader>
+          {children}
+        </>
       )}
     </div>
   );
@@ -105,10 +137,22 @@ export const Widget = ({
 // rest of the header (close/minimize, title, custom buttons) is ordinary
 // interactive/selectable content, and a future resize handle has somewhere
 // (the opposite corner) to live without fighting drag.
-export const WidgetHeader = ({ className, children }: { className?: string; children?: ReactNode }) => {
+const WidgetHeader = ({
+  className,
+  children,
+}: {
+  className?: string;
+  children?: ReactNode;
+}) => {
   const slot = useContext(WidgetSlotContext);
   return (
-    <div data-widget-header className={cn("flex items-center gap-1 border-b border-border py-1 pr-1 pl-2", className)}>
+    <div
+      data-widget-header
+      className={cn(
+        "flex items-center gap-1 border-b border-border py-1 pr-1 pl-2",
+        className,
+      )}
+    >
       <div className="mr-1 flex shrink-0 items-center gap-1 border-r border-border pr-2">
         <button
           type="button"

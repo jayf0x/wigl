@@ -1,21 +1,51 @@
 import { useState } from "react";
-import { Widget, WidgetHeader } from "@/wigl";
+import { Widget } from "@/wigl";
 import { useStorage } from "@/wigl/hooks";
 import { cn } from "@/wigl/utils";
-import { Activity, Clock, CloudDownload, FolderGit2, RefreshCw, Tag } from "lucide-react";
+import {
+  Activity,
+  Clock,
+  CloudDownload,
+  FolderGit2,
+  RefreshCw,
+  Tag,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { SortableHead } from "./cells";
 import { Row } from "./Row";
 import { remoteToRow } from "./remoteRow";
 import { Settings } from "./Settings";
-import { DEFAULT_SORT_DIR, type SortDir, type SortKey, sortProjects } from "./sort";
+import {
+  DEFAULT_SORT_DIR,
+  type SortDir,
+  type SortKey,
+  sortProjects,
+} from "./sort";
 import { useRemoteRepos } from "./useRemoteRepos";
 import { useReposWidget } from "./useReposWidget";
 
 const ReposWidget = () => {
-  const { projects, localNames, sourceDir, setSourceDirOverride, scanError, loading, refresh } = useReposWidget();
-  const { repos: remoteRepos, loading: remoteLoading, refresh: refreshRemote } = useRemoteRepos();
+  const {
+    projects,
+    localNames,
+    sourceDir,
+    setSourceDirOverride,
+    scanError,
+    loading,
+    refresh,
+  } = useReposWidget();
+  const {
+    repos: remoteRepos,
+    loading: remoteLoading,
+    refresh: refreshRemote,
+  } = useRemoteRepos();
   const [sortBy, setSortBy] = useStorage<SortKey>("repos_sort_by", "time");
   const [sortDir, setSortDir] = useStorage<SortDir>("repos_sort_dir", "desc");
   const [showUndownloaded, setShowUndownloaded] = useState(false);
@@ -39,9 +69,15 @@ const ReposWidget = () => {
   const localRows = gitOnly ? projects.filter((p) => p.isGitRepo) : projects;
   const undownloadedRows =
     showUndownloaded && sourceDir
-      ? remoteRepos.filter((r) => !localNames.has(r.name)).map((r) => remoteToRow(r, `${sourceDir}/${r.name}`))
+      ? remoteRepos
+          .filter((r) => !localNames.has(r.name))
+          .map((r) => remoteToRow(r, `${sourceDir}/${r.name}`))
       : [];
-  const sorted = sortProjects([...localRows, ...undownloadedRows], sortBy, sortDir);
+  const sorted = sortProjects(
+    [...localRows, ...undownloadedRows],
+    sortBy,
+    sortDir,
+  );
   const hiddenByGitFilter = gitOnly && projects.length > localRows.length;
 
   const head = (
@@ -55,7 +91,13 @@ const ReposWidget = () => {
         onSort={onSort}
         className="w-px pr-0 pl-2"
       />
-      <SortableHead label="name" sortKey="name" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+      <SortableHead
+        label="name"
+        sortKey="name"
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSort={onSort}
+      />
       <SortableHead
         icon={Clock}
         title="updated"
@@ -78,50 +120,79 @@ const ReposWidget = () => {
     </TableRow>
   );
 
+  const header = (
+    <>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        title={
+          gitOnly
+            ? "showing git folders only — click to show all"
+            : "showing all folders — click to show git only"
+        }
+        onClick={() => setGitOnly(!gitOnly)}
+        className={cn(
+          "ml-auto opacity-50 hover:opacity-90",
+          gitOnly && "text-primary opacity-90",
+        )}
+      >
+        <FolderGit2 className="size-3" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        title={
+          showUndownloaded
+            ? "show downloaded repos"
+            : "show un-downloaded repos"
+        }
+        onClick={() => {
+          setShowUndownloaded((v) => !v);
+          if (!showUndownloaded) refreshRemote();
+        }}
+        className={cn(
+          "opacity-50 hover:opacity-90",
+          showUndownloaded && "text-primary opacity-90",
+        )}
+      >
+        <CloudDownload
+          className={`size-3 ${remoteLoading && showUndownloaded ? "animate-pulse" : ""}`}
+        />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        title="refresh"
+        onClick={() => {
+          refresh();
+          if (showUndownloaded) refreshRemote();
+        }}
+        className="opacity-50 hover:opacity-90"
+      >
+        <RefreshCw
+          className={`size-3 ${loading || (showUndownloaded && remoteLoading) ? "animate-spin" : ""}`}
+        />
+      </Button>
+      {sourceDir && (
+        <Settings sourceDir={sourceDir} onSave={setSourceDirOverride} />
+      )}
+    </>
+  );
+
   return (
-    <Widget w={6} h={5} col={0} row={0}>
-      <WidgetHeader>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title={
-            gitOnly ? "showing git folders only — click to show all" : "showing all folders — click to show git only"
-          }
-          onClick={() => setGitOnly(!gitOnly)}
-          className={cn("ml-auto opacity-50 hover:opacity-90", gitOnly && "text-primary opacity-90")}
-        >
-          <FolderGit2 className="size-3" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title={showUndownloaded ? "show downloaded repos" : "show un-downloaded repos"}
-          onClick={() => {
-            setShowUndownloaded((v) => !v);
-            if (!showUndownloaded) refreshRemote();
-          }}
-          className={cn("opacity-50 hover:opacity-90", showUndownloaded && "text-primary opacity-90")}
-        >
-          <CloudDownload className={`size-3 ${remoteLoading && showUndownloaded ? "animate-pulse" : ""}`} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title="refresh"
-          onClick={() => {
-            refresh();
-            if (showUndownloaded) refreshRemote();
-          }}
-          className="opacity-50 hover:opacity-90"
-        >
-          <RefreshCw className={`size-3 ${loading || (showUndownloaded && remoteLoading) ? "animate-spin" : ""}`} />
-        </Button>
-        {sourceDir && <Settings sourceDir={sourceDir} onSave={setSourceDirOverride} />}
-      </WidgetHeader>
+    <Widget w={6} h={5} col={0} row={0} headerContent={header}>
       <div className="flex-1 overflow-y-auto">
         {!loading && sorted.length === 0 && (
-          <div className={cn("px-3 py-2 text-[11px]", scanError ? "text-destructive/80" : "opacity-40")}>
-            {scanError ?? (hiddenByGitFilter ? "no git repos found (non-git folders hidden)" : "no projects found")}
+          <div
+            className={cn(
+              "px-3 py-2 text-[11px]",
+              scanError ? "text-destructive/80" : "opacity-40",
+            )}
+          >
+            {scanError ??
+              (hiddenByGitFilter
+                ? "no git repos found (non-git folders hidden)"
+                : "no projects found")}
           </div>
         )}
         {sorted.length > 0 && (

@@ -48,3 +48,28 @@ Rules for keeping this file real:
 - [ ] **Multiple instances of one widget type** — today a widget is exactly one folder = one id = one instance, so e.g. two clocks on different timezones is impossible. `<Widget w h col row>` itself doesn't care about identity; the gap is discovery (folder name *is* the id) and storage (each instance needs its own key, not a shared one). A plugin's `package.json` (`wigl` key) is the natural place for this to land — a plugin declaring it's instantiable, with the user's chosen instances and per-instance overrides stored like any other layout state. Trigger: a concrete want for two instances of one widget type.
 - [ ] **A plugin is not sandboxed** — `src/wigl/plugins/registry.ts` controls which modules a plugin can import, which is real (it's how a withheld permission actually withholds something), but plugin code runs in the host's JS realm with `csp: null`, so `window.__TAURI_INTERNALS__` is reachable directly by anything that wants it. Acceptable today because plugins are hand-installed from a local folder by the person running the app; stops being acceptable the moment plugins are installed from a URL or a registry. Fix shape when that trigger arrives: run each plugin in a worker or sandboxed iframe with the host API exposed over a message port, or adopt Tauri's isolation pattern — both large enough to want their own design pass, and cheaper to adopt before a plugin ecosystem exists than after.
 - [ ] **(Very low priority) GNOME-native overlay flow via a Shell extension** — Wayland/GNOME sessions get the windowed flow (`docs/architecture.md`) instead of the real desktop-overlay one, because stock GNOME Wayland refuses a client absolute positioning and always-below/always-on-top stacking (click-through itself works fine over Wayland; it just isn't useful without one of those two). A GNOME Shell extension ([desktop-widgets](https://github.com/NiffirgkcaJ/desktop-widgets)-style) could plausibly grant enough positioning/stacking control to run the real per-monitor overlay flow under GNOME too. Not worth pursuing casually: it's an extra install step for the user, version-fragile against GNOME Shell updates in a way the current windowed flow isn't, and would need real QA on the positioning/stacking contract before switching GNOME users onto it by default. Trigger: someone actually bothered enough by the windowed flow's remaining UX gap (window doesn't stay pinned below/above other apps, doesn't span monitors) to want to try it.
+
+
+## General cleanup post features/bugs
+- all files with +400 LOC should be revisited to see if we can make them more clean.
+
+### 80/20 focus
+
+General rule is 80/20 focus. 80% is focus on core file function (eg. a component that's exported), where 20% is extra (small utils or a small sub component).
+Large files (+400LOC) likely are ~40% core component and 60% like forms, form validation, states of things that could be a sub component, utils... The goal here is to make sure that files respect this rule
+
+
+Some examples of this rule:
+- extract logic into utils if it's a lot of logic. Possibly make it shared if it's used by multiple instances. Especially mathematical utilities should be extracted so that each file has a clear intent. 
+- put small sub components or small functions on the bottom of the main component/function file, so that the focus is on the main component
+- strict clean typing
+
+
+Examples expected outcome of a file:
+- Component: 1 large export of component, some small imports, some extra utils and some type definitions
+- Types: a file full of exported types and typing utils that bring focus to other file(s). No conflicting names.
+
+
+## Raw ideas to backlog
+Some idea's for possible backlog items that eed confirmation research:
+- global state controls (eg. theme color) and other config from widgets in a json editor. Ideally an editor where fields are inputs and you have semi live updates.
