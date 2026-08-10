@@ -17,6 +17,10 @@
 // `composer.css` (imported by Composer.tsx), written against wigl's own theme
 // tokens; Crepe's shipped color themes are never imported.
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
+// Type-only: erased at compile time, so this doesn't pull the (document-touching)
+// runtime modules into the static import graph — see the dynamic-import note below.
+import type { Ctx } from "@milkdown/kit/ctx";
+import type { Node } from "@milkdown/kit/prose/model";
 
 export type CrepeHandle = {
   /** Move focus into the editor and drop the caret at the very end. */
@@ -25,8 +29,8 @@ export type CrepeHandle = {
 
 // What the mount effect resolves and the other effects/handle read back.
 type Loaded = {
-  editor: { action: (fn: (ctx: unknown) => void) => void };
-  replaceAll: (markdown: string) => (ctx: unknown) => void;
+  editor: { action: (fn: (ctx: Ctx) => void) => void };
+  replaceAll: (markdown: string) => (ctx: Ctx) => void;
   focusEnd: () => void;
 };
 
@@ -105,17 +109,17 @@ export const CrepeField = ({
       // markdown still round-trips, but nothing auto-formats as you type.
       await crepe.editor.remove([
         commonmark.wrapInHeadingInputRule,
-        commonmark.headingKeymap,
+        ...commonmark.headingKeymap,
         commonmark.createCodeBlockInputRule,
-        commonmark.codeBlockKeymap,
+        ...commonmark.codeBlockKeymap,
       ]);
 
       loadedRef.current = {
         editor: crepe.editor,
         replaceAll: utils.replaceAll,
         focusEnd: () =>
-          crepe.editor.action((ctx: unknown) => {
-            const view = (ctx as { get: (s: unknown) => EditorViewLike }).get(core.editorViewCtx);
+          crepe.editor.action((ctx: Ctx) => {
+            const view = ctx.get(core.editorViewCtx) as EditorViewLike;
             view.dispatch(view.state.tr.setSelection(state.Selection.atEnd(view.state.doc)));
             view.focus();
           }),
@@ -154,7 +158,7 @@ export const CrepeField = ({
 // pulling prose types (and their document-touching modules) into the static
 // import graph.
 type EditorViewLike = {
-  state: { tr: { setSelection: (s: unknown) => unknown }; doc: unknown; selection: unknown };
+  state: { tr: { setSelection: (s: unknown) => unknown }; doc: Node; selection: unknown };
   dispatch: (tr: unknown) => void;
   focus: () => void;
 };

@@ -27,13 +27,10 @@ wigl-widgets/<name>/
 
 ```tsx
 // wigl-widgets/clock/index.tsx — a complete, working widget
-import { Widget, WidgetHeader } from "@/wigl";
+import { Widget } from "@/wigl";
 
 const ClockWidget = () => (
   <Widget w={3} h={2} col={8} row={0}>
-    <WidgetHeader>
-      <span className="px-1 text-[10px] tracking-widest opacity-40">CLOCK</span>
-    </WidgetHeader>
     {/* body */}
   </Widget>
 );
@@ -87,7 +84,7 @@ The shape, in dependency order (any widget in `wigl-widgets/` with a hook is the
 
 Everything shared lives behind exactly three barrels — widgets never deep-import past them:
 
-- **`@/wigl`** — visual/layout primitives: `Widget`, `WidgetHeader`, `Desktop`, `TILING`.
+- **`@/wigl`** — visual/layout primitives: `Widget`, `Desktop`, `TILING`.
 - **`@/wigl/hooks`** — stateful/React helpers: `useStorage`, `useQuery`, `useRelativeTime`, `useRegisterGlobalAction`.
 - **`@/wigl/utils`** — plain non-React helpers: `cn`, `runCmd`, `isMacos`, `relativeTime`.
 
@@ -100,10 +97,6 @@ Everything shared lives behind exactly three barrels — widgets never deep-impo
 
 ```tsx
 <Widget minimizedBackground={<CalendarIcon className="size-4" />}>
-  <WidgetHeader className="bg-emerald-950/40">
-    <span className="px-1 text-[10px] tracking-widest opacity-40">REPOS</span>
-    <div className="ml-auto flex items-center gap-0.5">{/* your own buttons — clicks just work */}</div>
-  </WidgetHeader>
   {/* body */}
 </Widget>
 ```
