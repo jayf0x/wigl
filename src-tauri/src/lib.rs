@@ -168,7 +168,23 @@ fn spawn_screen_window(app: &tauri::AppHandle, i: usize, mon: &tauri::Monitor) {
         .build();
     match win {
         Ok(w) => {
+            // Skip on Linux: GTK queues this through the same
+            // window_requests_tx channel spawn_cursor_poller uses, processed
+            // by tao's event loop against the window's GdkWindow — which
+            // doesn't exist until the window is realized (shown). Since this
+            // window is built with .visible(false) and only shown later once
+            // its webview mounts and calls show() over IPC, the GdkWindow is
+            // still None when this queued request lands, and tao's handler
+            // unwraps that None and aborts the whole process. macOS's AppKit
+            // equivalent has no such realize precondition. No functional
+            // loss from skipping it here: the window is invisible until
+            // shown regardless, and spawn_cursor_poller (already running)
+            // establishes the correct ignore/interactive state from the
+            // first hit-rects report once the window is actually visible.
+            #[cfg(not(target_os = "linux"))]
             let _ = w.set_ignore_cursor_events(true);
+            #[cfg(target_os = "linux")]
+            let _ = &w;
         }
         Err(e) => eprintln!("[wigl] failed to create screen-{i}: {e}"),
     }
