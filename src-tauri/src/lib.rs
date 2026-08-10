@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fs,
     sync::atomic::{AtomicBool, Ordering},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -246,29 +246,44 @@ fn spawn_monitor_poller(app: tauri::AppHandle) {
 }
 
 fn spawn_cursor_poller(app: tauri::AppHandle) {
+    // GTK isn't thread-safe: every call here (cursor_position, a window's
+    // outer_position, set_ignore_cursor_events) has to land on the main
+    // thread, same as spawn_monitor_poller's run_on_main_thread above. This
+    // used to call them straight from the polling thread — usually got away
+    // with it (tao does queue the request internally), but under enough
+    // concurrent main-thread GTK/webkit traffic — e.g. dragging a widget,
+    // which repaints heavily — the race corrupted glibc's heap outright
+    // (`malloc(): smallbin double linked list corrupted`, not a clean Rust
+    // panic). `ignoring` moves to an Arc<Mutex<_>> since the closure posted
+    // to the main thread now outlives a single loop iteration on this one.
+    let ignoring: Arc<Mutex<HashMap<String, bool>>> = Arc::new(Mutex::new(HashMap::new()));
     thread::spawn(move || {
-        let mut ignoring: HashMap<String, bool> = HashMap::new();
         loop {
             thread::sleep(Duration::from_millis(33)); // ponytail: 30Hz poll, raise if hover feels laggy
             if app.state::<DragActive>().0.load(Ordering::Relaxed) {
                 continue;
             }
-            let Ok(cursor) = app.cursor_position() else { continue };
-            let rects = app.state::<HitRects>().0.lock().unwrap().clone();
-            for (label, window) in app.webview_windows() {
-                let Some(widget_rects) = rects.get(&label) else { continue };
-                let Ok(pos) = window.outer_position() else { continue };
-                let (lx, ly) = (cursor.x - pos.x as f64, cursor.y - pos.y as f64);
-                let hit = widget_rects
-                    .iter()
-                    .any(|r| lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h);
-                let want_ignore = !hit;
-                if ignoring.get(&label) != Some(&want_ignore) {
-                    if window.set_ignore_cursor_events(want_ignore).is_ok() {
-                        ignoring.insert(label, want_ignore);
+            let handle = app.clone();
+            let ignoring = ignoring.clone();
+            let _ = app.run_on_main_thread(move || {
+                let Ok(cursor) = handle.cursor_position() else { return };
+                let rects = handle.state::<HitRects>().0.lock().unwrap().clone();
+                let mut ignoring = ignoring.lock().unwrap();
+                for (label, window) in handle.webview_windows() {
+                    let Some(widget_rects) = rects.get(&label) else { continue };
+                    let Ok(pos) = window.outer_position() else { continue };
+                    let (lx, ly) = (cursor.x - pos.x as f64, cursor.y - pos.y as f64);
+                    let hit = widget_rects
+                        .iter()
+                        .any(|r| lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h);
+                    let want_ignore = !hit;
+                    if ignoring.get(&label) != Some(&want_ignore) {
+                        if window.set_ignore_cursor_events(want_ignore).is_ok() {
+                            ignoring.insert(label, want_ignore);
+                        }
                     }
                 }
-            }
+            });
         }
     });
 }
