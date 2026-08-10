@@ -147,12 +147,13 @@ while a `serve` instance was already running had zero effect until
 restart. So the sync must run *before* `startOpencodeServer()`, not after
 — `useOpencodeServer.ts` does exactly that, best-effort and time-boxed
 (`OLLAMA_SYNC_TIMEOUT_MS`, currently 2s) so a not-yet-running Ollama never
-blocks the widget from starting. A model pulled mid-session needs a manual
-restart to show up — `useOpencodeServer.ts`'s `restart()` still exists for
-this, though the button that called it (`ServerStatusBar.tsx`) was removed
-along with the rest of the always-on status UI. The auto-detect-and-restart
-follow-up (poll Ollama's model list, diff against what's synced, call
-`restart()` on a change) is `backlog.md`'s B5.
+blocks the widget from starting. A model pulled mid-session used to need a
+manual restart to show up; `useOpencodeServer.ts` now polls
+`listOllamaModels()` every `OLLAMA_POLL_INTERVAL_MS` (15s) while the server
+is online, diffs the names against what was last synced, and calls its own
+`restart()` when a new one appears — no UI trigger needed (the button that
+used to call `restart()`, `ServerStatusBar.tsx`, was removed along with the
+rest of the always-on status UI).
 
 `opencodeConfig.ts` uses plain `JSON.parse`/`stringify`, not a real JSONC
 parser — no widget bundles its own npm dependency yet (every widget's
@@ -261,6 +262,13 @@ passes `agent: "title"` (opencode's own hidden, toolless, purpose-built
 title-generation agent) for exactly this reason. Any new housekeeper
 consumer needs the same treatment — omitting `agent` isn't a safe default
 here the way it might look.
+
+The real chat composer has the same failure mode for the same reason: no
+explicit agent selection defaults to `"build"` server-side. `Composer.tsx`
+checks the selected model's `ProviderModel.capabilities.toolcall` and, when
+`false`, forces `agent: "title"` and disables the agent chip (so the user
+can't pick a tool-using agent that's guaranteed to 400) rather than letting
+the request go out with the default.
 
 **Wired today**: `generateSessionTitle()`, fired from `useActiveSession.ts`'s
 `send()` on a session's first user message — fire-and-forget, a slow/failed
