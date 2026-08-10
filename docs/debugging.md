@@ -33,6 +33,10 @@ Fix already in place: `package.json`'s `dev`/`build`/`preview` scripts call `bun
 
 Both are required; either alone fails (the second one fails the Cargo build outright with a clear "does not match the allowlist" error, so that half is hard to miss — the first half fails silently at runtime).
 
+## Transparent windows on Linux can ghost/tear while content moves
+
+Symptom seen once in the windowed flow (see `docs/architecture.md`'s "Two window flows"): dragging a widget left visible smearing/tearing behind it, old pixels never cleared — Linux-only, not reproducible on macOS. Cause: WebKitGTK's accelerated compositing doesn't reliably clear a `transparent(true)` GTK window's backing store between paints; the overlay flow's per-monitor windows are also transparent but stay static (no content moves across the whole surface the way a dragged grid item does), so they don't trigger it the same way. Fix in place: the windowed-mode window is opaque now (no `.transparent(true)` in `lib.rs`'s `setup()`), with the same vignette look baked into fully-opaque `App.css` gradient stops instead of relying on real alpha compositing. If this resurfaces anywhere still using `transparent(true)` on Linux, suspect this class of bug before assuming it's a React/rendering logic issue — `WEBKIT_DISABLE_COMPOSITING_MODE=1` (see the DMA-BUF section above) is worth trying too, since it disables WebKit's compositor outright.
+
 ## Webview console errors are invisible to `log show` / `bun run verify`
 
 Neither macOS's `log show` nor `verify.sh`'s captured stdout/stderr sees anything printed to a webview's own devtools console — that's a separate stream Rust never touches. A React crash (including a minified "Minified React error #NNN" message) can leave a monitor window blank with `bun run verify` still reporting "log errors: none", because verify only checks the native process's output, not the webview's console.

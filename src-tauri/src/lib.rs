@@ -317,20 +317,24 @@ pub fn run() {
             );
             if windowed {
                 // Single normal window: decorated, resizable, in the taskbar
-                // — a regular app, not a desktop overlay. Kept lightly
-                // transparent (see App.css's windowed-mode radial gradient)
-                // purely as a soft visual touch, not to fake the overlay
-                // flow's see-through-to-desktop look — that read as confusing
-                // once click-through (see above) turned out not to be worth
-                // keeping, since a transparent-looking area you can't click
-                // through is worse than an honestly opaque one. Not setting
-                // always_on_top either: same compositor-policy refusal as
-                // always-below under GNOME/Wayland (not a client request
-                // Mutter honors), and with no click-through to pair it with
-                // there's nothing here that would benefit from it even where
-                // it does work. Same widgets/grid, rendered as "screen-0" so
-                // the frontend's existing monitorIndex parsing needs no
-                // special case.
+                // — a regular app, not a desktop overlay. Opaque, not
+                // transparent: this used to carry a light `transparent(true)`
+                // touch purely for looks (see App.css's windowed-mode radial
+                // gradient), but WebKitGTK's accelerated compositing on a
+                // transparent GTK window doesn't reliably clear the backing
+                // store between paints — every widget drag left visible
+                // ghosting/tearing on Linux (not reproducible on macOS,
+                // where WKWebView's CALayer compositing doesn't have this
+                // bug). Not worth keeping a decorative effect that breaks
+                // the primary platform this mode exists for; App.css bakes
+                // the same vignette look into fully-opaque gradient stops
+                // instead. Not setting always_on_top either: same
+                // compositor-policy refusal as always-below under
+                // GNOME/Wayland (not a client request Mutter honors), and
+                // with no click-through to pair it with there's nothing here
+                // that would benefit from it even where it does work. Same
+                // widgets/grid, rendered as "screen-0" so the frontend's
+                // existing monitorIndex parsing needs no special case.
                 let win = tauri::WebviewWindowBuilder::new(
                     app,
                     "screen-0",
@@ -340,7 +344,6 @@ pub fn run() {
                 .inner_size(1100.0, 750.0)
                 .visible(true)
                 .resizable(true)
-                .transparent(true)
                 .on_page_load(|_window, payload| {
                     eprintln!("[wigl] page load: {:?} {}", payload.event(), payload.url());
                 })

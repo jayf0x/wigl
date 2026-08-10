@@ -17,12 +17,17 @@ body,
 
 /* Windowed mode (Wayland's single normal-window flow, see lib.rs's
    windowed_mode / App.tsx): fully transparent read as confusing rather than
-   desktop-like once click-through was reverted (see lib.rs). A CSS custom
-   property, not a bare value, so a future settings UI can swap in a user's
-   own background (image, solid color, whatever) by just overriding this
-   var. Default: a faint dark radial gradient fading to transparent. */
+   desktop-like once click-through was reverted (see lib.rs). The window
+   itself is opaque (not `transparent(true)`) — WebKitGTK's compositor
+   doesn't reliably clear a transparent window's backing store between
+   paints on Linux, which showed up as visible ghosting/tearing on every
+   widget drag. Both gradient stops stay fully opaque so the vignette reads
+   as a soft visual touch without any real alpha-channel window compositing
+   involved. A CSS custom property, not a bare value, so a future settings
+   UI can swap in a user's own background (image, solid color, whatever) by
+   just overriding this var. */
 :root {
-  --wigl-windowed-bg: radial-gradient(ellipse at center, rgb(11 11 12 / 0.95) 0%, rgb(11 11 12 / 0) 100%);
+  --wigl-windowed-bg: radial-gradient(ellipse at center, rgb(20 20 22) 0%, rgb(11 11 12) 100%);
   --destructive-foreground: var(--color-red-700);
   --info: var(--color-blue-500);
   --info-foreground: var(--color-blue-700);
