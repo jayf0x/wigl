@@ -22,9 +22,12 @@ import type { AgentDef, ModelSelection, ProviderCatalogEntry } from "../types";
 import { CrepeField, type CrepeHandle } from "./CrepeField";
 import "./composer.css";
 
-// `off` is the "no reasoning-effort override" sentinel — never sent as a
-// `variant`. Effort keys themselves are per-model (see below); this is only
-// the display map for the ones we know by name.
+// `off` is a real variant now (opencodeConfig.ts maps it to Ollama's
+// `reasoning_effort: "none"`, the one value that actually suppresses
+// thinking — backlog.md B1), always offered first regardless of what the
+// model's own `variants` map declares. Effort keys themselves are otherwise
+// per-model (see below); this is only the display map for the ones we know
+// by name.
 const EFFORT_OFF = "off";
 const EFFORT_LABELS: Record<string, string> = { off: "off", low: "low", high: "high" };
 
@@ -157,7 +160,10 @@ export const Composer = ({
   );
   // Effort keys come from the model's own `variants` map — never a hardcoded
   // low/medium/high list (AGENTS.md). No variants ⇒ no effort control at all.
-  const efforts = selected?.variants ? Object.keys(selected.variants) : [];
+  // `off` is filtered out here since it's prepended below as `EFFORT_OFF` —
+  // the config declares it as a real variant (opencodeConfig.ts) but the UI
+  // still treats it as the one fixed, always-first option.
+  const efforts = selected?.variants ? Object.keys(selected.variants).filter((k) => k !== EFFORT_OFF) : [];
   const effortOptions: Option[] = [EFFORT_OFF, ...efforts].map((v) => ({ value: v, label: EFFORT_LABELS[v] ?? v }));
   const agentOptions: Option[] = agents.map((a) => ({
     value: a.name,
@@ -247,7 +253,7 @@ export const Composer = ({
               muted={!variant}
               options={effortOptions}
               selectedValue={variant ?? EFFORT_OFF}
-              onSelect={(value) => onVariantChange(value === EFFORT_OFF ? undefined : value)}
+              onSelect={onVariantChange}
             />
           )}
           <div className="flex-1" />

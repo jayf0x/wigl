@@ -72,27 +72,30 @@ export interface OllamaModelSync {
   thinking: boolean;
 }
 
-// The two effort levels this widget's UI offers (see Composer.tsx) — opencode's
-// own docs describe `variants` as generic per-model overrides ("override
-// existing variants or add your own"), keyed by whatever label the config
-// author picks, with `reasoningEffort` as the field it forwards to the
-// provider. Picking exactly these two keys keeps `Composer.tsx`'s dropdown
-// contract simple (a fixed High/Low pair when present, nothing when not)
-// rather than surfacing whatever ad-hoc variant names a provider happens to
-// define — not verified live whether `reasoningEffort` actually changes
-// Ollama's own `think` behavior through the `openai-compatible` bridge (see
-// TODO.md); this is the best-supported mechanism available without
-// vendoring Ollama-specific request handling into this widget.
+// The three effort levels this widget's UI offers (see Composer.tsx) —
+// `reasoningEffort` is the field opencode's `variants` block forwards
+// straight through as the OpenAI-compatible request's `reasoning_effort`
+// field, verified live via a logging proxy in front of Ollama: `"high"`/
+// `"low"` reach Ollama unchanged, and `"none"` is the one value that
+// actually suppresses Ollama's `reasoning` output entirely (no `<think>`
+// step at all, not just a shorter one) — confirmed by diffing the SSE
+// response with and without it for the same prompt against a thinking
+// model. `off` has to be a real variant like the others, not the absence of
+// one: `variant: undefined` (no override) just leaves Ollama on its default
+// thinking behavior, which is the bug this fixes (backlog.md B1).
 const REASONING_VARIANTS: Record<string, { reasoningEffort: string }> = {
   high: { reasoningEffort: "high" },
   low: { reasoningEffort: "low" },
+  off: { reasoningEffort: "none" },
 };
 
 /** Adds any of `models` that aren't already declared under the ollama
  * provider block, creating that block if it doesn't exist yet, and gives a
  * thinking-capable model's entry a `variants` block if it doesn't have one
- * yet (covers both a brand-new model and one synced by an older version of
- * this function before `variants` existed here). Never removes a model or a
+ * yet, or patches in a missing `off` key if it already has one from before
+ * `off` was a real variant (covers a brand-new model, one synced by an
+ * older version of this function before `variants` existed, and one synced
+ * before `off` was added to `REASONING_VARIANTS`). Never removes a model or a
  * variant once written — one pulled via `ollama rm` just stops being
  * offered from Ollama's own list, and quietly stays declared in opencode's
  * config (harmless: opencode just can't reach it, same as any
@@ -120,6 +123,9 @@ export const syncOllamaModels = async (models: OllamaModelSync[]): Promise<boole
       changed = true;
     } else if (thinking && !entry.variants) {
       configuredModels[name] = { ...entry, variants: REASONING_VARIANTS };
+      changed = true;
+    } else if (thinking && entry.variants && !entry.variants.off) {
+      configuredModels[name] = { ...entry, variants: { ...entry.variants, off: REASONING_VARIANTS.off } };
       changed = true;
     }
   }

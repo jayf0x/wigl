@@ -195,21 +195,23 @@ before this fix, patches that block onto an already-declared model entry
 that's missing one, so nobody needs to delete `opencode.jsonc` by hand to
 pick this up.
 
-**Not verified live**: whether `reasoningEffort` in a `variants` entry
-actually changes what Ollama does for a request routed through opencode's
-generic `openai-compatible` provider (i.e. whether picking "High" vs "Low"
-in the UI produces a measurably different reasoning trace), as opposed to
-being a value opencode forwards that the provider silently ignores. This is
-the best-supported mechanism available (opencode's own docs describe
-`variants` as generic, provider-agnostic per-model overrides you can "add
-your own" of) but wasn't confirmed with a live SSE trace the way every
-other claim in this section was — what *is* fixed and confirmed is the UI
-bug: the control appears only for thinking-capable models and offers
-exactly high/low/off (off is a real selectable value, not just the unset
-default — the `EFFORT_OFF` sentinel in `Composer.tsx`). To confirm the deeper claim:
-run the same seeded prompt through a live `opencode serve` with `variant:
-"high"` vs `variant: "low"` against a thinking model and diff the
-`reasoning` part's length/content in the SSE trace.
+**Verified live** (backlog.md B1): `reasoningEffort` in a `variants` entry
+does reach Ollama — confirmed by putting a logging HTTP proxy in front of
+Ollama's own port, pointing opencode's `ollama` provider `baseURL` at it,
+and diffing the outgoing `/v1/chat/completions` body. `variants: { low:
+{ reasoningEffort: "low" } }` produces `"reasoning_effort":"low"` in that
+body unchanged — opencode's `openai-compatible` provider forwards the field
+verbatim, it doesn't silently drop it. The value that matters is `"none"`:
+Ollama's OpenAI-compatible endpoint treats `reasoning_effort: "none"` as a
+real off switch — no `reasoning`/`<think>` output at all for the same
+prompt that produces one with the field omitted — while `"low"`/`"high"`
+just shorten or lengthen the trace. `REASONING_VARIANTS` in
+`opencodeConfig.ts` now declares `off: { reasoningEffort: "none" }` as a
+real variant (patched onto existing configs the same way a missing
+`variants` block was), and `Composer.tsx`'s "Off" chip sends `"off"` as the
+actual `variant`, not `undefined` — sending `undefined` was the bug: it's
+"no override", which just leaves Ollama on its own default thinking
+behavior instead of suppressing it.
 
 ## Skills — disabled for now
 
