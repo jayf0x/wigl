@@ -13,6 +13,7 @@
 import type { ComponentType, ErrorInfo, ReactNode } from "react";
 import {
   Component,
+  memo,
   Suspense,
   useCallback,
   useEffect,
@@ -141,6 +142,57 @@ class WidgetErrorBoundary extends Component<
     return this.props.children;
   }
 }
+
+// One grid item. Memoized so a drag-triggered `setLayout` on the parent
+// doesn't re-render every other widget's subtree — their actual on-screen
+// position is already applied imperatively (see the `useLayoutEffect` below
+// that writes `transform` directly from `els`), so re-rendering here would
+// just be wasted React work chasing a DOM write that already happened.
+const WidgetItem = memo(function WidgetItem({
+  id,
+  Component,
+  w,
+  h,
+  lifted,
+  slot,
+  els,
+  onPointerDown,
+  onContextMenu,
+}: {
+  id: string;
+  Component: ComponentType;
+  w: number;
+  h: number;
+  lifted: boolean;
+  slot: WidgetSlotValue;
+  els: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+  onPointerDown: (e: React.PointerEvent, id: string) => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+}) {
+  const setRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      els.current[id] = el;
+    },
+    [els, id],
+  );
+  return (
+    <div
+      ref={setRef}
+      className={`wigl-widget${lifted ? " lifted" : ""}`}
+      style={{ width: spanToPx(w), height: spanToPx(h) }}
+      onPointerDown={(e) => onPointerDown(e, id)}
+      onContextMenu={onContextMenu}
+    >
+      <WidgetErrorBoundary id={id}>
+        <WidgetSlotProvider value={slot}>
+          <Suspense fallback={null}>
+            <Component />
+          </Suspense>
+        </WidgetSlotProvider>
+      </WidgetErrorBoundary>
+    </div>
+  );
+});
 
 export const Desktop = ({
   widgets,
@@ -463,16 +515,16 @@ export const Desktop = ({
 
   // Moves the proximity glow to the cursor — replaces the old per-frame
   // cursor.current used only by canvas math.
-  const moveFieldCursor = (x: number, y: number) => {
+  const moveFieldCursor = useCallback((x: number, y: number) => {
     const g = fieldGlow.current;
     if (!g) return;
     g.setAttribute("cx", String(x));
     g.setAttribute("cy", String(y));
-  };
+  }, []);
 
   // Marks the drop target's four corner anchors so CSS can light them up —
   // called only when the target cell actually changes, not per frame.
-  const setGhostCell = (cell: GridItem | null) => {
+  const setGhostCell = useCallback((cell: GridItem | null) => {
     ghostCell.current = cell;
     const svg = field.current;
     if (!svg) return;
@@ -490,27 +542,27 @@ export const Desktop = ({
           ?.classList.add("locked");
       }
     }
-  };
+  }, []);
 
-  const wakeField = (dragging: boolean) => {
+  const wakeField = useCallback((dragging: boolean) => {
     const { show } = TILING.field;
     if (show === "never") return;
     field.current?.classList.toggle("active", dragging || show === "always");
-  };
+  }, []);
   useEffect(() => {
     wakeField(false); // honor field.show === "always" from boot
-  }, []);
+  }, [wakeField]);
 
-  const showGhost = (col: number, row: number, w: number, h: number) => {
+  const showGhost = useCallback((col: number, row: number, w: number, h: number) => {
     const g = ghost.current!;
     g.style.width = `${spanToPx(w)}px`;
     g.style.height = `${spanToPx(h)}px`;
     g.style.transform = `translate(${colToPx(col)}px, ${rowToPx(row)}px)`;
     g.style.opacity = "1";
-  };
-  const hideGhost = () => {
+  }, []);
+  const hideGhost = useCallback(() => {
     ghost.current!.style.opacity = "0";
-  };
+  }, []);
 
   const persist = (items: GridItem[]) => {
     const merged = {
@@ -540,17 +592,17 @@ export const Desktop = ({
   // context menu instead (so e.g. pasting into a textarea still works). The
   // menu can extend past the widget's hit-rects, so the click-through poller
   // is paused while it's open (same trick as dragging).
-  const openMenu = (e: React.MouseEvent) => {
+  const openMenu = useCallback((e: React.MouseEvent) => {
     if (!(e.target as HTMLElement).closest("[data-widget-header]")) return;
     e.preventDefault();
     menuPos.current = { x: e.clientX, y: e.clientY };
     setMenu({ x: e.clientX, y: e.clientY });
     invoke("set_drag_active", { active: true }).catch(console.error);
-  };
-  const closeMenu = () => {
+  }, []);
+  const closeMenu = useCallback(() => {
     setMenu(null);
     invoke("set_drag_active", { active: false }).catch(console.error);
-  };
+  }, []);
 
   // Reset = wipe all saved positions and rebootstrap every monitor: widgets
   // fall back to monitor 0 + autoPlace + settle, exactly like a first boot.
@@ -674,38 +726,43 @@ export const Desktop = ({
   }, [monitorIndex]);
 
   // --- drag ------------------------------------------------------------------
-  const onPointerDown = (e: React.PointerEvent, id: string) => {
-    if (e.button !== 0 || !layout) return;
-    const target = e.target as HTMLElement;
-    if (!target.closest("[data-drag-handle]") || target.closest(INTERACTIVE))
-      return;
-    const item = layout.find((i) => i.id === id)!;
-    const el = els.current[id]!;
-    el.setPointerCapture(e.pointerId);
-    drag.current = {
-      id,
-      el,
-      offX: e.clientX - colToPx(item.col),
-      offY: e.clientY - rowToPx(item.row),
-      snapshot: layout.map((i) => ({ ...i })),
-      target: { mon: monitorIndex, col: item.col, row: item.row },
-      frozen: false,
-    };
-    setDragId(id);
-    setGhostCell({ ...item });
-    moveFieldCursor(e.clientX, e.clientY);
-    showGhost(item.col, item.row, item.w, item.h);
-    wakeField(true);
-    // Pause the click-through poller: flipping ignore_cursor_events mid-drag
-    // would sever the pointer capture. No poller exists in windowed mode.
-    if (!windowed)
-      invoke("set_drag_active", { active: true }).catch(console.error);
-  };
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent, id: string) => {
+      const layout = layoutRef.current;
+      if (e.button !== 0 || !layout) return;
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-drag-handle]") || target.closest(INTERACTIVE))
+        return;
+      const item = layout.find((i) => i.id === id)!;
+      const el = els.current[id]!;
+      el.setPointerCapture(e.pointerId);
+      drag.current = {
+        id,
+        el,
+        offX: e.clientX - colToPx(item.col),
+        offY: e.clientY - rowToPx(item.row),
+        snapshot: layout.map((i) => ({ ...i })),
+        target: { mon: monitorIndex, col: item.col, row: item.row },
+        frozen: false,
+      };
+      setDragId(id);
+      setGhostCell({ ...item });
+      moveFieldCursor(e.clientX, e.clientY);
+      showGhost(item.col, item.row, item.w, item.h);
+      wakeField(true);
+      // Pause the click-through poller: flipping ignore_cursor_events mid-drag
+      // would sever the pointer capture. No poller exists in windowed mode.
+      if (!windowed)
+        invoke("set_drag_active", { active: true }).catch(console.error);
+    },
+    [monitorIndex, windowed, setGhostCell, moveFieldCursor, showGhost, wakeField],
+  );
 
   const onPointerMove = (e: React.PointerEvent) => {
     const d = drag.current;
-    if (!d || !layout) return;
-    const item = layout.find((i) => i.id === d.id)!;
+    const layoutNow = layoutRef.current;
+    if (!d || !layoutNow) return;
+    const item = layoutNow.find((i) => i.id === d.id)!;
 
     // Which monitor is the cursor on? screenX/Y and the monitor rects share
     // the same global logical space.
@@ -730,7 +787,9 @@ export const Desktop = ({
         setGhostCell(null);
         hideGhost();
         wakeField(false);
-        setLayout(d.snapshot.map((i) => ({ ...i }))); // undo our local pushes
+        const reset = d.snapshot.map((i) => ({ ...i })); // undo our local pushes
+        layoutRef.current = reset;
+        setLayout(reset);
       }
       const m = ms![tgt];
       const fx = sx - m.x - d.offX;
@@ -794,13 +853,28 @@ export const Desktop = ({
     reflow(next, moved, cols);
     setGhostCell({ ...moved });
     ghost.current!.style.transform = `translate(${colToPx(col)}px, ${rowToPx(row)}px)`;
-    setLayout(next);
+
+    // Apply pushed positions straight to the DOM — no setState, no Desktop
+    // re-render, no reconciliation of widgets nobody touched. CSS owns the
+    // settle animation (`.wigl-widget`'s transition in App.css) regardless
+    // of whether the transform write comes from here or from React, so this
+    // looks identical to the old per-move setLayout, just without the cost.
+    // layoutRef is the live source of truth for the rest of the drag; React
+    // state (`layout`) only gets one final sync in endDrag, on drop.
+    for (const it of next) {
+      if (it.id === d.id) continue;
+      const el = els.current[it.id];
+      if (el)
+        el.style.transform = `translate(${colToPx(it.col)}px, ${rowToPx(it.row)}px)`;
+    }
+    layoutRef.current = next;
   };
 
   const endDrag = () => {
     const d = drag.current;
-    if (!d || !layout) return;
-    const item = layout.find((i) => i.id === d.id)!;
+    const layoutNow = layoutRef.current;
+    if (!d || !layoutNow) return;
+    const item = layoutNow.find((i) => i.id === d.id)!;
     drag.current = null;
     setGhostCell(null);
     setDragId(null); // re-enables the transition; layout effect springs it home
@@ -821,7 +895,9 @@ export const Desktop = ({
         row: d.target.row,
       } satisfies DropMsg).catch(console.error);
       d.el.classList.remove("detached");
-      setLayout(layout.filter((i) => i.id !== d.id));
+      const next = layoutNow.filter((i) => i.id !== d.id);
+      layoutRef.current = next;
+      setLayout(next);
       return;
     }
     emit("wigl-drop", {
@@ -832,7 +908,12 @@ export const Desktop = ({
       col: item.col,
       row: item.row,
     } satisfies DropMsg).catch(console.error);
-    persist(layout);
+    // One state sync for the whole gesture: lets the position effect spring
+    // the just-dropped card home (dragId is now null) and lets `layout`
+    // state — and everything derived from it (hit-rects, persistence) — catch
+    // up to the ref that's been the live truth since pointerdown.
+    setLayout(layoutNow);
+    persist(layoutNow);
   };
 
   if (!layout) return null;
@@ -883,28 +964,19 @@ export const Desktop = ({
       </div>
       {layout.map((it) => {
         if (it.hidden) return null;
-        const Component = widgets[it.id];
         return (
-          <div
+          <WidgetItem
             key={it.id}
-            ref={(el) => {
-              els.current[it.id] = el;
-            }}
-            className={`wigl-widget${dragId === it.id ? " lifted" : ""}`}
-            style={{ width: spanToPx(it.w), height: spanToPx(it.h) }}
-            onPointerDown={(e) => onPointerDown(e, it.id)}
+            id={it.id}
+            Component={widgets[it.id]}
+            w={it.w}
+            h={it.h}
+            lifted={dragId === it.id}
+            slot={getSlot(it.id, !!saved[it.id]?.minimized)}
+            els={els}
+            onPointerDown={onPointerDown}
             onContextMenu={openMenu}
-          >
-            <WidgetErrorBoundary id={it.id}>
-              <WidgetSlotProvider
-                value={getSlot(it.id, !!saved[it.id]?.minimized)}
-              >
-                <Suspense fallback={null}>
-                  <Component />
-                </Suspense>
-              </WidgetSlotProvider>
-            </WidgetErrorBoundary>
-          </div>
+          />
         );
       })}
       {menu && (
