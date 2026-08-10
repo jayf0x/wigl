@@ -140,9 +140,9 @@ app still rendering the old `qa-colors` install until it was removed by
 hand). Run `bun run plugin:rm <old-id>` yourself as part of any rename or
 deletion — `plugin:install` deliberately doesn't auto-prune orphaned ids,
 since the plugin system is meant to support installs with no corresponding
-`wigl-widgets/` source at all (see "Explicitly not going to happen" in
-`docs/future-ideas.md` for the URL-install case that's still rejected, but
-a hand-copied local plugin isn't), so "installed but no longer in source"
+`wigl-widgets/` source at all (a hand-copied local plugin folder is a valid
+install; a URL/registry-based install is still rejected — see
+`docs/future-ideas.md`'s intro), so "installed but no longer in source"
 isn't reliably a mistake the tooling can tell apart from an intentional one.
 
 Installed plugins live next to `wigl.db` in the per-OS app-data dir, one

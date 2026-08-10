@@ -4,8 +4,8 @@ Read this before touching the widget. It's not a tour of the folder — read
 the code for that — it's the decisions and gotchas that don't survive
 reading the code cold. Product framing lives in `sketch.md` (kept from the
 research pass); this file is dev-facing only. Deferred/delegated work lives
-in `TODO.md` at the repo root, not here — this file is decisions and
-gotchas for code that already exists.
+in root `backlog.md`, not here — this file is decisions and gotchas for
+code that already exists.
 
 ## What this actually talks to
 
@@ -150,9 +150,9 @@ restart. So the sync must run *before* `startOpencodeServer()`, not after
 blocks the widget from starting. A model pulled mid-session needs a manual
 restart to show up — `useOpencodeServer.ts`'s `restart()` still exists for
 this, though the button that called it (`ServerStatusBar.tsx`) was removed
-along with the rest of the always-on status UI, see TODO.md's "status
-polling removed" entry — for the auto-detect-and-restart follow-up, see
-`TODO.md`'s item 3.
+along with the rest of the always-on status UI. The auto-detect-and-restart
+follow-up (poll Ollama's model list, diff against what's synced, call
+`restart()` on a change) is `backlog.md`'s B5.
 
 `opencodeConfig.ts` uses plain `JSON.parse`/`stringify`, not a real JSONC
 parser — no widget bundles its own npm dependency yet (every widget's
@@ -264,9 +264,14 @@ here the way it might look.
 
 **Wired today**: `generateSessionTitle()`, fired from `useActiveSession.ts`'s
 `send()` on a session's first user message — fire-and-forget, a slow/failed
-call just leaves the truncated-prompt fallback title in place. Other
-consumers (greeting text, other small tasks) are unspecified scope, not
-built — see `TODO.md`.
+call just leaves the truncated-prompt fallback title in place. This is
+still the only caller — other consumers (greeting text, other small tasks)
+are unspecified scope, not built. Per `backlog.md`'s B6,
+`runHousekeeperPrompt()` being its own general-purpose function for a
+single caller is exactly the future-proofing this repo's `docs/principles.md`
+warns against — it should get inlined into `generateSessionTitle()` (or
+kept as an unexported private helper) unless a second concrete consumer
+shows up first.
 
 ## UI shape (post-redesign) — read before adding a control
 
@@ -353,7 +358,7 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
   (`Button`, `ScrollArea`, `cn`, `useStorage`) are used; the rest — palette,
   trace rows, turn layout — is one widget's opinion and would be a bad
   general API today. The one thing genuinely shared-shaped, an error
-  surface, is still in `TODO.md` for exactly that reason.
+  surface, is still `backlog.md`'s F1 for exactly that reason.
 - **Theme tokens only.** The old `PermissionBar` amber literal is gone; every
   color is a semantic token. Check any new class against `docs/theming.md`.
 - **No per-message metadata.** No role labels, no model name, no timestamps
@@ -532,12 +537,11 @@ over a raw `fetch` stream.
 ## Backlog
 
 Open, not-yet-built work for this widget (branching, sub-agent visibility,
-multi-monitor server sharing, Ollama start/stop) lives in root `backlog.md`,
-not here — that's the one canonical backlog for the whole repo (see root
-`AGENTS.md`'s docs table). The composer-editor rewrite is different: it's
-current, actionable work, so it's in root `TODO.md` instead. Skills are not
-backlog material — see "Skills — disabled for now" above for that decision's
-actual current state.
+multi-monitor server sharing, Ollama start/stop, the shared error surface,
+the housekeeper inline-vs-extend call) lives in root `backlog.md`, not
+here — that's the one canonical backlog for the whole repo (see root
+`AGENTS.md`'s docs table). Skills are not backlog material — see "Skills —
+disabled for now" above for that decision's actual current state.
 
 ## Hard rules specific to this widget
 

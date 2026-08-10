@@ -52,8 +52,8 @@ const LIGHT_COLORS: ThemeColors = {
 };
 
 // Ported from Terax (`src/modules/theme/themes/*.ts`), trimmed to wigl's
-// flat single-variant shape (see docs/future-ideas.md's "Theming beyond...").
-// Terax's `light`/`dark` variant split doesn't apply here beyond the two
+// flat single-variant shape (see docs/theming.md). Terax's `light`/`dark`
+// variant split doesn't apply here beyond the two
 // presets above — each of the following is that theme's dark variant, the
 // fitting look for a desktop overlay.
 export const PRESETS: ThemePreset[] = [

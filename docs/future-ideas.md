@@ -1,41 +1,79 @@
-# Future ideas / backlog
+# Future ideas
 
-Everything here is unbuilt and unapproved — a list of things that came up during design exploration (`.idea/full-conversation.md`) or were explicitly deferred in the original build spec (archived at `.idea/INIT.md`). None of it overrides `docs/architecture.md`'s "one window, one widget, one folder" rule. Read that file first; treat this one as a menu to pick from later, not a spec to implement. (Known defects and technical ceilings live in `backlog.md`, not here — this file is product ideas and scope decisions.)
+Raw, unapproved concepts — things we're not sure we want yet, not a spec to
+implement. Once an idea is actually decided and built, its reasoning lives
+in the `docs/*.md` file that owns that ground truth (see `AGENTS.md`'s
+table) and its history lives in git — it comes out of this file, it doesn't
+stay here with a strikethrough. Known defects and technical ceilings in
+what already exists live in `backlog.md`, not here.
 
-**Important**: `.idea/full-conversation.md` describes an earlier, much bigger vision — a full widget *platform* with a plugin SDK, a multi-display "placement engine" that treats widgets as position-independent nodes, and a native tiling layout system. Three pieces of that vision have since become real by deliberate owner decision (see "Decided" below): multiple concurrent widgets, folder-based auto-discovery, and — reversing this file's own prior stance — a runtime plugin/manifest system (`docs/plugins.md`). The rest stays rejected: no placement engine, no tiling. Don't resurrect those piecemeal by building toward them feature-by-feature.
+`.idea/full-conversation.md` (gitignored) describes an earlier, much bigger
+vision than what actually got built — a full widget *platform* with a
+plugin SDK, a multi-display "placement engine," and a native tiling layout
+system. Most of that stays rejected: no placement engine, no native tiling
+(the OS window manager is the layout engine — see `docs/architecture.md`).
+Don't resurrect either piecemeal by building toward them feature-by-feature.
 
-## Deferred for the repo-status widget specifically (from the original spec)
+## Explicitly out of scope
 
-- Backlog-item counts per project (would require parsing project-internal files).
-- Any parsing of project-internal files beyond git state.
-- The npm:deploy-gated three-state badge from the original Übersicht widget (deliberately dropped in favor of a simpler always-checked two-real-state + error scheme).
-
-~~Settings UI~~ (source directory) is now built (2026-07-18) — see the repos widget's `Settings.tsx` and `useReposWidget.ts`'s `repos_source_dir` storage key.
-
-~~Sorting / multiple header actions~~ and ~~a VS Code open action~~ from the reference widget are now built (2026-07-10) — see the repos widget folder.
-
-## Decided (not just deferred)
-
-- **Multiple concurrent widgets: one Tauri window per widget — superseded, see below.** First cut: chosen over rendering multiple widgets as sibling elements inside one window because `src/wigl/drag.ts` and `tauri-plugin-window-state` already operated at the window level (a window has one position; dragging moves the whole window) — one window per widget reused both completely unchanged instead of requiring a second, incompatible in-page drag/position system, and gave each widget its own WebView/JS realm as a side effect. Decided 2026-07-11; replaced the next day once cross-monitor dragging needed layout logic that native per-window dragging couldn't give (see the grid-engine entry below). Kept here for the "why windows" reasoning, which still applies at the per-*monitor* level today.
-- **Widget discovery: build-time folder scan, no window per widget.** A widget is `src/widgets/<name>/index.tsx` (default export), discovered by Vite's `import.meta.glob` in `src/App.tsx`; a hidden `main` bootstrap window (the only window in `tauri.conf.json`) is the sole thing Tauri declares statically. This replaced the first multi-widget cut (hand-edited `WIDGETS` map + per-widget `tauri.conf.json` window entries) the same day, on owner direction: adding a widget must touch only its own folder. That part of the decision stands unchanged; what changed the next day (below) is *where* a discovered widget renders. Decided 2026-07-11.
-- **One window per monitor + in-window grid engine, replacing one window per widget.** `tauri-plugin-window-state` and per-widget `WebviewWindow`s were dropped in favor of one `WebviewWindow` per connected monitor (spawned in `src-tauri/src/lib.rs`), each rendering a `<Desktop>` that tiles its assigned widgets on a shared grid (`src/wigl/grid.ts`) with pointer-driven, CSS-transform-based dragging instead of native window moves. Rust's job shrank to spawning monitor windows and one click-through cursor poller (`set_hit_rects`/`set_drag_active`). Trigger: cross-monitor dragging (a widget moving from one screen's grid to another's) has no native-window equivalent — "move this window to a different display mid-drag" isn't a thing OS window APIs do cleanly, but reparenting a grid item between two React trees over an IPC event is straightforward. See `docs/architecture.md` for the current model in full. Decided 2026-07-11/12.
-- **Shared-component API style: shadcn philosophy.** Owned code, children + `className` (via `cn()`), no prop-per-feature configuration. Concretely: `WidgetHeader` went from `title`/`actions` props to children-only, with its one real job being drag/click coexistence (interactive-element detection + `data-no-drag` escape hatch, replacing the manual `stopPropagation` contract). Decided 2026-07-11.
-- **UI component library: coss ui.** Considered shadcn/ui and Chakra too. Picked coss ui because it's copy-paste like shadcn (no monolithic runtime dependency, components live in `src/components/ui/` as owned code) and Tailwind-v4-native, so it doesn't fight the existing setup. See `docs/widgets.md`'s Styling section for how to add components. Chakra was rejected specifically for being a real runtime dependency with its own styling system, which would compete with Tailwind. Decided 2026-07-10.
-- **Monorepo / Turborepo (per-widget package isolation): rejected for now.** Considered so that widgets could have independent, non-conflicting dependency installs (e.g. one widget on a table lib, another on something incompatible). Rejected because all widgets ship in one bundle from one `package.json` — there is no dependency conflict until two widgets need genuinely incompatible versions of the same package, which hasn't happened. A monorepo here is pure ceremony (extra config, extra install step, more ways for HMR to break) for a problem that doesn't exist yet. Trigger to revisit: two widgets concretely need incompatible dependency versions. Until then, everything stays in the single root `package.json`.
-
-- **Theming: built (2026-07-20), parametric engine reworked (2026-07-21).** `src/wigl/theme/` holds a flat `ThemeColors` map, `applyTheme()` (a `root.style.setProperty` loop over `App.css`'s own `@theme` tokens plus `--wigl-accent`), and a handful of presets ported from Terax. The active preset id/knobs persist via `useStorage` and apply on load/change — every monitor window picks it up through the same DB-poll mechanism `useStorage` already had, no extra sync. That persistence + apply logic originally lived in a standalone `src/wigl/hooks/useTheme.ts`; it was folded directly into `ThemeSettingsPopover.tsx` on 2026-07-21 since nothing else consumed the hook and Desktop.tsx mounts the popover unconditionally regardless of open/closed state, so nothing was lost by having the popover own its own state. The same day, the parametric generator (`parametric.ts`) moved from 3 free-form color pickers + numeric elevation knobs to 3 hue dials (0-360°, one per role family) plus 3 global filters (brightness/contrast/saturation) — see `docs/theming.md` for the current model. The right-click menu's "Settings" entry (`src/wigl/Desktop.tsx` + `src/wigl/ThemeSettingsPopover.tsx`) opens a theme picker built on the shadcn Popover. No preset editor, no per-widget opt-out, no light/dark split (wigl has no such toggle) — matches the scope this entry used to describe.
-- **SQLite-backed `useStorage` + CLI write path: built (2026-07-11).** The `.idea/full-conversation.md` storage vision landed in its minimal form: `src/wigl/storage.ts` (kv table of JSON blobs, `sqlite3` CLI via plugin-shell, 3s poll for external changes) plus `wigl-widgets/calendar/cli.ts` as the first external writer. Known ceiling (whole-blob last-writer-wins) and the upgrade path are documented in `docs/widgets.md`. No query cache / `useQuery` layer — still not needed.
-- **External widget plugins: built.** Reverses this file's own prior "explicitly not going to happen" stance below (now removed from that list) — the owner decided a runtime-loaded, externally-versioned widget was worth the added surface, specifically so a plugin's release cycle doesn't require a wigl rebuild. `wigl-widgets/<name>/` (an optional `package.json` for deps/permissions, no required config file), built to ESM and installed into the app-data dir; `src/wigl/plugins/` is the host-side loader/registry; full contract in `docs/plugins.md`. `calendar` is the migrated example. Deliberately still rejected, unchanged from before: cloud sync, a hosted marketplace/registry (installs are local-folder only), and any relaxation of "macOS + Linux only".
-
-- **Drag scoped to the header's corner grip, right-click menu scoped to the header: built (2026-08-08).** Dragging previously started from a pointerdown anywhere on `WidgetHeader`; a widget's body (below the header) was never draggable but the header's own title/space wasn't reliably distinguishable from a future resize handle, and `.wigl-desktop`'s blanket `user-select: none` plus the whole-widget `onContextMenu` handler meant text inside a widget couldn't be selected or pasted over without hitting the global right-click menu. Fixed: `WidgetHeader` now carries `data-widget-header` (scopes the right-click menu) with a small `data-drag-handle` grip at its top-right corner (scopes dragging); the close/minimize pair on the left picked up a divider + extra margin to read as separate from a widget's own title. `.wigl-widget` opts back into `user-select: text`. See `docs/widgets.md`'s `WidgetHeader` entry and the resize backlog item above for why the corner specifically.
+- **Widget/plugin distribution beyond a local folder.** Cloud sync, a
+  hosted marketplace/registry, or installing a widget from a URL — installs
+  are local-folder only (`docs/plugins.md`). No trigger to revisit; this is
+  a standing scope boundary, not a deferred feature.
+- **Repos widget, from the original build spec**: backlog-item counts per
+  project or any parsing of project-internal files beyond git state; the
+  npm:deploy-gated three-state badge from the original Übersicht widget —
+  dropped in favor of a simpler always-checked two-real-state + error
+  scheme.
 
 ## Ideas worth considering if/when they become real needs
 
-- **Multi-display awareness**: already true today — `widget_layout` persists a monitor index (`m`) alongside `col`/`row`, not just raw coordinates (see `docs/architecture.md`). What's *not* handled yet is a monitor disconnecting/reconnecting; that gap is tracked in `backlog.md`.
-- **Each new widget**: the panel chrome already generalized once (see "Decided" above) — every widget added is the natural point to check whether anything *else* is now duplicated identically across all of them, per `docs/architecture.md`'s sharing threshold. Don't pre-extract before that.
-- **Native tiling / layout**: explicitly out of scope — the OS window manager is the layout engine. Don't build a custom tiling system for a single floating panel.
-- **Dev-mode ergonomics**: HMR via `bun run tauri dev` already gives fast iteration; no further tooling investment planned.
-- **Agent-authored widgets**: the "ask an agent to add a widget" workflow needs no new discovery mechanism — an agent creating a plugin folder under `wigl-widgets/` is mechanically identical to a human doing it. What's actually missing is a permission gate for what an agent may do *unattended* once it has file-write access to this repo: a binary auto-execute-vs-human-approval split per operation, not a configurable policy system. Day-one shape: writing/overwriting widget source, running arbitrary shell, `sqlite3` DDL/writes, and package installs all require a human click before they run; read-only operations (listing/reading the widgets dir) don't. Pair with a small secret-path deny-list (skip obviously-sensitive paths — `.env*`, `.ssh/`, `.git/`, credential files — before they ever reach the approval prompt) once this exists. Trigger: an actual agent-driven write flow gets built, not before — this entry exists so the shape is decided in advance rather than improvised under a real prompt-injection/mistake scenario.
-- **Global command integration for widgets**: today a widget's own CLI (e.g. `wigl-widgets/calendar/cli.ts`) is invoked with `bun run --cwd wigl-widgets/<name> <script>` — correct (the widget owns its scripts, root `package.json` stays a thin index per `AGENTS.md`), but that's more to type than the old flat `calendar:add` was. A generalized version of the root `wigl` CLI (`scripts/wigl.ts`) could dispatch `wigl <widget> <cmd> [args]` by reading that widget's `package.json` `scripts` (or a small `wigl.commands` convention) and shelling out to it, giving every widget a short global invocation without adding a root `package.json` line per widget. Trigger: a second widget wants its own CLI and the `--cwd` typing becomes an actual friction point, not before.
-- **Settings UI toggle for the right-click global menu's scope**: the global-commands menu is now scoped to a widget's header (`data-widget-header`) rather than its whole body, so a right-click inside a widget (e.g. a textarea) gets the normal context menu instead — see "Decided" below. The owner floated moving this into an app-level settings surface (a View/Edit menu) instead of a fixed scoping rule. Not built: there's no native app menu bar today (the overlay flow is deliberately chrome-less per monitor, see `docs/architecture.md`), and a settings-driven scope is more surface than the concrete friction (can't paste in a widget) needs. Trigger: header-only scoping turns out to be wrong for some widget in practice, not before.
-- **Local-agent status widget**: came up in an owner brainstorm about reducing dependence on cloud coding agents (Cline/Ollama, local orchestration tools like Cline Kanban/Emdash). Conclusion reached: wigl's window model (grid tile inside a per-monitor click-through overlay) is the wrong shape to *be* the orchestration UI — that needs a focused window with long transcripts, diff review, session history, none of which fit a widget tile — so build/evaluate the local-agent system as its own thing first, outside this repo. The one piece that *would* fit wigl, once a local-agent setup exists to observe: a small status widget showing the local agent fleet — running sessions per repo, last tool call, elapsed time, click to focus a terminal — driven by shelling out to whatever CLI the chosen tool exposes (`cline --json`, or similar), same data-flow pattern every other widget already uses. No new dependency, no Rust, no plugin-registry change needed beyond what already exists. Trigger: a local-agent CLI is actually in daily use and the owner wants a glanceable dashboard for it.
+- **Global widget/theme config as a JSON editor.** A live-updating JSON
+  editor for global state (theme knobs, other cross-widget config) instead
+  of bespoke settings UI per surface. Unresearched — no concrete shape yet
+  for what belongs in it beyond theme, or how "semi-live" updates would
+  work against `useStorage`'s poll-based sync. Trigger: a second piece of
+  global config shows up that would otherwise need its own settings popover.
+- **Agent-authored widgets: a permission gate for unattended writes.**
+  Creating a widget folder is mechanically identical whether a human or an
+  agent does it — nothing new needed there. What's missing is a policy for
+  what an agent may do *unattended* once it has file-write access to this
+  repo: a binary auto-execute-vs-human-approval split per operation, not a
+  configurable policy system. Day-one shape: writing/overwriting widget
+  source, running arbitrary shell, `sqlite3` DDL/writes, and package
+  installs all require a human click before they run; read-only operations
+  (listing/reading the widgets dir) don't. Pair with a small secret-path
+  deny-list (`.env*`, `.ssh/`, `.git/`, credential files) before they ever
+  reach the approval prompt. Trigger: an actual agent-driven write flow gets
+  built, not before.
+- **A generalized `wigl <widget> <cmd>` CLI dispatcher.** Today a widget's
+  own CLI (e.g. `wigl-widgets/calendar/cli.ts`) is invoked with
+  `bun run --cwd wigl-widgets/<name> <script>` — correct (the widget owns
+  its scripts, root `package.json` stays a thin index), but more to type
+  than a flat `calendar:add` used to be. A generalized `scripts/wigl.ts`
+  command could dispatch `wigl <widget> <cmd> [args]` by reading that
+  widget's `package.json` scripts (or a small `wigl.commands` convention)
+  and shelling out to it. Trigger: a second widget wants its own CLI and the
+  `--cwd` typing becomes an actual friction point, not before.
+- **Settings UI for the right-click global menu's scope.** The global-
+  commands menu is scoped to a widget's header (`data-widget-header`)
+  rather than its whole body today, so right-clicking inside a widget (e.g.
+  a textarea) gets the normal context menu. Floated once: move this into an
+  app-level settings surface instead of a fixed scoping rule. Not built —
+  there's no native app menu bar today (the overlay flow is deliberately
+  chrome-less per monitor), and a settings-driven scope is more surface than
+  the concrete friction (can't paste in a widget) needs. Trigger: header-
+  only scoping turns out to be wrong for some widget in practice.
+- **Local-agent status widget.** Came up in a brainstorm about reducing
+  dependence on cloud coding agents (Ollama, local orchestration tools).
+  Conclusion so far: wigl's window model (a grid tile inside a per-monitor
+  click-through overlay) is the wrong shape to *be* the orchestration UI —
+  that needs a focused window with long transcripts, diff review, session
+  history, none of which fit a widget tile — so build/evaluate a local-agent
+  system as its own thing first, outside this repo. The one piece that
+  *would* fit wigl once such a system exists to observe: a small status
+  widget showing the local agent fleet — running sessions per repo, last
+  tool call, elapsed time, click to focus a terminal — driven by shelling
+  out to whatever CLI the chosen tool exposes, same data-flow pattern every
+  other widget already uses. Trigger: a local-agent CLI is actually in daily
+  use and a glanceable dashboard for it is wanted.

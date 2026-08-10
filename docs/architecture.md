@@ -11,7 +11,7 @@ The app runs in one of two modes, decided once at launch by `windowed_mode()` in
 
 The frontend doesn't infer which mode it's in from window flags — it asks Rust directly (`is_windowed_mode` command, checked once in `App.tsx`) and passes a `windowed` prop down to `<Desktop>`, which uses it to skip cross-monitor drag hand-off (no sibling monitor windows exist to hand a drag to) and the hit-rect/drag-active IPC calls (no poller is listening — windowed mode has no click-through). Everything else — the grid engine, storage, widget code — is identical between the two flows; a widget never needs to know which one it's running under.
 
-**Low-priority backlog item, not blocking**: a GNOME Shell extension ([desktop-widgets](https://github.com/NiffirgkcaJ/desktop-widgets)-style) could in principle grant a Wayland client enough positioning/stacking control (the actual gap — always-below/always-on-top, not click-through) to run the real overlay flow under GNOME too. Worth investigating later — not now, since it likely means breaking changes to the positioning contract and needs real QA before it'd be safe to switch GNOME users onto it. See `backlog.md`.
+**Low-priority backlog item, not blocking**: a GNOME Shell extension could in principle grant a Wayland client enough positioning/stacking control to run the real overlay flow under GNOME too — see `backlog.md`'s "GNOME-native overlay flow via a Shell extension" entry for the full tradeoff.
 
 ## The rule (desktop-overlay flow)
 

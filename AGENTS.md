@@ -20,7 +20,7 @@ Each `docs/*.md` file owns one slice of ground truth. When a change in this sess
 | `docs/widgets.md` | The widget folder contract: what files a widget can have, how it's discovered, storage/query/shell conventions |
 | `docs/debugging.md` | How to verify a change and diagnose the current failure modes |
 | `docs/future-ideas.md` | Product ideas and closed/rejected scope decisions — defects and open gaps go in `backlog.md` instead |
-| `docs/principles.md` | Code-shape rules (functional core / imperative shell) — short on purpose |
+| `docs/principles.md` | Code-shape and file-organization rules (functional core / imperative shell, 80/20 file focus, naming) — short on purpose |
 | `docs/theming.md` | The theme token contract, preset vs. parametric generation, and the no-hardcoded-color rule for widgets |
 | `docs/plugins.md` | The external-plugin contract: folder/package.json shape, build/install CLI, the host module registry, and the permission model |
 
