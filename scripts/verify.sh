@@ -20,7 +20,7 @@ if command -v rustup >/dev/null 2>&1; then
 fi
 
 # Widgets are loaded at runtime from the app-data plugins dir (see
-# docs/plugins.md), not bundled into the app build below — build+install
+# docs/widgets.md), not bundled into the app build below — build+install
 # every widget first so verify actually reflects widget source changes too.
 NODE_ENV=production bun scripts/widget.ts install
 
