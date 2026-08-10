@@ -96,12 +96,19 @@ export const CrepeField = ({
           onChangeRef.current(markdown);
         });
       });
-      // Kill heading formatting: typing `# ` should stay literal text in a
-      // chat prompt, not become a title. Remove the input rule (the `# `
-      // trigger) and the heading keymap (Ctrl-Alt-N shortcuts). The heading
-      // node stays in the schema so pasted markdown still round-trips, but
-      // nothing in the editor turns text into a heading on its own.
-      await crepe.editor.remove([commonmark.wrapInHeadingInputRule, commonmark.headingKeymap]);
+      // Kill on-the-fly block formatting that fights a chat prompt: typing
+      // `# ` (heading) or ``` (fenced code block) should stay literal text,
+      // not silently reshape the editor mid-keystroke — the fence in
+      // particular read as "nothing happens, then the closing backticks turn
+      // it into a code input" (#10). Remove the input rules (the typed
+      // triggers) and their keymaps; the nodes stay in the schema so pasted
+      // markdown still round-trips, but nothing auto-formats as you type.
+      await crepe.editor.remove([
+        commonmark.wrapInHeadingInputRule,
+        commonmark.headingKeymap,
+        commonmark.createCodeBlockInputRule,
+        commonmark.codeBlockKeymap,
+      ]);
 
       loadedRef.current = {
         editor: crepe.editor,

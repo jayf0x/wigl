@@ -53,8 +53,8 @@ Things confirmed live that aren't obvious from guessing:
 - Reasoning-effort options are **per-model**, not a fixed enum: each
   model in `/config/providers` may have a `variants` map (e.g.
   `{ high: { reasoningEffort: "high" } }`); a model with no `variants` has
-  no effort control at all. `Composer.tsx` offers `/think` (and its chip)
-  only when the selected model declares `variants` — never hardcode a global
+  no effort control at all. `Composer.tsx` shows the effort chip only when
+  the selected model declares `variants` — never hardcode a global
   low/medium/high list.
 - There's no dedicated "edit message" endpoint. `client.ts`'s
   `revertToMessage` + a fresh `sendPrompt` is opencode's own intended
@@ -176,7 +176,7 @@ when it's wired up.
 
 `syncOllamaModels()` originally wrote `models[name] = { name }` and nothing
 else — no `variants` field, ever, for any Ollama model. The effort control
-(a `<Select>` then, `/think` now) only exists when the selected model's
+(a `<Select>` originally, a slash `/think`, now the effort chip menu) only exists when the selected model's
 catalog entry has a `variants` map, so with every synced model missing one,
 it was permanently unavailable regardless of which model was picked — not a
 per-model bug, a structural one. Fixed: `ollama.ts`'s
@@ -205,7 +205,7 @@ your own" of) but wasn't confirmed with a live SSE trace the way every
 other claim in this section was — what *is* fixed and confirmed is the UI
 bug: the control appears only for thinking-capable models and offers
 exactly high/low/off (off is a real selectable value, not just the unset
-default — see `commands.ts`). To confirm the deeper claim:
+default — the `EFFORT_OFF` sentinel in `Composer.tsx`). To confirm the deeper claim:
 run the same seeded prompt through a live `opencode serve` with `variant:
 "high"` vs `variant: "low"` against a thinking model and diff the
 `reasoning` part's length/content in the SSE trace.
@@ -273,14 +273,18 @@ built — see `TODO.md`.
 The redesign pass replaced the first, functional-but-cramped UI. Its rules,
 because "add a dropdown" is the default instinct and it's the wrong one here:
 
-- **Slash commands are the settings UI.** `/model`, `/agent`, `/think` —
-  parsed by `commands.ts` (pure, tested in `tests/commands.test.ts`),
-  rendered as an inline palette by `Composer.tsx`. There is no model, agent,
-  or effort `<Select>` anymore. The chip row under the composer is the
-  current-state readout *and* the discovery path: clicking a chip types its
-  command. A new per-turn setting is a new entry in `COMMANDS`, not a new
-  widget on the toolbar. Something that changes once a month is a constant in
-  `config.ts`, not UI at all.
+- **Per-turn settings are chip dropdowns, not slash commands.** Model, agent,
+  and reasoning effort are the chip row under the composer (`Composer.tsx`'s
+  `ChipMenu`, a `@/components/ui/popover`): each chip is both the
+  current-state readout *and* its own control — clicking it opens a dropdown
+  and selecting sets the value. **It never touches the composer text.** This
+  reversed an earlier "slash commands *are* the settings UI" design (`/model`,
+  `/agent`, `/think`, parsed by a now-deleted `commands.ts`): a command that
+  overwrote what you were typing and fought its own palette wasn't an
+  intuitive flow (owner's call — "UI options should remain UI options"). A `/`
+  in the composer is now just literal text the agent receives. A new per-turn
+  setting is a new `ChipMenu`, not a slash command. Something that changes
+  once a month is a constant in `config.ts`, not UI at all.
 - **Enter is a newline. ⌘/Ctrl/⌥+Enter sends.** Explicit owner call ("I
   personally hate this in every LLM UI"). Same binding for edit-and-resend in
   `MessageList.tsx`. Don't "fix" this back.
@@ -315,19 +319,22 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
     render. Deferring the import to the browser-only effect keeps the module
     import-safe; Bun inlines the dynamic imports into the one bundle (no
     chunks), so it still loads through the blob loader.
-  - **The slash palette owns its keys via a capture-phase `onKeyDownCapture`
-    in `Composer.tsx`, not a ProseMirror keymap.** A capture handler on the
-    editor wrapper runs before ProseMirror's own keydown on the inner
-    contentEditable; `preventDefault` + `stopPropagation` there stops the
-    descent so Milkdown never sees the key. Simpler than injecting a
-    high-precedence PM keymap and does the same job. `⌘/Ctrl/⌥+Enter` sends
-    through the same handler; plain `Enter` is never intercepted, so
-    Enter-never-submits holds.
-  - **No headings from typing:** the `wrapInHeadingInputRule` and
-    `headingKeymap` are `crepe.editor.remove(...)`'d right after build (before
-    `create()`), so `# ` stays literal text in a prompt instead of becoming a
-    title. The heading node stays in the schema so pasted markdown still
-    round-trips; nothing turns text into a heading on its own.
+  - **`⌘/Ctrl/⌥+Enter` sends via a capture-phase `onKeyDownCapture` in
+    `Composer.tsx`, not a ProseMirror keymap.** A capture handler on the editor
+    wrapper runs before ProseMirror's own keydown on the inner contentEditable;
+    `preventDefault` + `stopPropagation` there stops the descent so Milkdown
+    never inserts a newline for the send chord. Simpler than injecting a
+    high-precedence PM keymap. Plain `Enter` is never intercepted, so
+    Enter-never-submits holds. (This handler used to also drive the slash
+    palette's arrow/Tab/Enter navigation; that's gone with the palette.)
+  - **No headings or code blocks from typing:** the `wrapInHeadingInputRule` +
+    `headingKeymap` **and** `createCodeBlockInputRule` + `codeBlockKeymap` are
+    `crepe.editor.remove(...)`'d right after build (before `create()`), so
+    `# ` and ` ``` ` stay literal text in a prompt instead of silently
+    reshaping the editor mid-keystroke (the fence in particular read as
+    "nothing happens, then the closing backticks turn it into a code input").
+    The nodes stay in the schema so pasted markdown still round-trips; nothing
+    auto-formats as you type.
   - **Cursor:** the `cursor` feature (which layers `prosemirror-virtual-cursor`,
     a fake caret element, on top of the native one) is left OFF — it ghosted a
     duplicate caret, worst inside code blocks. The native contentEditable caret

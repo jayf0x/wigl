@@ -5,6 +5,7 @@
 // model the user is actually working with. Runs in its own scratch
 // session, deleted afterward; the user never sees it as a session.
 import * as client from "./client";
+import { HOUSEKEEPER_SESSION_TITLE } from "./config";
 import type { ModelSelection } from "./types";
 
 // Fire-and-forget from the caller's perspective (a slow title just arrives
@@ -37,7 +38,9 @@ export const runHousekeeperPrompt = async (
   directory: string,
   agent?: string,
 ): Promise<string | null> => {
-  const session = await client.createSession(baseUrl, { directory });
+  // Titled with the sentinel so useSessions filters this throwaway out of
+  // the sidebar during the brief window before the `finally` deletes it.
+  const session = await client.createSession(baseUrl, { directory, title: HOUSEKEEPER_SESSION_TITLE });
   try {
     const result = await new Promise<string | null>((resolve) => {
       let settled = false;
@@ -85,7 +88,15 @@ export const generateSessionTitle = async (
   firstPrompt: string,
   directory: string,
 ): Promise<string | null> => {
-  const instruction = `Summarize the following request as a short title, 3 to 6 words, no punctuation, no quotes, plain text only:\n\n${firstPrompt}`;
+  // The date line isn't for the model to read — it's a rotating nonce.
+  // Ollama runs small models with a fixed seed, so the *same* prompt yields
+  // the *same* title every time; two sessions started from one prompt would
+  // otherwise be indistinguishable. Varying the input per day (finer would
+  // just churn) makes a fresh session get a fresh title. ponytail: date
+  // granularity is the cheap knob; go to a full timestamp only if same-day
+  // duplicate titles actually bite.
+  const nonce = new Date().toISOString().slice(0, 10);
+  const instruction = `Summarize the following request as a short title, 3 to 6 words, no punctuation, no quotes, plain text only. (Session date ${nonce}.)\n\n${firstPrompt}`;
   // opencode's own hidden "title" agent — toolless (see runHousekeeperPrompt's
   // doc comment) and already prompted for exactly this job.
   const raw = await runHousekeeperPrompt(baseUrl, model, instruction, directory, "title");

@@ -164,9 +164,7 @@ export const MessageList = ({
         )}
 
         {messages.length === 0 && !busy && (
-          <p className="py-16 text-center text-[11.5px] text-muted-foreground/40">
-            type a prompt, or <span className="text-muted-foreground/70">/</span> for commands
-          </p>
+          <p className="py-16 text-center text-[11.5px] text-muted-foreground/40">type a prompt to begin</p>
         )}
         <div ref={bottomRef} />
       </div>

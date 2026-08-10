@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStorage } from "@/wigl/hooks";
 import * as client from "./client";
-import { AUTO_TITLE_LENGTH, STORAGE_KEYS } from "./config";
+import { AUTO_TITLE_LENGTH, HOUSEKEEPER_SESSION_TITLE, STORAGE_KEYS } from "./config";
 import type { OpencodeSession } from "./types";
 
 export interface SessionView extends OpencodeSession {
@@ -64,6 +64,9 @@ export const useSessions = (baseUrl: string | null, directory: string | null) =>
   const views = useMemo<SessionView[]>(
     () =>
       sessions
+        // Drop the housekeeper's throwaway sessions — they surface over SSE
+        // for a beat before deletion and otherwise read as duplicates (#4).
+        .filter((s) => s.title !== HOUSEKEEPER_SESSION_TITLE)
         .map((s) => ({
           ...s,
           displayTitle: titles[s.id] || s.title || "untitled",

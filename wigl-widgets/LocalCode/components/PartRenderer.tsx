@@ -4,7 +4,7 @@
 // content is height-capped and scrolls — a long reasoning trace used to push
 // the transcript down several screens on its own.
 import { type ReactNode, useState } from "react";
-import { ChevronRight, Loader2, ListTodo, Sparkles, Terminal } from "lucide-react";
+import { ChevronRight, Loader2, ListTodo, Repeat, Sparkles, Terminal } from "lucide-react";
 import { cn } from "@/wigl/utils";
 import { splitAtRepeat } from "../repetition";
 import type { MessagePart } from "../types";
@@ -37,7 +37,12 @@ const AnswerText = ({ text }: { text: string }) => {
   const { head, repeated } = splitAtRepeat(text);
   if (!repeated) return <Markdown text={text} />;
 
-  const lines = repeated.split("\n").filter((l) => l.trim()).length;
+  const repeatedLines = repeated.split("\n").filter((l) => l.trim());
+  const count = repeatedLines.length;
+  // Show the first repeated line right in the toggle so it's obvious this is a
+  // real loop, not the fold firing on a false positive (#14).
+  const preview = repeatedLines[0] ?? "";
+  const previewText = preview.length > 48 ? `${preview.slice(0, 48).trimEnd()}…` : preview;
   return (
     <div className="flex flex-col gap-1.5">
       {head && <Markdown text={head} />}
@@ -45,9 +50,17 @@ const AnswerText = ({ text }: { text: string }) => {
         type="button"
         data-no-drag
         onClick={() => setShowAll((v) => !v)}
-        className="self-start text-[10.5px] text-muted-foreground/60 transition-colors duration-150 hover:text-foreground"
+        title="the model started repeating itself — collapsed to keep the useful part readable"
+        className="flex items-center gap-1.5 self-start rounded-md border border-border/50 px-1.5 py-0.5 text-[10.5px] text-muted-foreground/70 transition-colors duration-150 hover:text-foreground"
       >
-        {showAll ? "hide" : `${lines} repeated line${lines === 1 ? "" : "s"}`}
+        <Repeat className="size-3 shrink-0 opacity-60" />
+        {showAll ? (
+          <span>hide {count} repeated line{count === 1 ? "" : "s"}</span>
+        ) : (
+          <span className="max-w-[40ch] truncate">
+            repeats “{previewText}” ×{count}
+          </span>
+        )}
       </button>
       {showAll && <Markdown text={repeated} className="opacity-50" />}
     </div>

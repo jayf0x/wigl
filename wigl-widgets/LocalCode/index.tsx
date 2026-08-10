@@ -24,7 +24,7 @@ const LocalCodeWidget = () => {
   // `status`/`restart` stay unused until the shared error-overlay component
   // exists (TODO.md) — `baseUrl` being null is what the header dot shows.
   const { baseUrl } = useOpencodeServer(defaultDir || null);
-  const { sessions, createSession, renameSession, togglePin, deleteSession } =
+  const { sessions, loading, createSession, renameSession, togglePin, deleteSession } =
     useSessions(baseUrl, defaultDir || null);
   const catalog = useModelCatalog(baseUrl);
   const [housekeeperModel] = useStorage<ModelSelection>(
@@ -110,6 +110,7 @@ const LocalCodeWidget = () => {
           sessions={sessions}
           activeID={activeID}
           open={sidebarOpen}
+          loading={loading}
           onSelect={setActiveID}
           onCreate={handleCreate}
           onRename={renameSession}
@@ -121,6 +122,9 @@ const LocalCodeWidget = () => {
           sessionID={activeID}
           catalog={catalog}
           housekeeper={housekeeper}
+          recentSessions={sessions}
+          sessionsLoading={loading}
+          onSelect={setActiveID}
           onCreate={handleCreate}
         />
       </div>

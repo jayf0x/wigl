@@ -15,6 +15,14 @@ export const STORAGE_KEYS = {
 // `opencode run --title` uses server-side. Not an LLM call by itself.
 export const AUTO_TITLE_LENGTH = 40;
 
+// Every housekeeper turn runs in a throwaway session that opencode's global
+// session store briefly exposes over SSE before it's deleted (see
+// housekeeper.ts). Tagging those sessions with this sentinel title lets
+// useSessions filter them out of the sidebar — otherwise one prompt looks
+// like it spawned several duplicate "untitled" sessions. Race-free because
+// the title is set at creation, so it rides the `session.created` event.
+export const HOUSEKEEPER_SESSION_TITLE = "__wigl_housekeeper";
+
 // Only providers in this list are offered anywhere in the UI (model picker,
 // housekeeper default) — explicit owner scoping: "We only work with Ollama
 // for now, later we will add claude code." Extend this list, not a

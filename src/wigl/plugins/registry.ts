@@ -9,6 +9,7 @@ import * as Badge from "@/components/ui/badge";
 import * as Button from "@/components/ui/button";
 import * as Checkbox from "@/components/ui/checkbox";
 import * as Input from "@/components/ui/input";
+import * as Popover from "@/components/ui/popover";
 import * as Progress from "@/components/ui/progress";
 import * as ScrollArea from "@/components/ui/scroll-area";
 import * as Select from "@/components/ui/select";
@@ -87,6 +88,7 @@ const HOST_MODULES: Record<HostModuleId, HostModule> = {
   "@/components/ui/button": { value: Button },
   "@/components/ui/checkbox": { value: Checkbox },
   "@/components/ui/input": { value: Input },
+  "@/components/ui/popover": { value: Popover },
   "@/components/ui/progress": { value: Progress },
   "@/components/ui/scroll-area": { value: ScrollArea },
   "@/components/ui/select": { value: Select },
