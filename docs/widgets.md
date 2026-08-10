@@ -2,7 +2,7 @@
 
 This file is the contract and the reasoning. It deliberately names no current widgets — for every pattern below, the living example is in `wigl-widgets/`: open the existing widget most similar to what you're building and read it top to bottom. If this doc and a widget's code ever disagree on style, the code is newer; fix whichever is wrong rather than following the stale one.
 
-**Every widget is a plugin** — a folder under `wigl-widgets/<name>/`, built and installed separately (`bun run plugin:install`), needing no app rebuild to add or remove. The folder layout, build/install commands, host module registry and permission model are `docs/plugins.md`'s slice, not this file's — this file is the component contract itself, which is the same regardless of where a widget's folder lives.
+**Every widget is built and shipped through the plugin mechanism** — a folder under `wigl-widgets/<name>/`, built and installed separately (`bun run widget:install`), needing no app rebuild to add or remove. "Build, install, and the plugin mechanism" below covers that machinery; everything else in this file is the component contract itself, which is the same regardless of where a widget's folder lives.
 
 ## Philosophy (shadcn-style)
 
@@ -10,11 +10,11 @@ Widgets and shared components are **owned code**, not framework surface. A compo
 
 ## A widget is one folder
 
-The contract, enforced at build time because TypeScript can't check "this JSX tree's root is `<Widget>`" on its own — that's a render-time shape, not a type: `bun run plugin:check` renders the built default export and greps the markup for `<Widget>`'s marker attribute, so a folder that default-exports something else fails the build (see `docs/plugins.md`). This is a build-boundary check only — nothing inside `<Widget>`/`<WidgetHeader>` enforces nesting at runtime; a widget author who misuses the shared components past what `plugin:check` catches is their own call to get wrong, not something worth extra ceremony to prevent.
+The contract, enforced at build time because TypeScript can't check "this JSX tree's root is `<Widget>`" on its own — that's a render-time shape, not a type: `bun run widget:check` renders the built default export and greps the markup for `<Widget>`'s marker attribute, so a folder that default-exports something else fails the build (see "Build, install, and the plugin mechanism" below). This is a build-boundary check only — nothing inside `<Widget>`/`<WidgetHeader>` enforces nesting at runtime; a widget author who misuses the shared components past what `widget:check` catches is their own call to get wrong, not something worth extra ceremony to prevent.
 
 ```
 wigl-widgets/<name>/
-  package.json     ← optional — deps, permissions, custom entry (docs/plugins.md)
+  package.json     ← optional — deps, permissions, custom entry (below)
   index.tsx        ← exactly one export: the default-exported component
   use<Name>.ts     ← only if it fetches external data (see below)
   config.ts        ← only if it has tunable constants
@@ -23,7 +23,7 @@ wigl-widgets/<name>/
                      imported by another widget.
 ```
 
-`loadPlugins()` discovers installed plugin folders at startup (`docs/plugins.md`); the folder name *is* the widget's id (used as its grid-layout key and its `useStorage`/`useQuery` key prefix — nowhere else declares it), not a window label — a widget renders as a grid item inside whichever monitor's window it's assigned to, it doesn't get its own OS window (see `docs/architecture.md`). Don't name a folder `main` (the hidden bootstrap window) or `wigl` (the app's name). **Adding a widget = creating the folder + `bun run plugin:install`. Deleting it = `bun run plugin:rm <id>`. No registration, no config edits, nothing else in the app itself.**
+`loadPlugins()` discovers installed widget folders at startup (below); the folder name *is* the widget's id (used as its grid-layout key and its `useStorage`/`useQuery` key prefix — nowhere else declares it), not a window label — a widget renders as a grid item inside whichever monitor's window it's assigned to, it doesn't get its own OS window (see `docs/architecture.md`). Don't name a folder `main` (the hidden bootstrap window) or `wigl` (the app's name). **Adding a widget = creating the folder + `bun run widget:install`. Deleting it = `bun run widget:rm <id>`. No registration, no config edits, nothing else in the app itself.**
 
 ```tsx
 // wigl-widgets/clock/index.tsx — a complete, working widget
@@ -45,6 +45,35 @@ Grid size/position are plain props on `<Widget>` — `w`/`h` in cells (default 3
 
 No capability or window edit needed either — a new widget adds no window (see above), and `src-tauri/capabilities/default.json`'s `windows` field is a `["*"]` glob regardless. You only touch that file for new *permissions* (see "Running shell commands" below).
 
+## Build, install, and the plugin mechanism
+
+This is the loading/build *mechanism* a widget is built and shipped through — not the widget itself (`docs/principles.md`'s naming rule). It lives in `src/wigl/plugins/` (host side) and `scripts/widget.ts` (build/install CLI).
+
+```
+bun run widget:build   wigl-widgets/calendar   # source → .wigl/index.js
+bun run widget:check   wigl-widgets/calendar   # load it headlessly, report host modules used
+bun run widget:install wigl-widgets/calendar   # build (if there's source), then copy into app data
+bun run widget:list
+bun run widget:rm      calendar
+```
+
+Omit the dir argument on `build`/`install` to sweep every `wigl-widgets/<name>/` folder at once (a folder starting with `_`, e.g. `_qa-color`, is skipped by the no-arg sweep but still buildable/installable by name). `bun run qa`/`bun run verify` already call `widget:install` with no argument before launching. **Renaming or deleting a folder does not remove its old installed copy** — run `bun run widget:rm <old-id>` yourself as part of any rename.
+
+`package.json` is optional and does triple duty:
+- **`dependencies`** — ordinary npm deps, bundled into *that widget's own* `.wigl/index.js` (each widget gets its own bundle, not one shared one, so one widget's third-party libraries never bloat another's).
+- **`main`** — overrides the entry path (defaults to `.wigl/index.js`). Point it at hand-written, already-built JS to skip `widget:build` entirely; still must be a single self-contained ES module.
+- **`wigl.permissions`** — declares which gated host-module capabilities (`storage`, `command`, `filesystem`, `network`) the widget may use; see `wigl-widgets/widget.schema.json`.
+
+**The host module registry is the actual security/dependency boundary.** A widget's bundle contains only its own code and its own npm deps — every specifier in `src/wigl/plugins/host-modules.ts` (`react`, `@/wigl`, `@/wigl/hooks`, `@/wigl/utils`, shadcn UI, `lucide-react`) is rewritten at build time into a call the host answers at load time. That's what keeps exactly one React in the process, and it's the only place a capability can be withheld — `@tauri-apps/*` is deliberately *not* on the list, so a widget can never hold a raw IPC handle; needing something the registry doesn't serve means adding a host module (`src/wigl/plugins/registry.ts` enforces `wigl.permissions` per-module *and* per-export), not an escape hatch. **Honest caveat**: this isn't a sandbox — a widget's code runs in the same JS realm as the host with `csp: null`, and `command`/`filesystem` permission is already broad access. Treat an installed widget as code you chose to trust, like a browser extension with broad host permissions, not as something sandboxed from the app. See `backlog.md`.
+
+**A widget can `import "./whatever.css"`** from its own source (not through a host module) — `Bun.build`'s CSS loader bundles it into a sibling `index.css`, `widget:install` copies it alongside `index.js`, and `loadPlugins()` injects it as a `<style>` tag at load time.
+
+**`widget:build`/`widget:check` require `NODE_ENV=production`** (the `widget:*` package scripts already set it) — Bun resolves React's dev-vs-production build from `NODE_ENV` at process start, and a `jsxDEV` bundle meeting the host's production React crashes with "dispatcher.getOwner is not a function". `widget:check` matters because a webview's console is invisible to `bun run verify` — it loads the built bundle against the host's **real** modules and **renders it** with `renderToString`, which is also how it enforces the `<Widget>` export contract (the rendered markup must include `data-wigl-widget`).
+
+**Typechecking** (`bun run typecheck:widgets`) resolves `@/...` against generated `.d.ts` under `wigl-widgets/types/` (`bun run widget:types`), never `../src` directly — a widget that only compiled by accident (deep-importing something the app's root tsconfig happened to resolve) fails here even if the build already passed, since the two check different things (specifier externalization vs. path resolution) — run both.
+
+**Loading**: `loadPlugins()` (`src/wigl/plugins/loader.ts`) reads each installed folder's `package.json`/entry as text through `sh`, prepends a per-widget header binding the scoped `require`, and imports the result as a blob URL — no capability, `tauri.conf.json`, or Rust change needed to install a widget. Discovery never throws; a widget that fails to load comes back as a failure the app renders on screen rather than blanking every other widget.
+
 ## What a real-data widget needs
 
 The shape, in dependency order (any widget in `wigl-widgets/` with a hook is the reference in action):
@@ -64,11 +93,13 @@ Everything shared lives behind exactly three barrels — widgets never deep-impo
 
 **Read each barrel's `index.ts` for the current list**; each module carries its own doc comment. The two you'll always use from `@/wigl`:
 
-- **`Widget`** — the dark rounded panel (also forces the `dark` class coss ui needs). Override looks via `className`. Children + `className` only, per the philosophy above — with one exception: `minimizedClassNames?: ReactNode`, shown centered in the 1x1 minimized view in place of the default `•` (see below). This is per-widget content, not a style override, which is why it's a named prop rather than something `className` could express.
-- **`WidgetHeader`** — a title bar, plus two fixed controls every widget gets for free: close and minimize (top-left, macOS traffic-light order, set off from your own title/buttons by a right-hand divider), before your own children, synced to storage and driven by `<Widget>`/`Desktop.tsx` — nothing to wire up. Close unmounts the widget entirely (no render, no reflow, no hit-testing) until it's reopened from the "closed widgets" section of the desktop's right-click menu. Minimize forces the widget to 1x1 and swaps its body for `minimizedClassNames` (or `•`) plus an expand button; the widget itself keeps rendering underneath (state, polling, etc. all keep running), it just isn't shown. Dragging lives on a small grip at the header's top-right corner (`data-drag-handle`), not the header at large — the rest of the header (close/minimize, title, your own buttons) is ordinary interactive content, so text stays selectable and a click on a header button never gets mistaken for a drag; this also leaves the header's opposite corner free for a future resize handle without the two fighting over the same surface. The header as a whole still carries `data-widget-header`, which is what scopes the desktop's right-click global-commands menu — right-clicking a widget's *body* falls through to the normal browser/webview context menu (so pasting into a textarea works) rather than opening global commands. Content is whatever children you pass — a title span, status info, your own buttons (`ml-auto` to right-align them against the drag grip), nothing at all. **Never** attach `onMouseDown`/`stopPropagation` workarounds inside it, and never import the drag module directly in a widget. Don't add your own close/minimize button — these two are already there.
+- **`Widget`** — the dark rounded panel (also forces the `dark` class coss ui needs). Override looks via `className`. Children + `className` only, per the philosophy above — with one exception: `minimizedBackground?: ReactNode`, flex-centered full-bleed behind the minimized split-view (see below). This is per-widget content, not a style override, which is why it's a named prop rather than something `className` could express.
+- **`WidgetHeader`** — a title bar, plus two fixed controls every widget gets for free: close and minimize (top-left, macOS traffic-light order, set off from your own title/buttons by a right-hand divider), before your own children, synced to storage and driven by `<Widget>`/`Desktop.tsx` — nothing to wire up. Close unmounts the widget entirely (no render, no reflow, no hit-testing) until it's reopened from the "closed widgets" section of the desktop's right-click menu. Dragging lives on a small grip at the header's top-right corner (`data-drag-handle`), not the header at large — the rest of the header (close/minimize, title, your own buttons) is ordinary interactive content, so text stays selectable and a click on a header button never gets mistaken for a drag; this also leaves the header's opposite corner free for a future resize handle without the two fighting over the same surface. The header as a whole still carries `data-widget-header`, which is what scopes the desktop's right-click global-commands menu — right-clicking a widget's *body* falls through to the normal browser/webview context menu (so pasting into a textarea works) rather than opening global commands. Content is whatever children you pass — a title span, status info, your own buttons (`ml-auto` to right-align them against the drag grip), nothing at all. **Never** attach `onMouseDown`/`stopPropagation` workarounds inside it, and never import the drag module directly in a widget. Don't add your own close/minimize button — these two are already there.
+
+  Minimize forces the widget to 1x1 and swaps the whole header for a dedicated minimized layout — there's no room for the full header at that size, so it isn't a shrunk copy of it: a 50/50 split with a semi-transparent background, expand on the left, a full-height drag handle on the right, always on top and not overridable. `minimizedBackground` renders centered underneath that split, full-bleed — an icon, an emoji, or your own `bg-[url(...)]` div; the widget itself keeps rendering underneath regardless (state, polling, etc. all keep running), it just isn't shown. Close isn't available while minimized (reopen a fully closed widget from the right-click menu's "closed widgets" section instead) — there's no width for a third control in a 1x1 tile.
 
 ```tsx
-<Widget minimizedClassNames={<CalendarIcon className="size-4" />}>
+<Widget minimizedBackground={<CalendarIcon className="size-4" />}>
   <WidgetHeader className="bg-emerald-950/40">
     <span className="px-1 text-[10px] tracking-widest opacity-40">REPOS</span>
     <div className="ml-auto flex items-center gap-0.5">{/* your own buttons — clicks just work */}</div>
@@ -119,7 +150,7 @@ Cached by `key` (prefix it with the widget's folder name, same rule as `useStora
 
 ## Running shell commands from a widget
 
-A widget never imports `@tauri-apps/plugin-shell` directly — a plugin can't hold a raw Tauri API at all (see `docs/plugins.md`'s host module registry). It calls `runCmd`/`runCmdStreaming` from `@/wigl/utils` instead, gated on the `command` permission; `wigl-widgets/repos/commands.ts` is the reference:
+A widget never imports `@tauri-apps/plugin-shell` directly — a widget can't hold a raw Tauri API at all (see "Build, install, and the plugin mechanism" above). It calls `runCmd`/`runCmdStreaming` from `@/wigl/utils` instead, gated on the `command` permission; `wigl-widgets/repos/commands.ts` is the reference:
 
 ```ts
 import { runCmd } from "@/wigl/utils";
@@ -160,7 +191,7 @@ Reach for semantic color tokens (`bg-card`, `border-border`, `text-muted-foregro
 
 ## Testing
 
-A widget can add a `tests/` folder (or colocated `*.test.ts`/`*.test.tsx` files) using `bun:test` — no framework to install, no config, nothing `plugin:build`/`plugin:install` needs to know about (they only ever touch `index.tsx`/`index.ts`, `package.json`, and the built `.wigl/` entry, so test files are invisible to the build regardless of where they live). Run them through the root `wigl` CLI (`scripts/wigl.ts`, aliased globally in `.bashrc`), not `bun test` directly — it scopes discovery so a stray `.test.ts` elsewhere in the repo doesn't get swept in:
+A widget can add a `tests/` folder (or colocated `*.test.ts`/`*.test.tsx` files) using `bun:test` — no framework to install, no config, nothing `widget:build`/`widget:install` needs to know about (they only ever touch `index.tsx`/`index.ts`, `package.json`, and the built `.wigl/` entry, so test files are invisible to the build regardless of where they live). Run them through the root `wigl` CLI (`scripts/wigl.ts`, aliased globally in `.bashrc`), not `bun test` directly — it scopes discovery so a stray `.test.ts` elsewhere in the repo doesn't get swept in:
 
 ```bash
 wigl test              # everything: wigl-widgets/*/tests + src/wigl

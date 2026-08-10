@@ -55,7 +55,7 @@ export const runCmdBackground = async (
  * join with a plain template string (this app targets macOS/Linux only, so
  * `/` is always the right separator — no path-joining host module needed).
  * Mediated so plugins never hold a raw `@tauri-apps/api/path` handle (see
- * `docs/plugins.md`'s host module registry section). */
+ * `docs/widgets.md`'s host module registry section). */
 export const homeDir = async (): Promise<string> => (await tauriHomeDir()).replace(/\/$/, "");
 
 /** Merges Tailwind classes, later ones winning on conflicting utilities. */

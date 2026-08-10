@@ -311,7 +311,7 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
   - **`CrepeBuilder` from `@milkdown/crepe/builder`, never the `Crepe`
     umbrella.** The umbrella statically imports *every* feature (katex,
     `@codemirror/language-data`, codemirror `basicSetup`, dompurify, …) whether
-    enabled or not; in this repo's non-tree-shaking single-file plugin bundle
+    enabled or not; in this repo's non-tree-shaking single-file widget bundle
     that's ~17MB. The builder pulls only what you `addFeature` — here just
     `list-item` and `placeholder`. Bundle lands ~5.6MB (up from the
     CodeMirror era's ~3.8MB; the delta is Vue + ProseMirror, the price of a
@@ -320,7 +320,7 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
     reason the old CodeMirror pass documented — fenced code stays plain.
   - **The editor libs load via dynamic `import()` inside the mount effect, not
     static top-level imports.** Milkdown's Vue/ProseMirror modules touch
-    `document` at evaluation time, which crashes `plugin:check`'s headless
+    `document` at evaluation time, which crashes `widget:check`'s headless
     render. Deferring the import to the browser-only effect keeps the module
     import-safe; Bun inlines the dynamic imports into the one bundle (no
     chunks), so it still loads through the blob loader.

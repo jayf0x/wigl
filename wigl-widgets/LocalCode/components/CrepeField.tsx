@@ -6,10 +6,10 @@
 //
 // The editor libraries are loaded with dynamic `import()` inside the mount
 // effect, NOT static top-level imports: Milkdown's Vue/ProseMirror components
-// touch `document` at module-evaluation time, which crashes `plugin:check`'s
+// touch `document` at module-evaluation time, which crashes `widget:check`'s
 // headless render (no DOM). Deferring the import to the effect — which only
 // runs in a real browser realm — keeps the module import-safe while still
-// bundling everything into the one plugin file.
+// bundling everything into the one widget file.
 //
 // Feature surface is stripped to a chat composer, not a document editor: only
 // list-item and placeholder are added (see the mount effect for why cursor is

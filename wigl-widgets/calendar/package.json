@@ -1,5 +1,5 @@
 {
-  "$schema": "../plugin.schema.json",
+  "$schema": "../widget.schema.json",
   "dependencies": {
     "date-fns": "^4.4.0"
   },

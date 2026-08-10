@@ -1,5 +1,5 @@
 /** The specifiers the host serves to plugins at runtime — the same list the
- * build script marks external (see `scripts/plugin.ts`).
+ * build script marks external (see `scripts/widget.ts`).
  *
  * This is its own file, holding nothing but strings, so the build script can
  * import it without pulling React and every UI component into a CLI process.

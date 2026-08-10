@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bunx --bun vite",
-    "postinstall": "bun run plugin:types",
+    "postinstall": "bun run widget:types",
     "build": "tsc && bunx --bun vite build",
     "preview": "bunx --bun vite preview",
     "tauri": "tauri",
@@ -22,13 +22,13 @@
     "wigl": "bun scripts/wigl.ts",
     "tw-colors": "bun scripts/tw-colors.ts",
     "check:eager": "bun scripts/check-eager.ts",
-    "typecheck:plugins": "tsc -p wigl-widgets --noEmit",
-    "plugin:build": "NODE_ENV=production bun scripts/plugin.ts build",
-    "plugin:install": "NODE_ENV=production bun scripts/plugin.ts install",
-    "plugin:list": "bun scripts/plugin.ts list",
-    "plugin:rm": "bun scripts/plugin.ts rm",
-    "plugin:types": "tsc -p tsconfig.types.json",
-    "plugin:check": "NODE_ENV=production bun scripts/plugin.ts check"
+    "typecheck:widgets": "tsc -p wigl-widgets --noEmit",
+    "widget:build": "NODE_ENV=production bun scripts/widget.ts build",
+    "widget:install": "NODE_ENV=production bun scripts/widget.ts install",
+    "widget:list": "bun scripts/widget.ts list",
+    "widget:rm": "bun scripts/widget.ts rm",
+    "widget:types": "tsc -p tsconfig.types.json",
+    "widget:check": "NODE_ENV=production bun scripts/widget.ts check"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

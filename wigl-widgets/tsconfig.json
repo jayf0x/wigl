@@ -1,14 +1,14 @@
 {
-  // Plugins typecheck against this, never the app's root tsconfig — that's
+  // Widgets typecheck against this, never the app's root tsconfig — that's
   // the point of this folder. `paths` resolves `@/...` to generated `.d.ts`
-  // under `types/` (`bun run plugin:types`), not to `../src`, so a plugin
+  // under `types/` (`bun run widget:types`), not to `../src`, so a widget
   // can never compile against app internals that happen to share a repo
   // with it.
   //
   // Types are intentionally broader than the runtime API: `@/*` resolves at
   // the type level, but only the specifiers in
   // `src/wigl/plugins/host-modules.ts` are externalized by the build, so a
-  // deep import like `@/wigl/Desktop` fails at `bun run plugin:build` with a
+  // deep import like `@/wigl/Desktop` fails at `bun run widget:build` with a
   // resolution error rather than silently bundling a second copy of a host
   // component (and, for anything React-shaped, a second React).
   "compilerOptions": {
@@ -32,7 +32,7 @@
   },
   "include": ["*/**/*.ts", "*/**/*.tsx"],
   // */cli.ts: root-context CLI scripts (bun-run directly, not part of the
-  // plugin bundle) that deliberately reach into ../../src — excluded so
+  // widget bundle) that deliberately reach into ../../src — excluded so
   // they don't quietly defeat the "never resolve app internals" guarantee
   // above just because their relative path happens to still work.
   "exclude": ["*/.wigl", "types", "*/cli.ts"]

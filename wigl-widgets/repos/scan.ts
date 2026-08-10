@@ -5,7 +5,7 @@ import type { RepoScanRow } from "./types";
 // project, entirely in POSIX `sh` — no bundled script, no `bun` on PATH
 // required. This used to shell out to `scripts/repos-scan.ts` via a
 // resolved Tauri app-resource path, which a plugin can't do (see
-// docs/plugins.md's host module registry: no raw `@tauri-apps/*` access).
+// docs/widgets.md's host module registry: no raw `@tauri-apps/*` access).
 // Rewriting the scan itself as a shell script removes the need for that
 // capability altogether, rather than adding one just to keep the old shape.
 // Output is NDJSON (one `{...}` object per line) — same convention as

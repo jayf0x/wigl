@@ -7,9 +7,9 @@
  *   wigl test shared          # only src/wigl/**\/*.test.ts
  *
  * Uses bun's built-in test runner (bun:test) — no new dependency, same
- * reasoning as scripts/plugin.ts using Bun.build instead of a bundler dep.
+ * reasoning as scripts/widget.ts using Bun.build instead of a bundler dep.
  * A widget's tests/ folder is plain convention, not a contract enforced by
- * plugin:check — nothing requires a widget to have one.
+ * widget:check — nothing requires a widget to have one.
  */
 import { resolve } from "node:path";
 

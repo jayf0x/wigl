@@ -41,7 +41,7 @@ pkill -x wigl 2>/dev/null && sleep 1 || true
 # up even though "the build" succeeded. No dir argument = every
 # wigl-widgets/<name> folder except a `_`-prefixed one.
 echo "[qa] building + installing widgets..."
-NODE_ENV=production bun scripts/plugin.ts install
+NODE_ENV=production bun scripts/widget.ts install
 
 echo "[qa] building frontend..."
 bun run build >/dev/null

@@ -130,9 +130,9 @@ down — not to go find a second caller to justify keeping it.
 
 A widget's folder name, id, storage-key prefix, and any code or comment
 describing *the thing itself* say **widget**. Reserve **plugin** for the
-loading/build *mechanism* (`docs/plugins.md`: `src/wigl/plugins/`,
-`plugin:build`/`plugin:install`, `wigl.permissions` in `package.json`) —
-the machinery a widget happens to be built and shipped through, not what
-it's called. (Existing code that still says "plugin" for the thing itself
-is a known, tracked inconsistency — see `backlog.md` — not something this
-rule expects you to go sweep the repo for.)
+loading/build *mechanism* itself (`docs/widgets.md`'s "Build, install, and the plugin mechanism": `src/wigl/plugins/`,
+`scripts/widget.ts`, `wigl.permissions` in `package.json`) — the machinery a
+widget happens to be built and shipped through, not what it's called. The
+CLI commands (`widget:build`/`widget:install`/`widget:check`/...) say
+**widget** too, per B15 in `backlog.md` — they build and install a widget,
+even though the mechanism underneath keeps the "plugin" name.

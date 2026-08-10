@@ -16,9 +16,9 @@ Don't resurrect either piecemeal by building toward them feature-by-feature.
 
 ## Explicitly out of scope
 
-- **Widget/plugin distribution beyond a local folder.** Cloud sync, a
+- **Widget distribution beyond a local folder.** Cloud sync, a
   hosted marketplace/registry, or installing a widget from a URL — installs
-  are local-folder only (`docs/plugins.md`). No trigger to revisit; this is
+  are local-folder only (`docs/widgets.md`). No trigger to revisit; this is
   a standing scope boundary, not a deferred feature.
 - **Repos widget, from the original build spec**: backlog-item counts per
   project or any parsing of project-internal files beyond git state; the

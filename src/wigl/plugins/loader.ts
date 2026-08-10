@@ -26,7 +26,7 @@ import {
 // already grants `sh`, so no capability, tauri.conf.json, or Rust change is
 // needed to install a plugin. The tradeoff is that a blob module has no file
 // path, so devtools shows the plugin as an anonymous blob URL — the build
-// script inlines a sourcemap to put that back (see `scripts/plugin.ts`).
+// script inlines a sourcemap to put that back (see `scripts/widget.ts`).
 
 interface PluginModule {
   default: ComponentType;
@@ -60,7 +60,7 @@ const tryReadFile = async (path: string): Promise<string | null> => {
 export const pluginsDir = async () => join(await appDataDir(), "plugins");
 
 /** A plugin's own `import "./x.css"` builds to a sibling `index.css` next to
- * `index.js` (`scripts/plugin.ts`'s `cssSibling`) — installed alongside it,
+ * `index.js` (`scripts/widget.ts`'s `cssSibling`) — installed alongside it,
  * so a real stylesheet works despite the plugin loading as one JS blob with
  * no bundler-level CSS pipeline of its own. Injected as a `<style>` tag
  * (never a widget's job to do this itself): the text is build-time plugin

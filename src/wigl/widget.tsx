@@ -52,12 +52,15 @@ export const Widget = ({
   col,
   row,
   hidden,
-  minimizedClassNames,
+  minimizedBackground,
   headerContent = null,
 }: {
   className?: string;
   children: ReactNode;
-  minimizedClassNames?: string;
+  /** Rendered flex-centered, full-bleed, behind the minimized split-view
+   * controls (expand/drag) — an icon, emoji, or `bg-[url(...)]` div. The
+   * controls themselves aren't customizable through this prop. */
+  minimizedBackground?: ReactNode;
   headerContent?: ReactNode;
 } & WidgetGridProps) => {
   const slot = useContext(WidgetSlotContext);
@@ -79,7 +82,7 @@ export const Widget = ({
 
   return (
     // data-wigl-widget marks the root every widget must render through —
-    // `plugin:check` greps built plugins for it so a folder that default-
+    // `widget:check` greps built widgets for it so a folder that default-
     // exports some other component (not wrapped in <Widget>) fails the
     // build instead of silently never reporting a grid size. Nothing below
     // <Widget> enforces its own placement at runtime (e.g. <WidgetHeader>
@@ -93,36 +96,10 @@ export const Widget = ({
       )}
     >
       {minimized ? (
-        <div className="h-full w-full p-2">
-          {/* <div className="flex h-5 w-full flex-row justify-between items-center">
-            <button
-              type="button"
-              data-no-drag
-              onClick={slot?.onToggleMinimize}
-              title="Expand"
-              className="p-1 text-card-foreground/40 hover:text-card-foreground"
-            >
-              <Expand className="size-3" />
-            </button>
-
-            <div
-              data-drag-handle
-              className="flex flex-1 items-center justify-center pb-1 text-lg leading-none text-card-foreground/70"
-            >
-              {":)"}
-            </div>
-          </div> */}
-
-          <WidgetHeader
-            slot={slot}
-            className={minimizedClassNames}
-          ></WidgetHeader>
-        </div>
+        <MinimizedWidget slot={slot} background={minimizedBackground} />
       ) : (
         <>
-          <WidgetHeader slot={slot} className={minimizedClassNames}>
-            {headerContent}
-          </WidgetHeader>
+          <WidgetHeader slot={slot}>{headerContent}</WidgetHeader>
           {children}
         </>
       )}
@@ -138,7 +115,7 @@ export const Widget = ({
 // rest of the header (close/minimize, title, custom buttons) is ordinary
 // interactive/selectable content, and a future resize handle has somewhere
 // (the opposite corner) to live without fighting drag.
-const WidgetHeader = ({
+export const WidgetHeader = ({
   className,
   children = null,
   slot,
@@ -172,11 +149,7 @@ const WidgetHeader = ({
           title="Minimize"
           className="text-card-foreground/40 hover:text-card-foreground"
         >
-          {slot.minimized ? (
-            <Expand className="size-3" />
-          ) : (
-            <Minimize2 className="size-3" />
-          )}
+          <Minimize2 className="size-3" />
         </button>
       )}
     </div>
@@ -187,6 +160,44 @@ const WidgetHeader = ({
       className="flex size-6 shrink-0 cursor-grab items-center justify-center text-card-foreground/25 hover:text-card-foreground/50 active:cursor-grabbing"
     >
       <Grip className="size-3" />
+    </div>
+  </div>
+);
+
+// The 1x1 minimized view has no room for the full header, so it gets its own
+// layout instead of a cramped copy of WidgetHeader: a 50/50 split (expand
+// left, drag full-height right) pinned on top of `background`, which renders
+// centered underneath — an icon/emoji/image the split-view controls are
+// never customizable through, only what's behind them is.
+const MinimizedWidget = ({
+  slot,
+  background,
+}: {
+  slot?: WidgetSlotValue | null;
+  background?: ReactNode;
+}) => (
+  <div data-widget-header className="relative h-full w-full">
+    {!!background && (
+      <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+        {background}
+      </div>
+    )}
+    <div className="absolute inset-0 flex bg-card/60">
+      <button
+        type="button"
+        onClick={slot?.onToggleMinimize}
+        title="Expand"
+        className="flex flex-1 items-center justify-center text-card-foreground/50 hover:text-card-foreground"
+      >
+        <Expand className="size-3.5" />
+      </button>
+      <div
+        data-drag-handle
+        title="Drag"
+        className="flex flex-1 cursor-grab items-center justify-center text-card-foreground/30 hover:text-card-foreground/50 active:cursor-grabbing"
+      >
+        <Grip className="size-3.5" />
+      </div>
     </div>
   </div>
 );

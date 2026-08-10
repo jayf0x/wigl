@@ -1,5 +1,5 @@
 {
-  "$schema": "../plugin.schema.json",
+  "$schema": "../widget.schema.json",
   "wigl": {
     "permissions": ["storage", "command", "filesystem"]
   },

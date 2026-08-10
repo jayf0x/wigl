@@ -175,7 +175,7 @@ ideas for a small-surface client, unverified. Low priority to revisit.
   primitives (textarea, dialog, scroll-area, markdown renderer) aren't
   registered yet** — adding LocalCode means adding these via
   `bunx shadcn@latest add @coss/<component>` and registering them, per
-  `docs/plugins.md`'s host-module-addition path.
+  `docs/widgets.md`'s host-module-addition path.
 - All shell access via `runCmd`/`runCmdStreaming` from `@/wigl/utils`
   (`"command"` permission in the widget's `package.json`). Reference
   implementation to copy the *shape* of (not the content):

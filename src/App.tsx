@@ -45,14 +45,14 @@ const App = () => {
   // is_windowed_mode round-trip is ever slow or fails, the window still
   // shows and renders immediately instead of staying blank indefinitely.
   const [windowed, setWindowed] = useState(false);
-  // Null until plugin discovery settles. <Desktop> is held back until then
+  // Null until widget discovery settles. <Desktop> is held back until then
   // deliberately: it builds its layout from the widget ids it's handed, and
   // handing it a set that grows a tick later is the same mount-order hazard
   // that already cost a first-launch layout bug once. Discovery is a couple
   // of `sh` reads, so the wait is imperceptible — and on failure it still
   // resolves (with an empty list) rather than hanging.
   const [widgets, setWidgets] = useState<Record<string, ComponentType> | null>(null);
-  const [failedPlugins, setFailedPlugins] = useState<FailedPlugin[]>([]);
+  const [failedWidgets, setFailedWidgets] = useState<FailedPlugin[]>([]);
 
   useEffect(() => {
     if (label !== "main") getCurrentWindow().show().catch(console.error);
@@ -63,10 +63,10 @@ const App = () => {
     loadPlugins()
       .then(({ loaded, failed }) => {
         setWidgets(Object.fromEntries(loaded.map((p) => [p.manifest.id, p.component])));
-        setFailedPlugins(failed);
+        setFailedWidgets(failed);
       })
       .catch((e) => {
-        console.error("[wigl] plugin discovery failed", e);
+        console.error("[wigl] widget discovery failed", e);
         setWidgets({});
       });
   }, [label]);
@@ -85,11 +85,11 @@ const App = () => {
   if (!widgets) return null;
   return (
     <AppErrorBoundary>
-      {failedPlugins.length > 0 && (
+      {failedWidgets.length > 0 && (
         <div className="pointer-events-none fixed inset-x-0 top-0 z-50 p-2 text-[11px] text-destructive">
-          {failedPlugins.map((p) => (
+          {failedWidgets.map((p) => (
             <div key={p.id}>
-              plugin "{p.id}" failed to load: {p.error}
+              widget "{p.id}" failed to load: {p.error}
             </div>
           ))}
         </div>

@@ -1,21 +1,21 @@
 #!/usr/bin/env bun
 /**
- * Plugin CLI — build / install / list / rm.
+ * Widget CLI — build / install / list / rm.
  *
- *   bun run plugin:build       wigl-widgets/calendar   # one widget
- *   bun run plugin:build                               # every wigl-widgets/<name> folder
- *   bun run plugin:install     wigl-widgets/calendar   # build, then copy into app data
- *   bun run plugin:install                             # build+install every widget
- *   bun run plugin:list
- *   bun run plugin:rm          calendar
+ *   bun run widget:build       wigl-widgets/calendar   # one widget
+ *   bun run widget:build                               # every wigl-widgets/<name> folder
+ *   bun run widget:install     wigl-widgets/calendar   # build, then copy into app data
+ *   bun run widget:install                             # build+install every widget
+ *   bun run widget:list
+ *   bun run widget:rm          calendar
  *
  * Why a build step exists at all: a webview has no compiler, so it cannot
  * import a `.tsx` file. Shipping one in the app (esbuild-wasm and friends)
- * would add ~9MB to a desktop-widget app to save plugin authors a command.
+ * would add ~9MB to a desktop-widget app to save widget authors a command.
  * `Bun.build` does it here instead — no new dependency, since the repo
- * already requires bun. A plugin that ships hand-written, already-built JS
+ * already requires bun. A widget that ships hand-written, already-built JS
  * (no TypeScript, no `wigl` build tooling at all) skips this step entirely —
- * `plugin:install` only builds when there's an `index.tsx`/`index.ts` to
+ * `widget:install` only builds when there's an `index.tsx`/`index.ts` to
  * build, otherwise it installs whatever's already sitting at the resolved
  * entry path.
  *
@@ -32,7 +32,7 @@ import { HOST_MODULE_IDS } from "../src/wigl/plugins/host-modules";
 import { RESERVED_PLUGIN_IDS, resolvePluginConfig } from "../src/wigl/plugins/types";
 
 const WIDGETS_ROOT = "wigl-widgets";
-const NON_PLUGIN_DIRS = new Set(["types"]);
+const NON_WIDGET_DIRS = new Set(["types"]);
 // A leading "_" opts a wigl-widgets/ folder out of discovery/build entirely —
 // e.g. `_qa-color`, a dev-only QA surface with no reason to ship.
 
@@ -57,19 +57,19 @@ const die = (msg: string): never => {
  * exactly the "dispatcher.getOwner is not a function" crash this cost once
  * already. So building or checking under the wrong NODE_ENV is refused
  * outright rather than producing a bundle that looks fine and isn't. The
- * `plugin:*` package scripts set it; this is the guard for anyone invoking
+ * `widget:*` package scripts set it; this is the guard for anyone invoking
  * the script directly. */
 const requireProductionEnv = (what: string) => {
   if (process.env.NODE_ENV !== "production") {
-    die(`${what} must run with NODE_ENV=production (use \`bun run plugin:${what}\`, which sets it)`);
+    die(`${what} must run with NODE_ENV=production (use \`bun run widget:${what}\`, which sets it)`);
   }
 };
 
 /** No manifest.json: id is the folder name, entry/permissions come from an
  * optional package.json (`resolvePluginConfig` in types.ts — the same
  * resolution the runtime loader uses). No package.json at all is valid: a
- * zero-config plugin defaults to `.wigl/index.js`, no permissions. */
-const readPluginConfig = async (dir: string) => {
+ * zero-config widget defaults to `.wigl/index.js`, no permissions. */
+const readWidgetConfig = async (dir: string) => {
   const id = basename(dir);
   if (RESERVED_PLUGIN_IDS.has(id)) die(`"${id}" is a reserved id`);
   const pkgFile = Bun.file(join(dir, "package.json"));
@@ -99,10 +99,10 @@ const hostExternals = {
 
 const build = async (dir: string) => {
   requireProductionEnv("build");
-  const config = await readPluginConfig(dir);
+  const config = await readWidgetConfig(dir);
   const entrySrc = findEntrySource(dir);
   if (!entrySrc) {
-    die(`${dir}: no index.tsx or index.ts to build (ships hand-written JS? skip plugin:build, go straight to plugin:install)`);
+    die(`${dir}: no index.tsx or index.ts to build (ships hand-written JS? skip widget:build, go straight to widget:install)`);
   }
 
   const outPath = join(dir, config.entry);
@@ -126,17 +126,18 @@ const build = async (dir: string) => {
 
   if (!(await Bun.file(outPath).exists())) {
     die(
-      `${config.id}: build didn't produce "${config.entry}" — if package.json sets a custom "main", leave it as the default ".wigl/index.js" while using plugin:build`,
+      `${config.id}: build didn't produce "${config.entry}" — if package.json sets a custom "main", leave it as the default ".wigl/index.js" while using widget:build`,
     );
   }
   const size = (await stat(outPath)).size;
-  // A plain `import "./foo.css"` anywhere in the plugin's own source (never
+  // A plain `import "./foo.css"` anywhere in the widget's own source (never
   // through a host module — those are externalized) is handled by Bun.build's
   // built-in CSS loader: it bundles every such import into one sibling asset
   // named after the entry point, `index.js` → `index.css`, no config needed
   // (verified against a live Bun.build run, not assumed from docs). `install`
   // copies it alongside the JS, and `loader.ts` injects it as a `<style>` tag
-  // at load time — see docs/plugins.md's "CSS" section.
+  // at load time — see docs/widgets.md's "Build, install, and the plugin
+  // mechanism" section.
   const cssPath = cssSibling(outPath);
   const hasCss = await Bun.file(cssPath).exists();
   console.log(`✓ built ${config.id} → ${config.entry}${hasCss ? " (+ css)" : ""} (${(size / 1024).toFixed(1)}kb)`);
@@ -148,7 +149,7 @@ const build = async (dir: string) => {
 const cssSibling = (jsPath: string) => jsPath.replace(/\.js$/, ".css");
 
 const install = async (dir: string) => {
-  const config = await readPluginConfig(dir);
+  const config = await readWidgetConfig(dir);
   const built = findEntrySource(dir) ? await build(dir) : config;
   const entryPath = join(dir, built.entry);
   if (!(await Bun.file(entryPath).exists())) {
@@ -157,7 +158,7 @@ const install = async (dir: string) => {
 
   const target = join(installRoot(), built.id);
   // Only package.json, the entry file, and its CSS sibling (if the build
-  // produced one) are installed — the plugin's other source, node_modules
+  // produced one) are installed — the widget's other source, node_modules
   // and tsconfig are build-time concerns with no business sitting in a
   // user's app-data dir.
   await rm(target, { recursive: true, force: true });
@@ -175,29 +176,29 @@ const install = async (dir: string) => {
 /** Every `wigl-widgets/<name>` folder, in the same order `ls` would give —
  * used when `build`/`install` are called with no dir so "do it to every
  * widget" is one command instead of one per folder. */
-const allPluginDirs = async (): Promise<string[]> => {
+const allWidgetDirs = async (): Promise<string[]> => {
   const entries = await readdir(WIDGETS_ROOT, { withFileTypes: true });
   return entries
-    .filter((e) => e.isDirectory() && !NON_PLUGIN_DIRS.has(e.name) && !e.name.startsWith("_"))
+    .filter((e) => e.isDirectory() && !NON_WIDGET_DIRS.has(e.name) && !e.name.startsWith("_"))
     .map((e) => resolve(WIDGETS_ROOT, e.name));
 };
 
-/** Loads *and renders* a built plugin in a plain bun process, against the
+/** Loads *and renders* a built widget in a plain bun process, against the
  * host's real modules — the same React object the app would hand it.
  *
  * Rendering is the point, not a bonus. A webview's console is invisible to
  * `bun run verify` (see docs/debugging.md), so "the app launched cleanly"
- * says nothing about whether a plugin worked; and an earlier version of this
+ * says nothing about whether a widget worked; and an earlier version of this
  * check that only imported the bundle against stub modules passed happily
- * while the plugin crashed on its first render with "dispatcher.getOwner is
+ * while the widget crashed on its first render with "dispatcher.getOwner is
  * not a function" — a bundled copy of React's dev jsx runtime meeting the
  * host's React. Anything that doesn't actually render can't catch that whole
  * class of bug, which is the main risk this boundary carries. */
 const check = async (dir: string) => {
   requireProductionEnv("check");
-  const config = await readPluginConfig(dir);
+  const config = await readWidgetConfig(dir);
   const entry = join(dir, config.entry);
-  if (!(await Bun.file(entry).exists())) die(`${config.id}: not built yet — run plugin:build first`);
+  if (!(await Bun.file(entry).exists())) die(`${config.id}: not built yet — run widget:build first`);
 
   // Real host modules, resolved through the app's own tsconfig paths — a
   // stub would defeat the purpose. `@tauri-apps/*` calls inside them do fail
@@ -262,10 +263,10 @@ const list = async () => {
   try {
     entries = (await readdir(root, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
   } catch {
-    console.log(`no plugins installed (${root} doesn't exist yet)`);
+    console.log(`no widgets installed (${root} doesn't exist yet)`);
     return;
   }
-  if (!entries.length) return console.log(`no plugins installed (${root})`);
+  if (!entries.length) return console.log(`no widgets installed (${root})`);
   for (const id of entries) {
     try {
       const pkgFile = Bun.file(join(root, id, "package.json"));
@@ -291,7 +292,7 @@ switch (cmd) {
     if (arg) {
       await build(resolve(arg));
     } else {
-      for (const dir of await allPluginDirs()) {
+      for (const dir of await allWidgetDirs()) {
         if (findEntrySource(dir)) await build(dir);
         else console.log(`- ${basename(dir)}: no index.tsx/ts, skipped (ships pre-built JS)`);
       }
@@ -301,18 +302,18 @@ switch (cmd) {
     if (arg) {
       await install(resolve(arg));
     } else {
-      for (const dir of await allPluginDirs()) await install(dir);
+      for (const dir of await allWidgetDirs()) await install(dir);
     }
     break;
   case "check":
-    await check(resolve(arg ?? die("usage: plugin check <dir>")));
+    await check(resolve(arg ?? die("usage: widget check <dir>")));
     break;
   case "list":
     await list();
     break;
   case "rm":
-    await remove(arg ?? die("usage: plugin rm <id>"));
+    await remove(arg ?? die("usage: widget rm <id>"));
     break;
   default:
-    die("usage: plugin <build|check|install|list|rm> [dir|id]");
+    die("usage: widget <build|check|install|list|rm> [dir|id]");
 }

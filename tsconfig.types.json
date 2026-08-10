@@ -1,14 +1,14 @@
 {
   // Emits the host API as `.d.ts` into `wigl-widgets/types/`, which is what
-  // plugins typecheck against — never the app's `src/` directly. Two reasons
-  // it's worth the extra step: a plugin author outside this repo needs
-  // *something* shippable to type against, and pointing plugin `paths` at
+  // widgets typecheck against — never the app's `src/` directly. Two reasons
+  // it's worth the extra step: a widget author outside this repo needs
+  // *something* shippable to type against, and pointing widget `paths` at
   // live app source would make "it compiles" depend on files that aren't
   // part of the plugin contract.
   //
   // Type-level access here is deliberately broader than runtime access: the
-  // real gate is the build (`scripts/plugin.ts`), which only externalizes
-  // the specifiers in `host-modules.ts`. Anything else a plugin imports from
+  // real gate is the build (`scripts/widget.ts`), which only externalizes
+  // the specifiers in `host-modules.ts`. Anything else a widget imports from
   // `@/` fails to bundle, loudly, before it can ever reach a user.
   "extends": "./tsconfig.json",
   "compilerOptions": {

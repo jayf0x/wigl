@@ -23,9 +23,9 @@ import type { HostModuleId } from "./host-modules";
 import type { WidgetPermission } from "./types";
 
 // The module registry is the entire plugin/host boundary. A plugin's build
-// never bundles anything listed here — `bun run plugin:build` rewrites those
+// never bundles anything listed here — `bun run widget:build` rewrites those
 // imports into `__wigl_host.require(...)` calls that land in `hostRequire`
-// below (see `scripts/plugin.ts`). Two consequences worth being explicit
+// below (see `scripts/widget.ts`). Two consequences worth being explicit
 // about, because both are the reason this exists rather than "just let the
 // bundle import whatever":
 //
