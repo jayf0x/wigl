@@ -183,6 +183,24 @@ const allWidgetDirs = async (): Promise<string[]> => {
     .map((e) => resolve(WIDGETS_ROOT, e.name));
 };
 
+/** Removes any installed plugin whose source folder no longer qualifies —
+ * deleted, or renamed to a `_`-prefixed (opted-out) folder. Without this, a
+ * bulk `install` only ever adds/overwrites: an id installed by an earlier
+ * run keeps loading forever even after its source is gone, since the
+ * runtime loader reads app-data, never `wigl-widgets/` directly. Only runs
+ * for the no-arg "install everything" form — a single-widget install has no
+ * full picture of what should currently exist, so it can't safely prune. */
+const pruneStaleInstalls = async (currentIds: Set<string>) => {
+  const root = installRoot();
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  for (const e of entries) {
+    if (e.isDirectory() && !currentIds.has(e.name)) {
+      await rm(join(root, e.name), { recursive: true, force: true });
+      console.log(`✓ pruned stale install ${e.name} (no matching wigl-widgets/ source)`);
+    }
+  }
+};
+
 /** Loads *and renders* a built widget in a plain bun process, against the
  * host's real modules — the same React object the app would hand it.
  *
@@ -302,7 +320,9 @@ switch (cmd) {
     if (arg) {
       await install(resolve(arg));
     } else {
-      for (const dir of await allWidgetDirs()) await install(dir);
+      const dirs = await allWidgetDirs();
+      for (const dir of dirs) await install(dir);
+      await pruneStaleInstalls(new Set(dirs.map((d) => basename(d))));
     }
     break;
   case "check":
