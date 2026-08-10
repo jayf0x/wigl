@@ -28,6 +28,12 @@ import "./composer.css";
 const EFFORT_OFF = "off";
 const EFFORT_LABELS: Record<string, string> = { off: "off", low: "low", high: "high" };
 
+// opencode's own hidden toolless agent (see housekeeper.ts) — the one thing
+// guaranteed not to attach a tool schema, so it's what a tool-incapable
+// model gets forced onto instead of 400ing on the default `build` agent
+// (backlog.md B2).
+const TOOLLESS_AGENT = "title";
+
 interface Option {
   value: string;
   label: string;
@@ -42,6 +48,7 @@ const ChipMenu = ({
   label,
   title,
   muted,
+  disabled,
   options,
   selectedValue,
   onSelect,
@@ -50,20 +57,23 @@ const ChipMenu = ({
   label: string;
   title: string;
   muted?: boolean;
+  disabled?: boolean;
   options: Option[];
   selectedValue?: string;
   onSelect: (value: string) => void;
 }) => {
   const [open, setOpen] = useState(false);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open && !disabled} onOpenChange={(next) => setOpen(next && !disabled)}>
       <PopoverTrigger
         data-no-drag
         title={title}
+        disabled={disabled}
         className={cn(
           "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] transition-colors duration-150",
           "text-muted-foreground hover:bg-muted hover:text-foreground data-[popup-open]:bg-muted data-[popup-open]:text-foreground",
-          muted && "opacity-40",
+          (muted || disabled) && "opacity-40",
+          disabled && "cursor-default hover:bg-transparent hover:text-muted-foreground",
         )}
       >
         <Icon className="size-3" />
@@ -155,6 +165,12 @@ export const Composer = ({
     hint: a.description?.slice(0, 40),
   }));
 
+  // A tool-incapable model 400s the moment `build` (or any tool-using agent)
+  // is attached — `ProviderModel.capabilities.toolcall` already tells us
+  // this per-model, so force the toolless fallback rather than let the user
+  // pick an agent that's guaranteed to error (backlog.md B2).
+  const toolless = selected?.capabilities.toolcall === false;
+
   // With ALLOWED_PROVIDER_IDS scoped to Ollama alone there's often exactly
   // one model installed — don't make anyone open a menu to pick it.
   useEffect(() => {
@@ -163,6 +179,10 @@ export const Composer = ({
       onModelChange({ providerID, modelID: rest.join("/") });
     }
   }, [model, modelOptions, onModelChange]);
+
+  useEffect(() => {
+    if (toolless && agent !== TOOLLESS_AGENT) onAgentChange(TOOLLESS_AGENT);
+  }, [toolless, agent, onAgentChange]);
 
   const submit = () => {
     if (!text.trim() || busy) return;
@@ -212,8 +232,9 @@ export const Composer = ({
           />
           <ChipMenu
             icon={Bot}
-            label={agent ?? "build"}
-            title="agent"
+            label={toolless ? TOOLLESS_AGENT : (agent ?? "build")}
+            title={toolless ? "agent (no tools — model can't use them)" : "agent"}
+            disabled={toolless}
             options={agentOptions}
             selectedValue={agent ?? undefined}
             onSelect={onAgentChange}

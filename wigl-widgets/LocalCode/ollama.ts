@@ -19,9 +19,10 @@ export const listOllamaModels = async (): Promise<string[]> => {
 };
 
 // Process-lifetime cache: a model's capabilities don't change without a
-// re-pull, and this widget has no signal for that happening mid-session
-// anyway (same ceiling `useOpencodeServer`'s config sync already accepts —
-// see TODO.md's "Ollama model catalog" entry).
+// re-pull under the same tag, and `useOpencodeServer`'s hot-reload poll only
+// notices a *new* model name appearing, not an existing one being re-pulled
+// with different capabilities — a rare enough edge case not to invalidate
+// this cache over.
 const thinkingCache = new Map<string, boolean>();
 
 /** Whether Ollama reports `"thinking"` in `POST /api/show`'s `capabilities`
