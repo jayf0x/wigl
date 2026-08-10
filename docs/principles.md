@@ -82,11 +82,15 @@ abstraction for a concern that has exactly one caller today.
 
 ## The 80/20 file
 
-A file's first 80% should be its one core export — a component, a hook, a
-cohesive set of types. The other 20% is small local helpers or
-sub-components that exist only to keep that core readable. When a file
-passes ~400 LOC, it's almost always because the 20% grew unchecked — pull
-it back out rather than letting the core drown in it:
+A file should read as its one core export — a component, a hook, a
+cohesive set of types — with only as much supporting material around it as
+that core needs to stay readable. This is a feel, not a formula: a small
+widget with a 150-line `index.tsx` and nothing else is completely fine as
+one flat file, and forcing it into a `src/` split would be the mistake, not
+the fix. The signal worth acting on is a file where the reader has to
+scroll past a pile of unrelated form-validation/state-machine/util code to
+find the thing they came for — that's when it's grown its own 20% and it's
+time to pull that part out, regardless of raw line count:
 
 - Extract logic into a sibling `utils.ts` when there's enough of it to name;
   promote it to `@/wigl/utils` only once a second widget needs the same
@@ -95,10 +99,11 @@ it back out rather than letting the core drown in it:
 - Small sub-components or one-off functions that only the main export calls
   go at the bottom of the same file, or a sibling file — not mixed in
   above the export a reader actually came for.
-- A folder earns a `src/` split (`components/`, `hooks/`, `utils/`) once its
-  root has enough single-purpose files that finding one means scanning past
-  a dozen others — one extra file in the root isn't a foldering emergency,
-  ten is.
+- A folder earns a `src/` split (`components/`, `hooks/`, `utils/`) once
+  it's genuinely grown into several concerns worth naming separately — a
+  widget like `LocalCode` (its own client, event reducer, multiple hooks,
+  sub-components) is the shape that justifies it. A typical widget never
+  needs one; don't default to it.
 
 Barrels (`index.ts`): use one where a folder's contents are *always*
 consumed together as a unit — that's an import contract, not decoration
@@ -128,6 +133,6 @@ describing *the thing itself* say **widget**. Reserve **plugin** for the
 loading/build *mechanism* (`docs/plugins.md`: `src/wigl/plugins/`,
 `plugin:build`/`plugin:install`, `wigl.permissions` in `package.json`) —
 the machinery a widget happens to be built and shipped through, not what
-it's called. The two got used interchangeably before the plugin system
-existed and some of that lingers; fix it opportunistically when you're
-already touching a file, not as a repo-wide rename sweep on its own.
+it's called. (Existing code that still says "plugin" for the thing itself
+is a known, tracked inconsistency — see `backlog.md` — not something this
+rule expects you to go sweep the repo for.)
