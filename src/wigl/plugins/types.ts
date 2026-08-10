@@ -5,7 +5,7 @@ import type { ComponentType } from "react";
  * member) resolvable at all — see `registry.ts`. Undeclared means the
  * import throws at load time, not "works but shouldn't have", which is the
  * whole point of the list. */
-export type WidgetPermission = "command" | "filesystem" | "network" | "storage";
+export type WidgetPermission = "command" | "filesystem" | "network" | "storage" | "pty";
 
 /** Where a plugin's built entry lives if it doesn't say otherwise. A plugin
  * with its own `package.json` can override this via `main`, same field Node

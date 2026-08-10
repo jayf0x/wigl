@@ -1,0 +1,10 @@
+{
+  "$schema": "../widget.schema.json",
+  "dependencies": {
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0"
+  },
+  "wigl": {
+    "permissions": ["pty"]
+  }
+}

@@ -8,6 +8,8 @@ use std::{
 };
 use tauri::{Emitter, Manager};
 
+mod pty;
+
 // Secret/token storage: a widget needing an API key or OAuth token has
 // nowhere else to put it (useStorage's sqlite kv is plaintext and synced
 // across every window/poller). One JSON file in the app's data dir,
@@ -273,12 +275,19 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(HitRects::default())
         .manage(DragActive::default())
+        .manage(pty::PtyState::default())
         .invoke_handler(tauri::generate_handler![
             set_hit_rects,
             set_drag_active,
             is_windowed_mode,
             secrets_get,
-            secrets_set
+            secrets_set,
+            pty::pty_spawn,
+            pty::pty_write,
+            pty::pty_read,
+            pty::pty_resize,
+            pty::pty_kill,
+            pty::pty_exitstatus
         ])
         .setup(|app| {
             let windowed = windowed_mode();

@@ -27,7 +27,7 @@
         "permissions": {
           "type": "array",
           "items": {
-            "enum": ["storage", "command", "filesystem", "network"]
+            "enum": ["storage", "command", "filesystem", "network", "pty"]
           }
         }
       }

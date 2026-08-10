@@ -72,7 +72,7 @@ const HOST_MODULES: Record<HostModuleId, HostModule> = {
   "@/wigl": { value: Wigl },
   "@/wigl/hooks": {
     value: WiglHooks,
-    members: { useStorage: "storage", useQuery: "storage" },
+    members: { useStorage: "storage", useQuery: "storage", usePty: "pty" },
   },
   "@/wigl/utils": {
     value: WiglUtils,
