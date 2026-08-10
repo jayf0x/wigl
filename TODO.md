@@ -6,7 +6,22 @@
   - A widget made to throw during render shows an inline "widget crashed" message in its own grid cell; the rest of the desktop (other widgets, drag, etc.) keeps working.
   - repos widget's `xdg-open` and VS Code CLI (`/usr/bin/code`) both invoke correctly on Ubuntu; the GitHub Desktop fallback correctly no-ops when `github-desktop` isn't installed (no official Linux build, as the code's own comment expects).
   - Still open: this was X11, not real Wayland/GNOME — someone on actual Wayland hardware should still do a quick pass, since the windowed flow's WM/compositor behavior differs from X11's.
-- [ ] (Low priority) Drag ghosting/residue in windowed mode (GNOME/Wayland) — still unreproduced. Only tested on X11 here (WebKitGTK's DMA-BUF compositor-damage hypothesis is Wayland-specific, so X11 can't confirm or rule it out). Same A/B tests as before, still needed on real GNOME/Wayland hardware: (1) `WEBKIT_DISABLE_DMABUF_RENDERER= bun run qa:app`, (2) `WEBKIT_DISABLE_COMPOSITING_MODE=1`, (3) `journalctl --user -b 0 | grep -i webkit` while reproducing.
+- [ ] Drag ghosting/residue — a measured cause was found and fixed on X11
+  (`WEBKIT_DISABLE_DMABUF_RENDERER` is now set on Wayland sessions only;
+  on X11 it was dropping the web process onto software compositing, ~83% vs
+  ~28% CPU per drag on a fractionally-scaled 4K desktop). See
+  `todo-ghosting.md` for the measurements, the disproven hypotheses, and the
+  `scripts/dev/` harness. **Open**: owner confirmation that the visual
+  symptom is actually gone — it has never been reproducible from synthetic
+  input — and the same pass on real GNOME/Wayland hardware, where
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` still applies and the windowed flow's
+  now-opaque window is still unverified.
+- [ ] Heap corruption under sustained drag load: `malloc_consolidate():
+  unaligned fastbin chunk detected`, reproduced once with scripted dragging
+  *after* `631dd85` moved the cursor poller's GTK calls onto the main
+  thread — so that fix was necessary but not sufficient. No backtrace yet
+  (didn't recur under `gdb` in ~50 scripted drags). Details in
+  `todo-ghosting.md`.
 - [ ] **New, unconfirmed**: the windowed-mode window was twice observed to have grown well past its `.inner_size(1100, 750)` startup size (e.g. to physical 2884×2438, later 3824×2210) with no `setSize`/`innerSize` call anywhere in the codebase (grepped `src/`, `src-tauri/src/` — nothing calls it). Repeated deliberate attempts to reproduce — fresh launches left idle, single/multi-step synthetic drags of varying size, tall `widget_layout` rows (up to row 23) — all stayed rock-solid at 2200×1500 (2x the logical 1100×750, i.e. correctly HiDPI-scaled). Only ever seen after a longer, organic sequence of interactions (several widget-settings clicks, a widget crash+recover, then a large cross-window drag) on one long-lived process; never on a fresh minimal repro. Could be a real GTK/WebKitGTK size-negotiation bug triggered by some interaction sequence, or could be an artifact of this session's synthetic-input testing method (XTest lacks some metadata real hardware input has, and a decorated+resizable X11 window means Mutter, not just the app, is a candidate cause). Trigger: if a real user on Linux ever sees the window balloon in size unprompted, check `xwininfo -id <id>` over time and see if it correlates with a specific action; otherwise not worth chasing further from synthetic input alone.
 
 ## Fixed this session (Linux, X11)

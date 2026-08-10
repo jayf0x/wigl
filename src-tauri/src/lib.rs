@@ -132,11 +132,19 @@ fn windowed_mode() -> bool {
     if !cfg!(target_os = "linux") {
         return false;
     }
-    // XDG_SESSION_TYPE is the documented signal, but some session managers
-    // leave it unset or wrong (e.g. under certain display managers or when
-    // launched from a non-login shell) — WAYLAND_DISPLAY is the socket a
-    // Wayland client actually connects to, and is a more reliable fallback
-    // signal than trusting XDG_SESSION_TYPE alone.
+    wayland_session()
+}
+
+// Is this process talking to a Wayland compositor? Separate from
+// windowed_mode() because WIGL_MODE can force the windowed *flow* on an X11
+// session, while renderer workarounds have to key off the actual session.
+//
+// XDG_SESSION_TYPE is the documented signal, but some session managers leave
+// it unset or wrong (e.g. under certain display managers or when launched
+// from a non-login shell) — WAYLAND_DISPLAY is the socket a Wayland client
+// actually connects to, and is a more reliable fallback signal than trusting
+// XDG_SESSION_TYPE alone.
+fn wayland_session() -> bool {
     let session_type_wayland = std::env::var("XDG_SESSION_TYPE").as_deref() == Ok("wayland");
     let has_wayland_display = std::env::var("WAYLAND_DISPLAY").map(|v| !v.is_empty()).unwrap_or(false);
     session_type_wayland || has_wayland_display
@@ -296,8 +304,20 @@ pub fn run() {
     // nothing ever actually paints. This is the standard workaround — set
     // before webkit2gtk initializes, and only if the user hasn't already
     // set it themselves (e.g. to debug/compare).
+    //
+    // Wayland only, deliberately. WebKitGTK removed its X11 accelerated
+    // backing store, so on X11 this variable no longer means "use the other
+    // accelerated path" — it means "fall off accelerated compositing
+    // entirely". The software path then reports the *whole* window as
+    // damaged on every frame instead of the rects that actually changed,
+    // which is what the compositor re-uploads per frame. On a normal display
+    // that's merely wasteful; on a fractionally-scaled 4K desktop (a
+    // 6144x3456 framebuffer here, ~85 MB per surface) it can't keep up with
+    // a drag, and the screen shows half-updated frames — the ghosting/
+    // tearing tracked in todo-ghosting.md. X11 sessions never had the blank-
+    // window problem this works around in the first place.
     #[cfg(target_os = "linux")]
-    if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
+    if wayland_session() && std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
 
