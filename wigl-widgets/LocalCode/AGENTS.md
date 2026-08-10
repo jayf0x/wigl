@@ -266,12 +266,10 @@ here the way it might look.
 `send()` on a session's first user message — fire-and-forget, a slow/failed
 call just leaves the truncated-prompt fallback title in place. This is
 still the only caller — other consumers (greeting text, other small tasks)
-are unspecified scope, not built. Per `backlog.md`'s B6,
-`runHousekeeperPrompt()` being its own general-purpose function for a
-single caller is exactly the future-proofing this repo's `docs/principles.md`
-warns against — it should get inlined into `generateSessionTitle()` (or
-kept as an unexported private helper) unless a second concrete consumer
-shows up first.
+are unspecified scope, not built. `runHousekeeperPrompt()` is an unexported
+helper local to this file for exactly that reason (was a needless exported
+general-purpose primitive for a single caller); re-export it only once a
+second concrete consumer shows up.
 
 ## UI shape (post-redesign) — read before adding a control
 

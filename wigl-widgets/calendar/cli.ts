@@ -22,7 +22,10 @@ const appDataDir =
     : join(process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"), APP_IDENTIFIER);
 const DB_PATH = join(appDataDir, "wigl.db");
 mkdirSync(appDataDir, { recursive: true });
-const KEY = EVENTS_STORAGE_KEY;
+// The registry auto-prefixes every widget's useStorage/useQuery keys with
+// `<widget-id>:` (see src/wigl/plugins/registry.ts) — a raw sqlite3 write
+// from outside that path (this CLI) has to match it by hand.
+const KEY = `calendar:${EVENTS_STORAGE_KEY}`;
 
 const db = new Database(DB_PATH, { create: true });
 db.run("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)");

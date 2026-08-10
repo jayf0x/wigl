@@ -116,12 +116,12 @@ Adds an entry to the desktop's right-click menu for as long as the calling compo
 
 ```ts
 import { useStorage } from "@/wigl/hooks";
-const [items, setItems, { loading }] = useStorage<Item[]>("<widget>_items", []);
+const [items, setItems, { loading }] = useStorage<Item[]>("items", []);
 ```
 
-`useState` persisted as a JSON blob in a kv table in `wigl.db` under the OS's app-data dir (macOS: `~/Library/Application Support/<id>`, Linux: `~/.local/share/<id>`), via the system's `sqlite3` CLI (no Rust, no Tauri plugin — same "shell out to a real CLI" rule as data fetching). `sqlite3` isn't bundled — ships by default on macOS, `apt install sqlite3` on Ubuntu if it's missing; a widget using `useStorage` with it not installed logs a read/write error but doesn't crash (see `docs/architecture.md`). Writes are optimistic; external changes (another window, a CLI script) are picked up by a poll (a few seconds). Keys must match `[a-zA-Z0-9_-]+` and share one flat namespace across all widgets — **prefix your keys with the widget's folder name** (`calendar_events`, not `events`).
+`useState` persisted as a JSON blob in a kv table in `wigl.db` under the OS's app-data dir (macOS: `~/Library/Application Support/<id>`, Linux: `~/.local/share/<id>`), via the system's `sqlite3` CLI (no Rust, no Tauri plugin — same "shell out to a real CLI" rule as data fetching). `sqlite3` isn't bundled — ships by default on macOS, `apt install sqlite3` on Ubuntu if it's missing; a widget using `useStorage` with it not installed logs a read/write error but doesn't crash (see `docs/architecture.md`). Writes are optimistic; external changes (another window, a CLI script) are picked up by a poll (a few seconds). Keys must match `[a-zA-Z0-9_:-]+`; the registry auto-prefixes every key a widget passes with `<widget-id>:` (`src/wigl/plugins/registry.ts`'s `createPluginRequire`), so two widgets picking the same key string never collide — write plain keys (`"events"`, not `"calendar_events"`), the widget never sees or writes the raw un-prefixed one.
 
-External tools can write the same data: any script in `scripts/` that talks to the DB is the pattern in action (run them via the `bun run` entries in `package.json`). If you build a CLI for a widget's data, copy that shape: same DB path, one kv key, JSON blob, `CREATE TABLE IF NOT EXISTS kv (...)` before use. The contract between widget and CLI is the key **and the JSON shape** — export both the key constant and the TypeScript type from the widget folder and import them in the CLI (scripts run under bun and can import from `src/` directly; don't hand-duplicate the type).
+External tools can write the same data: any script in `scripts/` that talks to the DB is the pattern in action (run them via the `bun run` entries in `package.json`). If you build a CLI for a widget's data, copy that shape: same DB path, one kv key, JSON blob, `CREATE TABLE IF NOT EXISTS kv (...)` before use. A CLI talks to sqlite directly, outside the registry, so it doesn't get the auto-prefix for free — **write the key as `<widget-id>:<key>` by hand** to land in the same row the widget reads (`wigl-widgets/calendar/cli.ts` is the reference). The contract between widget and CLI is the key **and the JSON shape** — export both the key constant and the TypeScript type from the widget folder and import them in the CLI (scripts run under bun and can import from `src/` directly; don't hand-duplicate the type).
 
 Ceiling to know about: last-writer-wins on the whole blob — two writers mutating the same key within one poll window can drop a write. Fine for single-user widget data; if that ever bites, move that key to its own table with row-level writes.
 
@@ -132,14 +132,14 @@ Ceiling to know about: last-writer-wins on the whole blob — two writers mutati
 ```ts
 import { useQuery, hours } from "@/wigl/hooks";
 const [data, loading, { refresh }] = useQuery({
-  key: "<widget>_archived",
+  key: "archived",
   fn: loadArchivedRepoNames,
   stale: hours(24),
   useSql: true, // persist across restarts; omit for in-memory-only (resets on relaunch)
 });
 ```
 
-Cached by `key` (prefix it with the widget's folder name, same rule as `useStorage` keys), deduped across concurrent callers, and re-run only once `stale` ms have passed since the last successful fetch — `refresh()` forces it early. `useSql: true` persists the result in the same kv table `useStorage` uses (`query_<key>`, `updatedAt` embedded in the stored blob — no separate invalidation table). It's deliberately not a TanStack Query clone: no retries, no background refetch-on-focus, no error state — if `fn()` throws, the caller sees the rejection, same as calling it directly.
+Cached by `key` (auto-prefixed with the widget's folder name, same as `useStorage` keys — see above), deduped across concurrent callers, and re-run only once `stale` ms have passed since the last successful fetch — `refresh()` forces it early. `useSql: true` persists the result in the same kv table `useStorage` uses (`query_<key>`, `updatedAt` embedded in the stored blob — no separate invalidation table). It's deliberately not a TanStack Query clone: no retries, no background refetch-on-focus, no error state — if `fn()` throws, the caller sees the rejection, same as calling it directly.
 
 ## Running shell commands from a widget
 

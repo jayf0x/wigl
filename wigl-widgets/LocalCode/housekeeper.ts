@@ -30,8 +30,12 @@ const HOUSEKEEPER_TIMEOUT_MS = 45_000;
  * support tools" for small models that don't support function-calling at
  * all (`smollm:135m`, the housekeeper default, is one of them). Callers
  * doing a plain text-in/text-out task should pass a toolless native agent
- * (`"title"`, `"summary"`, ...) rather than leaving this unset. */
-export const runHousekeeperPrompt = async (
+ * (`"title"`, `"summary"`, ...) rather than leaving this unset.
+ *
+ * Not exported: `generateSessionTitle` below is the only caller today (see
+ * backlog.md's old B6) — a second concrete consumer is what earns this
+ * back its own export/module. */
+const runHousekeeperPrompt = async (
   baseUrl: string,
   model: ModelSelection,
   prompt: string,

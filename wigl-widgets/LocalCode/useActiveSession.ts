@@ -121,6 +121,23 @@ export const useActiveSession = (
 
   const dismissError = useCallback(() => setState((prev) => ({ ...prev, error: null })), []);
 
+  // Hang guard. opencode's `build` agent has been reproduced hanging
+  // indefinitely against Ollama — no `session.idle`/`session.error` ever
+  // fires, so without this the pending indicator spins forever (see
+  // backlog.md's B4). A single client-side deadline per turn, not a
+  // per-token idle timer: it starts when `busy` flips true and is cleared
+  // when the turn actually finishes, so normal streaming (which keeps
+  // `state.messages` changing but not `state.busy`) doesn't reset it.
+  const HANG_TIMEOUT_MS = 90_000;
+  useEffect(() => {
+    if (!state.busy) return;
+    const timer = setTimeout(() => {
+      abort();
+      setState((prev) => ({ ...prev, busy: false, error: "no response — opencode/Ollama didn't reply in time" }));
+    }, HANG_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [state.busy, abort]);
+
   // Runaway-loop guard. A small local model that starts restating the same
   // phrase generally never stops on its own (see TODO.md's `build`-agent hang
   // entry for a related failure) — it just burns GPU until someone notices.

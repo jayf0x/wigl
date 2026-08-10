@@ -11,7 +11,10 @@ import { sql, sqlLiteral } from "../storage/client";
 const POLL_MS = 3000;
 
 // Keys are baked into SQL strings, so restrict them instead of escaping them.
-const KEY_RE = /^[a-zA-Z0-9_-]+$/;
+// `:` is allowed for the registry's per-widget `<widget-id>:` key prefix
+// (see registry.ts's createPluginRequire) — widget ids themselves are
+// already restricted to this same charset minus `:`.
+const KEY_RE = /^[a-zA-Z0-9_:-]+$/;
 
 // One id per JS realm (each screen-<i> window is its own webview/realm) so a
 // window can recognize and ignore its own broadcasts.

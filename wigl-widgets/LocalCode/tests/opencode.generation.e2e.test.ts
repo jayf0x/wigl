@@ -15,7 +15,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import * as client from "../client";
 import { applyEvent, emptySessionState, type SessionState } from "../eventReducer";
-import { generateSessionTitle, runHousekeeperPrompt } from "../housekeeper";
+import { generateSessionTitle } from "../housekeeper";
 import { SCRATCH_DIRECTORY, setupE2eSuite, subscribeEventsViaFetch } from "./testServer";
 import type { OpencodeEvent } from "../types";
 
@@ -177,33 +177,6 @@ describe("prompt -> loading -> reply (the reported regression)", () => {
 // the same session.error surfacing path deterministically.
 
 describe("housekeeper model (session titling)", () => {
-  test.skipIf(!ready)(
-    "runHousekeeperPrompt returns deterministic text from a real throwaway session",
-    async () => {
-      const baseUrl = server?.baseUrl as string;
-      // "title" — a toolless native agent, see runHousekeeperPrompt's doc
-      // comment. Omitting `agent` here (defaulting to the "build" session
-      // agent, which always attaches opencode's tool schema) is exactly
-      // the "does not support tools" 400 this suite caught against
-      // smollm:135m — a real Ollama-model limitation, not a widget bug,
-      // but one every housekeeper caller must route around explicitly.
-      const reply = await runHousekeeperPrompt(
-        baseUrl,
-        HOUSEKEEPER_MODEL,
-        "Reply with only the word: pong",
-        DIRECTORY,
-        "title",
-      );
-      expect(reply).toBeTruthy();
-      expect(reply?.length).toBeGreaterThan(0);
-
-      // The scratch session must not leak into the real session list.
-      const sessions = await client.listSessions(baseUrl, DIRECTORY);
-      expect(sessions.some((s) => s.title.includes("pong"))).toBe(false);
-    },
-    TURN_TIMEOUT_MS + 5000,
-  );
-
   test.skipIf(!ready)(
     "generateSessionTitle produces a short, punctuation-stripped title",
     async () => {
