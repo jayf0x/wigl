@@ -37,6 +37,7 @@ If a task's outcome doesn't change any of those claims, there's nothing to updat
 | Run a new shell command / CLI from a widget | `docs/widgets.md` → "Running shell commands" | `src-tauri/capabilities/default.json` + the widget's hook |
 | Window/monitor behavior (drag, transparency, chrome, click-through) | `docs/architecture.md` (all of it) | `src/wigl/Desktop.tsx`, `src-tauri/src/lib.rs` |
 | Something silently does nothing / builds look stale / can't verify visually | `docs/debugging.md` (all of it — short, saves hours) | — |
+| Rendering/perf bug that only happens on one machine | `docs/debugging.md` → "Diagnosing a 'only happens on my machine' rendering bug", then run `scripts/dev/x11-report.py` | — |
 | Feature idea, scope question, "should we add X?" | `docs/future-ideas.md` + `docs/architecture.md` → "The rule" | — |
 | Known defect / ceiling / pending decision | `backlog.md` | — |
 
@@ -46,7 +47,7 @@ If a task's outcome doesn't change any of those claims, there's nothing to updat
    - A widget imports React and everything shared through the host module registry (`src/wigl/plugins/host-modules.ts`), never its own copy, and never `@tauri-apps/*` directly. Needing something the registry doesn't serve means adding a host module — not an escape hatch. Anything else it needs, it bundles.
 2. Shared components follow the shadcn philosophy: owned code, children + `className`, no prop-per-feature APIs. Nothing new becomes "shared" until a second widget concretely needs it. Everything shared lives in `src/wigl/` behind exactly three barrels — visual/layout primitives from `@/wigl`, stateful/React hooks from `@/wigl/hooks`, plain non-React helpers from `@/wigl/utils` — each barrel's `index.ts` is the authoritative list of what it exports; widgets never deep-import past those three. The header component's own content (title, buttons) is ordinary interactive/selectable content — only its small top-right grip drags the widget; use `data-no-drag` for custom clickable elements placed inside the grip itself (rare), never `stopPropagation` workarounds.
 3. Data comes from shell commands (`tauri-plugin-shell`), not custom Rust. New Rust logic requires the operation to be impossible via shell.
-4. macOS and Linux (Ubuntu) only — no Windows. No performance work without measuring first. If a task can't be tied to a real feature in one sentence, skip it and note it. Widgets sharing a monitor share one JS realm and React tree (each monitor is its own window/realm, not each widget) — a per-widget error boundary in `Desktop.tsx` stops one widget's crash from taking down the others on that screen, but don't assume render isolation between widgets the way separate windows would give you.
+4. macOS and Linux (Ubuntu) only — no Windows — for the app itself: the GUI (window chrome, drag, click-through, `src-tauri/src/lib.rs`, `src/wigl/Desktop.tsx`) and `bun run verify`/`qa` (shell scripts). The widget **authoring/build tooling** (`scripts/widget.ts`'s `build`/`install`/`check`/`devkit`/etc., and the `scripts/e2e/` suite that exercises it) is plain Bun/TypeScript with no shell scripts or macOS/Linux-only APIs, and is expected to work on Windows too — see `scripts/e2e/README.md`'s "Platform scope". Don't read this as a broader Windows-support decision; it isn't one. No performance work without measuring first. If a task can't be tied to a real feature in one sentence, skip it and note it. Widgets sharing a monitor share one JS realm and React tree (each monitor is its own window/realm, not each widget) — a per-widget error boundary in `Desktop.tsx` stops one widget's crash from taking down the others on that screen, but don't assume render isolation between widgets the way separate windows would give you.
 5. Never use `dangerouslySetInnerHTML` in a widget — CSP is disabled (`csp: null`), so any injected markup runs with full IPC access. React's default escaping is the safety layer; keep it in the loop.
 
 ## Verify before claiming done
@@ -75,6 +76,11 @@ New debug/CLI scripts that operate on the whole repo (widget data scanners, seed
   for manual QA loops ("does drag still work", "does the composer still
   stream"), not CI — a lightweight, rerunnable, predictable way to check
   something without the overhead of a real test suite.
+- **Scripting real mouse/keyboard input?** It moves the owner's actual
+  cursor and makes the machine unusable while it runs. `scripts/dev/`'s
+  README has the rules (hard 60s budget, enforced in `ghost-probe.py`; never
+  background one; never "wait for it to crash"). Read them before writing
+  anything that drives XTest.
 - **Installing something globally** (not into this repo's own
   `node_modules`) **to make a widget or script work?** Add a line to
   `global-deps.md` — what it is, how it's installed, what depends on it.

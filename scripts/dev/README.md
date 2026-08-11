@@ -31,6 +31,23 @@ runs, the machine is unusable.
   for as long as it runs. Find a deterministic trigger, or say the flow didn't
   work and stop.
 
+## Start here for any Linux rendering/perf question
+
+- `x11-report.py` — every display-stack fact that decides how this machine
+  renders, in one no-input command: session type, the *correct* compositor
+  check, fractional-scaling detection, GPU/Mesa/WebKitGTK versions, plus the
+  caveats that have already cost people a session. **Run this before forming
+  a theory.** Two dead ends in this repo's history were environment facts
+  misread, not code bugs: `xprop -root _NET_WM_CM_S0` reporting "no
+  compositor" (it's a selection, not a property — that check always says
+  that), and a "stale pixel band" that was the Ubuntu dock.
+- `perf-drag.py` — per-process CPU during an identical, fixed-seed scripted
+  drag, for A/B-ing a change or an env var. Two builds can look identical on
+  screen and emit identical damage while differing 3x in cost; that is how
+  the DMA-BUF renderer bug was actually found, after pixel comparison
+  found nothing. If a symptom is "only on my machine" and the machine has a
+  big framebuffer, measure cost before hunting for a logic bug.
+
 ## X11 overlay-rendering harness
 
 Four Python scripts (stdlib + ctypes against libX11/libXtst/libXdamage, plus

@@ -2,6 +2,36 @@
 
 Most of this file is macOS-specific tooling (`log show`, `swift scripts/winlist.swift`, DMG bundling) because that flow has the most moving parts to go wrong (transparency, click-through, per-monitor windows). See "Verifying on Linux" near the end for the windowed flow's much shorter checklist — it's a normal window, so most of what follows below doesn't apply to it.
 
+## Diagnosing a "only happens on my machine" rendering bug
+
+Hard-won, in the order that would have saved the most time:
+
+1. **Get the environment facts before forming a theory.** `python3 scripts/dev/x11-report.py`
+   answers session type, compositor, fractional scaling, GPU and WebKitGTK
+   version in one no-input command. A rendering bug that reproduces on
+   exactly one machine is usually a property of that machine's display stack,
+   and the single most common culprit is a framebuffer much larger than the
+   panel (GNOME implements X11 fractional scaling by rendering oversized and
+   downscaling) — every per-frame cost scales with that larger number.
+2. **Validate the measurement before trusting it.** More than one session
+   here was lost to a confident answer from a broken check. Two real
+   examples: `xprop -root _NET_WM_CM_S0` "proving" no compositor was running
+   (it's an X *selection*, not a root property — that command always prints
+   "not found"), and a persistent stale-looking pixel band that was the
+   Ubuntu dock (gnome-shell draws the dock, notifications and overview as its
+   own actors, which are not X windows and cannot be masked out by stacking
+   order). Before believing a metric, point it at a case where you already
+   know the answer.
+3. **Measure cost, not just pixels.** Two builds can render identical pixels
+   and emit identical XDamage while differing 3x in CPU. `scripts/dev/perf-drag.py`
+   A/Bs that. The DMA-BUF renderer bug was invisible to every pixel-level
+   check and obvious the moment cost was measured.
+4. **A bug that won't reproduce from synthetic input is telling you
+   something.** After a bounded attempt, stop and treat "not reproducible
+   this way" as the finding. Randomised input until something breaks is not a
+   test — see `scripts/dev/README.md`'s input-budget rules, which exist
+   because this was gotten wrong.
+
 ## You often can't take a screenshot
 
 This window is `alwaysOnBottom` + `skipTaskbar` + undecorated, running in environments that may be headless/sandboxed agent shells with no real interactive display. Screenshots are frequently unreliable here (can capture unrelated screensaver/lock-screen content instead of the app) and mouse-drag gestures can't be scripted without accessibility permissions this environment usually doesn't have. Default to verifying through logs and process state instead:
