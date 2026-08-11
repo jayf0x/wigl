@@ -930,6 +930,13 @@ export const Desktop = ({
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
+      // Widget dragging is a pointer-event gesture (see onPointerDown), so
+      // the browser's own HTML5 drag never does anything useful here — it
+      // just renders a translucent snapshot of whatever got grabbed (text,
+      // an image, a link) that floats around detached from the grid and
+      // drops nowhere. Killing dragstart at the root removes that whole
+      // native codepath for every widget at once.
+      onDragStart={(e) => e.preventDefault()}
     >
       <svg ref={field} className="wigl-field" aria-hidden="true">
         {/* <defs>

@@ -13,6 +13,24 @@ and maintaining a full test suite for it.
 - Delete a script once the flow it checks no longer exists or is covered by
   a real automated test instead. This folder isn't an archive.
 
+## Rules for anything that drives synthetic input
+
+These scripts move the **real cursor on the owner's real desktop**. While one
+runs, the machine is unusable.
+
+- **Hard cap: 60 seconds of input per run.** `ghost-probe.py` enforces this
+  itself — past the budget every motion/press raises `BudgetExhausted` and any
+  held button is released, including on Ctrl+C, SIGTERM, and interpreter exit.
+  Override via `WIGL_PROBE_BUDGET` only for a bounded, deterministic run, never
+  to let a loop grind longer.
+- **Never run one of these in the background**, and never `sleep`-poll waiting
+  on one. Run it in the foreground where it can be interrupted.
+- **Never "wait for it to crash."** If a bug doesn't reproduce inside a bounded
+  run, the hypothesis is wrong or the bug is already fixed — randomized input
+  until something breaks is not a test, and it costs the owner their machine
+  for as long as it runs. Find a deterministic trigger, or say the flow didn't
+  work and stop.
+
 ## X11 overlay-rendering harness
 
 Four Python scripts (stdlib + ctypes against libX11/libXtst/libXdamage, plus

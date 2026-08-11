@@ -13,13 +13,59 @@ Usage (app must already be running, e.g. `bun run qa`):
     python3 scripts/dev/ghost-probe.py moveafter X Y    # after a drag: idle then move, report
 """
 
+import atexit
 import ctypes
 import ctypes.util
+import os
+import signal
 import sys
 import time
 
 x11 = ctypes.CDLL(ctypes.util.find_library("X11"))
 xtst = ctypes.CDLL(ctypes.util.find_library("Xtst"))
+
+# --- input budget -----------------------------------------------------------
+# These scripts move the real cursor on the owner's real desktop. Anything
+# that holds the pointer hostage makes the machine unusable, so seizing input
+# is budgeted, not open-ended: past WIGL_PROBE_BUDGET seconds (default 60)
+# every synthetic-input call raises and the button is released. A run that
+# needs longer than a minute of dragging is not a test, it's a slot machine —
+# find a deterministic trigger instead of waiting for something to happen.
+BUDGET_SECONDS = float(os.environ.get("WIGL_PROBE_BUDGET", "60"))
+_started = time.time()
+_button_down = set()
+
+
+class BudgetExhausted(RuntimeError):
+    pass
+
+
+def budget_left():
+    return BUDGET_SECONDS - (time.time() - _started)
+
+
+def release_all():
+    """Never leave a mouse button stuck down — the desktop becomes unusable."""
+    for b in list(_button_down):
+        try:
+            xtst.XTestFakeButtonEvent(dpy, b, 0, 0)
+            x11.XFlush(dpy)
+        except Exception:
+            pass
+        _button_down.discard(b)
+
+
+def _check_budget():
+    if budget_left() <= 0:
+        release_all()
+        raise BudgetExhausted(
+            f"synthetic input budget of {BUDGET_SECONDS:.0f}s exhausted; "
+            "raise WIGL_PROBE_BUDGET only for a bounded, deterministic run")
+
+
+atexit.register(release_all)
+for _sig in (signal.SIGINT, signal.SIGTERM):
+    signal.signal(_sig, lambda *_: (release_all(), sys.exit(130)))
 
 
 class XWindowAttributes(ctypes.Structure):
@@ -153,39 +199,53 @@ def diff(a, b):
 
 
 def motion(x, y):
+    _check_budget()
     xtst.XTestFakeMotionEvent(dpy, -1, int(x), int(y), 0)
     x11.XFlush(dpy)
 
 
 def button(b, down):
+    # A release is always allowed through, budget or not — refusing one is
+    # how you end up with a stuck mouse button.
+    if down:
+        _check_budget()
+        _button_down.add(b)
+    else:
+        _button_down.discard(b)
     xtst.XTestFakeButtonEvent(dpy, b, 1 if down else 0, 0)
     x11.XFlush(dpy)
 
 
 def smooth_drag(x0, y0, dx, dy, steps=40, dt=0.012):
-    motion(x0, y0); time.sleep(0.2)
-    button(1, True); time.sleep(0.08)
-    for i in range(1, steps + 1):
-        motion(x0 + dx * i / steps, y0 + dy * i / steps)
-        time.sleep(dt)
-    button(1, False)
+    try:
+        motion(x0, y0); time.sleep(0.2)
+        button(1, True); time.sleep(0.08)
+        for i in range(1, steps + 1):
+            motion(x0 + dx * i / steps, y0 + dy * i / steps)
+            time.sleep(dt)
+    finally:
+        button(1, False)
 
 
 def wander_drag(x0, y0, path, dt=0.008):
     """A long, human-shaped drag: hold the button and wander through `path`
     (a list of absolute points) instead of one straight 0.5s line. Real drags
     last seconds and change direction; a short synthetic line has repeatedly
-    failed to reproduce the ghosting this repo is chasing."""
-    motion(x0, y0); time.sleep(0.3)
-    button(1, True); time.sleep(0.1)
-    cx, cy = x0, y0
-    for tx, ty in path:
-        steps = max(2, int(max(abs(tx - cx), abs(ty - cy)) / 12))
-        for i in range(1, steps + 1):
-            motion(cx + (tx - cx) * i / steps, cy + (ty - cy) * i / steps)
-            time.sleep(dt)
-        cx, cy = tx, ty
-    button(1, False)
+    failed to reproduce the ghosting this repo is chasing.
+
+    Wrapped so an exhausted input budget still releases the button."""
+    try:
+        motion(x0, y0); time.sleep(0.3)
+        button(1, True); time.sleep(0.1)
+        cx, cy = x0, y0
+        for tx, ty in path:
+            steps = max(2, int(max(abs(tx - cx), abs(ty - cy)) / 12))
+            for i in range(1, steps + 1):
+                motion(cx + (tx - cx) * i / steps, cy + (ty - cy) * i / steps)
+                time.sleep(dt)
+            cx, cy = tx, ty
+    finally:
+        button(1, False)
 
 
 def report(label, region, base):
