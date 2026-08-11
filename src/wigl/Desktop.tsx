@@ -746,6 +746,12 @@ export const Desktop = ({
         frozen: false,
       };
       setDragId(id);
+      // A fast drag sweeps the pointer across other widgets' content, which
+      // is selectable (see App.css) — the browser reads that as "extend a
+      // selection" and highlights whatever it passed over. The .dragging
+      // class turns selection off desktop-wide for the duration; this clears
+      // anything the gesture already managed to select before it applied.
+      window.getSelection()?.removeAllRanges();
       setGhostCell({ ...item });
       moveFieldCursor(e.clientX, e.clientY);
       showGhost(item.col, item.row, item.w, item.h);
@@ -926,7 +932,7 @@ export const Desktop = ({
 
   return (
     <div
-      className="wigl-desktop"
+      className={`wigl-desktop${dragId ? " dragging" : ""}`}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}

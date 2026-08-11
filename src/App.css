@@ -140,6 +140,19 @@ html.wigl-windowed #root {
   user-select: text;
   -webkit-user-select: text;
 }
+
+/* ...except while a widget is actually being dragged. A fast drag moves the
+   pointer across other widgets' content between events, and the browser
+   reads that as extending a text selection — so the gesture leaves chunks of
+   the widgets it flew over highlighted. Slow drags don't show it because the
+   pointer never leaves the dragged card. Selection goes off desktop-wide for
+   the duration of the drag and comes straight back on drop (Desktop.tsx adds
+   .dragging while dragId is set, and clears any in-flight selection there).
+   Specificity beats the opt-in rule above, so no !important needed. */
+.wigl-desktop.dragging [data-wigl-widget] > :not([data-widget-header]) {
+  user-select: none;
+  -webkit-user-select: none;
+}
 .wigl-widget.lifted {
   transition: filter 0.25s ease;
   z-index: 10;

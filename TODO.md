@@ -1,11 +1,13 @@
 ## Linux
 
-- [x] Windowed-mode interactive flows verified — drag/drop, `useStorage` read/write, the per-widget error boundary, and the repos widget's Linux shell paths (`xdg-open`, VS Code CLI) all confirmed working, via headless X11 automation (XTest synthetic input + window screenshots, not a human on real hardware — this box is X11, not Wayland/GNOME). Specifics:
-  - Dragging a widget by its grip persists the new `col`/`row` to `widget_layout` in sqlite and re-renders in the new spot with no residue at the old spot (see the ghosting item below for the one caveat).
-  - `useStorage` round-trips correctly once its data isn't stale (see the key-prefix bug fixed below).
-  - A widget made to throw during render shows an inline "widget crashed" message in its own grid cell; the rest of the desktop (other widgets, drag, etc.) keeps working.
-  - repos widget's `xdg-open` and VS Code CLI (`/usr/bin/code`) both invoke correctly on Ubuntu; the GitHub Desktop fallback correctly no-ops when `github-desktop` isn't installed (no official Linux build, as the code's own comment expects).
-  - Still open: this was X11, not real Wayland/GNOME — someone on actual Wayland hardware should still do a quick pass, since the windowed flow's WM/compositor behavior differs from X11's.
+- [ ] Real Wayland/GNOME pass. Everything verified so far was done on X11
+  (this box), including the windowed-flow interactive checks — drag/drop,
+  `useStorage` round-trips, the per-widget error boundary, and the repos
+  widget's `xdg-open`/VS Code CLI paths, all of which passed here. The
+  windowed flow exists *for* Wayland though, and its WM/compositor behavior
+  differs from X11's, so someone on actual Wayland hardware should redo the
+  pass. Specifically still unverified there: `WEBKIT_DISABLE_DMABUF_RENDERER=1`
+  (still applied on Wayland sessions) and the now-opaque windowed window.
 - [ ] Drag ghosting/residue — a measured cause was found and fixed on X11
   (`WEBKIT_DISABLE_DMABUF_RENDERER` is now set on Wayland sessions only;
   on X11 it was dropping the web process onto software compositing, ~83% vs
@@ -13,9 +15,7 @@
   `todo-ghosting.md` for the measurements, the disproven hypotheses, and the
   `scripts/dev/` harness. **Open**: owner confirmation that the visual
   symptom is actually gone — it has never been reproducible from synthetic
-  input — and the same pass on real GNOME/Wayland hardware, where
-  `WEBKIT_DISABLE_DMABUF_RENDERER=1` still applies and the windowed flow's
-  now-opaque window is still unverified.
+  input.
 - [ ] Heap corruption seen once: `malloc_consolidate(): unaligned fastbin
   chunk detected`, during scripted dragging *after* `631dd85` moved the
   cursor poller's GTK calls onto the main thread.
@@ -36,17 +36,6 @@
   ```
   If it needs to be pursued deliberately instead, the next step is a
   sanitizer/valgrind build (neither is installed here), not more dragging.
-- [x] Native HTML5 drag ghost: dragging on the desktop sometimes picked up
-  the browser's own drag image — a translucent snapshot of widget content
-  that follows the cursor, moves nothing, and drops nowhere. Widget dragging
-  is a pointer-event gesture, so the native drag codepath is never wanted;
-  `Desktop.tsx`'s root now calls `preventDefault()` on `dragstart`.
-- [x] Text selection during drag: dragging across the desktop selected text
-  out of whatever widgets the cursor passed over. `.wigl-widget` was opting
-  the *whole* widget (header included) back into `user-select: text` on top
-  of `.wigl-desktop`'s app-wide `none`. Now scoped in `App.css` to
-  `[data-wigl-widget] > :not([data-widget-header])` — grid and chrome are
-  unselectable, a widget's own content still selects and copies normally.
 - [ ] **New, unconfirmed**: the whole grid was once observed shifted down by
   roughly half the screen height — still functional, just offset — after
   switching to Ubuntu's Activities overview during a long drag session.
