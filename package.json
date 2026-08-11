@@ -27,6 +27,7 @@
     "widget:install": "NODE_ENV=production bun scripts/widget.ts install",
     "widget:list": "bun scripts/widget.ts list",
     "widget:rm": "bun scripts/widget.ts rm",
+    "widget:devkit": "bun scripts/widget.ts devkit",
     "widget:types": "tsc -p tsconfig.types.json",
     "widget:check": "NODE_ENV=production bun scripts/widget.ts check"
   },

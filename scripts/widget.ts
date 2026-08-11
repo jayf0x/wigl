@@ -25,29 +25,54 @@
  * keeps exactly one React in the process, and it's what makes permissions
  * enforceable rather than decorative.
  */
-import { mkdir, readdir, rm, stat } from "node:fs/promises";
+import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { HOST_MODULE_IDS } from "../src/wigl/plugins/host-modules";
 import { RESERVED_PLUGIN_IDS, resolvePluginConfig } from "../src/wigl/plugins/types";
 
-const WIDGETS_ROOT = "wigl-widgets";
-const NON_WIDGET_DIRS = new Set(["types"]);
+// Override for a widgets folder that lives outside this repo (a personal
+// widget stash, or the e2e suite under scripts/e2e/ proving the tooling
+// isn't secretly repo-root-coupled — see scripts/e2e/README.md). Only the
+// no-arg "every widget" sweep reads this; `widget:build <dir>`/`widget:install
+// <dir>` already take any path, in or out of the repo, with no override needed.
+const WIDGETS_ROOT = resolve(process.env.WIGL_WIDGETS_ROOT ?? "wigl-widgets");
+// "types": widget:types' generated .d.ts output. "node_modules": present at
+// widgets-root level only when a devkit's react type deps were copied
+// alongside it (widget:devkit, see scripts/e2e/README.md) — a widget's own
+// deps live inside its own folder, never at the root.
+const NON_WIDGET_DIRS = new Set(["types", "node_modules"]);
 // A leading "_" opts a wigl-widgets/ folder out of discovery/build entirely —
 // e.g. `_qa-color`, a dev-only QA surface with no reason to ship.
 
 // Mirrors Tauri's `appDataDir()` for this app's identifier. Kept in sync
 // with `src/config/app.ts` by reading the same source of truth Tauri does.
+// `WIGL_APP_DATA_DIR` overrides the whole thing — the e2e suite sets it to a
+// throwaway temp dir so a test install never touches the real app's plugins.
 const identifier = (await Bun.file("src-tauri/tauri.conf.json").json()).identifier as string;
-const appDataDir = () =>
-  process.platform === "darwin"
-    ? join(homedir(), "Library", "Application Support", identifier)
-    : join(process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"), identifier);
+const appDataDir = () => {
+  if (process.env.WIGL_APP_DATA_DIR) return process.env.WIGL_APP_DATA_DIR;
+  if (process.platform === "darwin") return join(homedir(), "Library", "Application Support", identifier);
+  if (process.platform === "win32") return join(process.env.APPDATA || join(homedir(), "AppData", "Roaming"), identifier);
+  return join(process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"), identifier);
+};
 const installRoot = () => join(appDataDir(), "plugins");
 
 const die = (msg: string): never => {
   console.error(`✗ ${msg}`);
   process.exit(1);
+};
+
+/** Every path a command touches ultimately comes from a CLI arg or the
+ * `WIGL_WIDGETS_ROOT` env var — either can point at a typo'd or not-yet-created
+ * path. Failing loudly here beats the alternative: `readdir`/`Bun.file` calls
+ * further down silently seeing "nothing there" and reporting it as "0 widgets
+ * found" or "no entry to build", which reads like an empty-but-valid state
+ * instead of the misconfiguration it actually is. */
+const requireDirExists = async (dir: string, what: string) => {
+  const s = await stat(dir).catch(() => null);
+  if (!s) die(`${what} "${dir}" does not exist`);
+  if (!s.isDirectory()) die(`${what} "${dir}" is not a directory`);
 };
 
 /** Bun picks the JSX transform (`jsx` vs `jsxDEV`) and resolves React's
@@ -99,6 +124,7 @@ const hostExternals = {
 
 const build = async (dir: string) => {
   requireProductionEnv("build");
+  await requireDirExists(dir, "widget directory");
   const config = await readWidgetConfig(dir);
   const entrySrc = findEntrySource(dir);
   if (!entrySrc) {
@@ -149,6 +175,7 @@ const build = async (dir: string) => {
 const cssSibling = (jsPath: string) => jsPath.replace(/\.js$/, ".css");
 
 const install = async (dir: string) => {
+  await requireDirExists(dir, "widget directory");
   const config = await readWidgetConfig(dir);
   const built = findEntrySource(dir) ? await build(dir) : config;
   const entryPath = join(dir, built.entry);
@@ -177,10 +204,16 @@ const install = async (dir: string) => {
  * used when `build`/`install` are called with no dir so "do it to every
  * widget" is one command instead of one per folder. */
 const allWidgetDirs = async (): Promise<string[]> => {
+  await requireDirExists(
+    WIDGETS_ROOT,
+    process.env.WIGL_WIDGETS_ROOT ? "WIGL_WIDGETS_ROOT" : "widgets root",
+  );
   const entries = await readdir(WIDGETS_ROOT, { withFileTypes: true });
-  return entries
+  const dirs = entries
     .filter((e) => e.isDirectory() && !NON_WIDGET_DIRS.has(e.name) && !e.name.startsWith("_"))
     .map((e) => resolve(WIDGETS_ROOT, e.name));
+  if (!dirs.length) console.warn(`⚠ no widget folders found under "${WIDGETS_ROOT}"`);
+  return dirs;
 };
 
 /** Removes any installed plugin whose source folder no longer qualifies —
@@ -275,6 +308,50 @@ const check = async (dir: string) => {
   console.log(`  permissions declared: ${config.permissions.join(", ") || "none"}`);
 };
 
+/** Exports what an out-of-repo widget folder needs to typecheck the same way
+ * `wigl-widgets/` does: a fresh `types/` (regenerated, since a stale one
+ * would silently typecheck against an outdated host API) plus the tsconfig
+ * that points `@/*` at it. Copy destination becomes a drop-in root — put
+ * widget folders directly under it and `tsc -p <dest> --noEmit` typechecks
+ * them exactly like `bun run typecheck:widgets` does in-repo. This is the
+ * actual mechanism the e2e suite exercises (scripts/e2e/README.md) — not a
+ * test-only shim, since a widget author working outside this repo needs the
+ * same export to typecheck against at all (see docs/widgets.md). */
+const devkit = async (dest: string) => {
+  const destResolved = resolve(dest);
+  await mkdir(destResolved, { recursive: true });
+  console.log("regenerating widget types (bun run widget:types)...");
+  const proc = Bun.spawn(["bun", "run", "widget:types"], { stdio: ["inherit", "inherit", "inherit"] });
+  if ((await proc.exited) !== 0) die("widget:types failed — fix the host API typecheck before exporting a devkit");
+
+  await cp("wigl-widgets/tsconfig.json", join(destResolved, "tsconfig.json"));
+  await rm(join(destResolved, "types"), { recursive: true, force: true });
+  await cp("wigl-widgets/types", join(destResolved, "types"), { recursive: true });
+
+  // `wigl-widgets/tsconfig.json` resolves bare "react"/"react/jsx-runtime"
+  // (every generated .d.ts under types/ that touches a component prop needs
+  // it, and the `jsx: "react-jsx"` compiler option needs it for every .tsx
+  // file) by walking up from its own location through ancestor node_modules
+  // — which finds this repo's `@types/react` for free only because
+  // wigl-widgets/ lives inside the repo. Moved anywhere else, that walk hits
+  // nothing and every widget fails to typecheck with "This JSX tag requires
+  // the module path 'react/jsx-runtime' to exist" even though the widget
+  // itself has no error — a real bug this e2e suite (scripts/e2e/) caught.
+  // Vendoring the exact same `@types/react` (+ its one dependency,
+  // `csstype`) this repo is pinned to fixes it without asking a widget
+  // author to separately `bun install` anything, and guarantees the types
+  // are the same version the host actually serves at runtime.
+  for (const pkg of [join("@types", "react"), "csstype"]) {
+    const src = join("node_modules", pkg);
+    if (await Bun.file(join(src, "package.json")).exists()) {
+      await rm(join(destResolved, "node_modules", pkg), { recursive: true, force: true });
+      await cp(src, join(destResolved, "node_modules", pkg), { recursive: true });
+    }
+  }
+  console.log(`✓ devkit exported to ${destResolved} (tsconfig.json + types/ + react type deps)`);
+  console.log(`  typecheck widgets placed there with: tsc -p ${destResolved} --noEmit`);
+};
+
 const list = async () => {
   const root = installRoot();
   let entries: string[] = [];
@@ -334,6 +411,9 @@ switch (cmd) {
   case "rm":
     await remove(arg ?? die("usage: widget rm <id>"));
     break;
+  case "devkit":
+    await devkit(arg ?? die("usage: widget devkit <dest-dir>"));
+    break;
   default:
-    die("usage: widget <build|check|install|list|rm> [dir|id]");
+    die("usage: widget <build|check|install|list|rm|devkit> [dir|id]");
 }

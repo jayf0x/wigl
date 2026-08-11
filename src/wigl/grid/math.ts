@@ -38,23 +38,30 @@ export const collides = (a: GridItem, b: GridItem) =>
   a.row < b.row + b.h &&
   b.row < a.row + a.h;
 
-/** Push everything colliding with `moved` downward, then fully re-compact
- * every other item into the first free top-left slot (row-major scan) —
- * not just straight up, so a widget fills a horizontal gap instead of every
- * item stacking into one wasted-width column. Mutates `items`. */
+/** Push everything colliding with `moved` downward (cascading), then
+ * re-compact only the items that were actually pushed into the first free
+ * top-left slot (row-major scan) — not just straight up, so a widget fills
+ * a horizontal gap instead of every item stacking into one wasted-width
+ * column. Items never touched by the collision cascade keep their exact
+ * position, so dragging through empty space never reshuffles unrelated
+ * widgets. Mutates `items`. */
 export const reflow = (items: GridItem[], moved: GridItem, cols: number) => {
+  const pushed = new Set<GridItem>();
   const queue = [moved];
   while (queue.length) {
     const m = queue.shift()!;
     for (const it of items) {
-      if (it === moved || !collides(it, m)) continue;
+      if (it === moved || pushed.has(it) || !collides(it, m)) continue;
       it.row = m.row + m.h;
+      pushed.add(it);
       queue.push(it);
     }
   }
-  const placed = [moved];
-  const rest = items.filter((it) => it !== moved && !it.hidden).sort((a, b) => a.row - b.row || a.col - b.col);
-  for (const it of rest) {
+  if (pushed.size === 0) return;
+  const untouched = items.filter((it) => it !== moved && !pushed.has(it) && !it.hidden);
+  const placed = [moved, ...untouched];
+  const toPlace = [...pushed].sort((a, b) => a.row - b.row || a.col - b.col);
+  for (const it of toPlace) {
     const pos = autoPlace(placed, it.w, it.h, cols);
     it.col = pos.col;
     it.row = pos.row;
