@@ -2,10 +2,11 @@
 
 Proves the widget CLI (`scripts/widget.ts`) isn't secretly coupled to
 `wigl-widgets/` living inside this repo — that a widget folder built,
-typechecked, and installed from some other location on disk behaves exactly
-like one built in place. This was a real, previously-untested assumption:
-the first run of this suite caught two genuine bugs (both now fixed in
-`scripts/widget.ts`):
+typechecked, and installed from some other location on disk (and via a
+process launched from some other *working directory*, a separate axis — see
+finding 3) behaves exactly like one built in place. This was a real,
+previously-untested assumption: the first run of this suite caught three
+genuine bugs (all now fixed in `scripts/widget.ts`):
 
 1. **Typechecking a widget outside the repo failed** — `tsc` resolves bare
    `"react"`/`"react/jsx-runtime"` by walking up through ancestor
@@ -19,6 +20,20 @@ the first run of this suite caught two genuine bugs (both now fixed in
    a devkit-seeded `node_modules/` at that same root qualified. Fixed by
    adding `"node_modules"` to `NON_WIDGET_DIRS` in `scripts/widget.ts`
    (same reservation `"types"` already had).
+3. **The CLI itself only worked by accident when launched with `cwd` ==
+   repo root** — every repo-relative path in `scripts/widget.ts`
+   (`"wigl-widgets"`, `"src-tauri/tauri.conf.json"`, the devkit's
+   `"node_modules"` source) was a bare string resolved against
+   `process.cwd()`. That's true under `bun run widget:*` (bun always sets
+   cwd to the package.json dir), which is why it went unnoticed, but breaks
+   for any other invocation path — a global alias run after `cd ~`, say.
+   Fixed by resolving every one of those against `resolve(import.meta.dir,
+   "..")` instead (mirrors `scripts/wigl.ts`, which already did this
+   correctly). The "invoked from an unrelated working directory" describe
+   block in `widgets-root.test.ts` is what caught and now guards this —
+   every widget CLI arg (`build <dir>`, `install <dir>`) still resolves
+   relative to the *caller's* cwd, as it should; only the script's own
+   internal repo-relative constants changed.
 
 ## Running it
 
@@ -83,6 +98,19 @@ Both are read by `scripts/widget.ts` and only matter when set — normal
   subcommand, add a scenario here exercising it against an external root
   before considering it done; that's the whole point of this suite existing
   as a separate thing from `wigl-widgets/*/tests/`.
+
+## What `widget:check` does and doesn't prove
+
+The "well-formed widget" scenario's `check` step (and this suite generally)
+renders a widget with React's `renderToString` — that's a headless
+correctness probe, not real SSR. wigl has no server and never will; nothing
+here is testing a server-rendering use case. The reason it matters is
+narrower: `useEffect` never fires under `renderToString`, so a widget's
+actual `setInterval`/shell-command/`useStorage` data-fetch path is untested
+by `widget:check` — only import-time crashes, jsx-runtime mismatches, an
+undeclared host module, and a first-render throw. A widget's live behavior
+(does the data actually load, does the poll actually tick) still needs a
+by-hand check per `docs/debugging.md`, same as before this suite existed.
 
 ## Platform scope
 

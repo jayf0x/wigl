@@ -20,6 +20,7 @@ import {
   makeTempDir,
   readInstalled,
   runWidgetCli,
+  runWidgetCliFrom,
   typecheck,
 } from "./helpers";
 
@@ -134,6 +135,58 @@ describe("WIGL_WIDGETS_ROOT sweep against an external root", () => {
     expect(install.code).toBe(0);
     expect(await exists(join(appData, "plugins", "good-widget"))).toBe(true);
     expect(await exists(join(appData, "plugins", "_skip-me"))).toBe(false);
+  }, 30_000);
+});
+
+describe("invoked from an unrelated working directory", () => {
+  // Moving the widgets is only half the relocation story — the CLI itself
+  // has to not assume it's being launched with cwd == repo root either. A
+  // real global invocation (a shell alias, a script run after `cd ~`) won't
+  // have that guarantee the way `bun run widget:*` does. This caught a real
+  // bug: scripts/widget.ts used bare relative strings ("wigl-widgets",
+  // "src-tauri/tauri.conf.json", ...) that only worked by accident when cwd
+  // happened to be the repo root — fixed by resolving them against the
+  // script's own location (import.meta.dir) instead. Every test in this
+  // block uses runWidgetCliFrom with cwd pointed at a directory that has
+  // nothing to do with this repo, proving that fix holds.
+  test("widget:devkit works with cwd elsewhere", async () => {
+    const elsewhere = await makeTempDir("wigl-e2e-elsewhere-");
+    const dest = await makeTempDir("wigl-e2e-foreign-devkit-");
+    const result = await runWidgetCliFrom(elsewhere, ["devkit", dest]);
+    expect(result.code, result.stdout + result.stderr).toBe(0);
+    expect(await exists(join(dest, "tsconfig.json"))).toBe(true);
+    expect(await exists(join(dest, "types"))).toBe(true);
+  }, 30_000);
+
+  test("build/check/install of an absolute-path widget work with cwd elsewhere", async () => {
+    const elsewhere = await makeTempDir("wigl-e2e-elsewhere-");
+    const root = await makeScenarioRoot(devkitDir, ["good-widget"]);
+    const widgetDir = join(root, "good-widget");
+    const appData = await makeTempDir("wigl-e2e-appdata-foreign-");
+
+    const build = await runWidgetCliFrom(elsewhere, ["build", widgetDir]);
+    expect(build.code, build.stdout + build.stderr).toBe(0);
+
+    const check = await runWidgetCliFrom(elsewhere, ["check", widgetDir]);
+    expect(check.code, check.stdout + check.stderr).toBe(0);
+
+    const install = await runWidgetCliFrom(elsewhere, ["install", widgetDir], {
+      env: { WIGL_APP_DATA_DIR: appData },
+    });
+    expect(install.code, install.stdout + install.stderr).toBe(0);
+    expect(await exists(join(appData, "plugins", "good-widget"))).toBe(true);
+  }, 30_000);
+
+  test("the no-arg WIGL_WIDGETS_ROOT sweep works with cwd elsewhere", async () => {
+    const elsewhere = await makeTempDir("wigl-e2e-elsewhere-");
+    const root = await makeScenarioRoot(devkitDir, ["good-widget"]);
+    const appData = await makeTempDir("wigl-e2e-appdata-foreign-sweep-");
+
+    const install = await runWidgetCliFrom(elsewhere, ["install"], {
+      env: { WIGL_WIDGETS_ROOT: root, WIGL_APP_DATA_DIR: appData },
+    });
+    expect(install.code, install.stdout + install.stderr).toBe(0);
+    expect(await exists(join(appData, "plugins", "good-widget"))).toBe(true);
   }, 30_000);
 });
 

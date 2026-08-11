@@ -31,12 +31,23 @@ import { basename, dirname, join, resolve } from "node:path";
 import { HOST_MODULE_IDS } from "../src/wigl/plugins/host-modules";
 import { RESERVED_PLUGIN_IDS, resolvePluginConfig } from "../src/wigl/plugins/types";
 
+// scripts/widget.ts -> repo root. Every repo-relative path below is resolved
+// against *this*, not `process.cwd()` — a bare relative string like
+// "wigl-widgets" only happens to work when invoked via `bun run widget:*`
+// (which always sets cwd to the package.json's own dir); called any other
+// way (a global alias, a different starting directory) it would silently
+// resolve against wherever the caller happened to be instead. `scripts/wigl.ts`
+// already gets this right; this mirrors it.
+const repoRoot = resolve(import.meta.dir, "..");
+
 // Override for a widgets folder that lives outside this repo (a personal
 // widget stash, or the e2e suite under scripts/e2e/ proving the tooling
 // isn't secretly repo-root-coupled — see scripts/e2e/README.md). Only the
 // no-arg "every widget" sweep reads this; `widget:build <dir>`/`widget:install
 // <dir>` already take any path, in or out of the repo, with no override needed.
-const WIDGETS_ROOT = resolve(process.env.WIGL_WIDGETS_ROOT ?? "wigl-widgets");
+// A relative override is resolved against repoRoot (not cwd) for the same
+// reason as everything else here; an absolute override is used as-is.
+const WIDGETS_ROOT = resolve(repoRoot, process.env.WIGL_WIDGETS_ROOT ?? "wigl-widgets");
 // "types": widget:types' generated .d.ts output. "node_modules": present at
 // widgets-root level only when a devkit's react type deps were copied
 // alongside it (widget:devkit, see scripts/e2e/README.md) — a widget's own
@@ -49,7 +60,7 @@ const NON_WIDGET_DIRS = new Set(["types", "node_modules"]);
 // with `src/config/app.ts` by reading the same source of truth Tauri does.
 // `WIGL_APP_DATA_DIR` overrides the whole thing — the e2e suite sets it to a
 // throwaway temp dir so a test install never touches the real app's plugins.
-const identifier = (await Bun.file("src-tauri/tauri.conf.json").json()).identifier as string;
+const identifier = (await Bun.file(join(repoRoot, "src-tauri/tauri.conf.json")).json()).identifier as string;
 const appDataDir = () => {
   if (process.env.WIGL_APP_DATA_DIR) return process.env.WIGL_APP_DATA_DIR;
   if (process.platform === "darwin") return join(homedir(), "Library", "Application Support", identifier);
@@ -244,7 +255,17 @@ const pruneStaleInstalls = async (currentIds: Set<string>) => {
  * while the widget crashed on its first render with "dispatcher.getOwner is
  * not a function" — a bundled copy of React's dev jsx runtime meeting the
  * host's React. Anything that doesn't actually render can't catch that whole
- * class of bug, which is the main risk this boundary carries. */
+ * class of bug, which is the main risk this boundary carries.
+ *
+ * This is `renderToString`, not real SSR — wigl has no server, this is a
+ * headless correctness probe borrowing React's server renderer because it's
+ * the cheapest way to force a first render outside a browser/webview.
+ * `useEffect` never fires under it, so a widget's actual `setInterval`/shell-
+ * command/`useStorage` data-fetch path is never exercised here — only
+ * import-time crashes, jsx-runtime mismatches, an undeclared host module, and
+ * a first-render throw. That gap is fine to leave open (see docs/debugging.md
+ * for how a widget's live behavior actually gets verified) rather than
+ * pulling in a DOM shim to close it. */
 const check = async (dir: string) => {
   requireProductionEnv("check");
   const config = await readWidgetConfig(dir);
@@ -321,12 +342,15 @@ const devkit = async (dest: string) => {
   const destResolved = resolve(dest);
   await mkdir(destResolved, { recursive: true });
   console.log("regenerating widget types (bun run widget:types)...");
-  const proc = Bun.spawn(["bun", "run", "widget:types"], { stdio: ["inherit", "inherit", "inherit"] });
+  // cwd: repoRoot, not inherited — `bun run widget:types` needs package.json
+  // underfoot, which is only guaranteed at the repo root, not wherever this
+  // process itself happened to be launched from.
+  const proc = Bun.spawn(["bun", "run", "widget:types"], { cwd: repoRoot, stdio: ["inherit", "inherit", "inherit"] });
   if ((await proc.exited) !== 0) die("widget:types failed — fix the host API typecheck before exporting a devkit");
 
-  await cp("wigl-widgets/tsconfig.json", join(destResolved, "tsconfig.json"));
+  await cp(join(repoRoot, "wigl-widgets/tsconfig.json"), join(destResolved, "tsconfig.json"));
   await rm(join(destResolved, "types"), { recursive: true, force: true });
-  await cp("wigl-widgets/types", join(destResolved, "types"), { recursive: true });
+  await cp(join(repoRoot, "wigl-widgets/types"), join(destResolved, "types"), { recursive: true });
 
   // `wigl-widgets/tsconfig.json` resolves bare "react"/"react/jsx-runtime"
   // (every generated .d.ts under types/ that touches a component prop needs
@@ -342,7 +366,7 @@ const devkit = async (dest: string) => {
   // author to separately `bun install` anything, and guarantees the types
   // are the same version the host actually serves at runtime.
   for (const pkg of [join("@types", "react"), "csstype"]) {
-    const src = join("node_modules", pkg);
+    const src = join(repoRoot, "node_modules", pkg);
     if (await Bun.file(join(src, "package.json")).exists()) {
       await rm(join(destResolved, "node_modules", pkg), { recursive: true, force: true });
       await cp(src, join(destResolved, "node_modules", pkg), { recursive: true });

@@ -69,6 +69,34 @@ export const runWidgetCli = async (
   return { code, stdout, stderr };
 };
 
+/** Same as `runWidgetCli`, but lets the caller pick `cwd` and invokes the
+ * script by its absolute path instead of the repo-relative `scripts/widget.ts`
+ * — this is what actually changes between "run via `bun run widget:*`" and
+ * "run from wherever the user's shell happens to be" (e.g. a global alias
+ * invoked after `cd ~`). Exists specifically to prove `scripts/widget.ts`'s
+ * own repo-relative paths (tauri.conf.json, wigl-widgets/tsconfig.json,
+ * node_modules) resolve against the script's location, not the caller's cwd
+ * — see the "invoked from an unrelated cwd" describe block below. */
+export const runWidgetCliFrom = async (
+  cwd: string,
+  args: string[],
+  opts: { env?: Record<string, string | undefined> } = {},
+): Promise<CliResult> => {
+  const scriptPath = join(repoRoot, "scripts", "widget.ts");
+  const proc = Bun.spawn(["bun", scriptPath, ...args], {
+    cwd,
+    env: { ...process.env, NODE_ENV: "production", ...opts.env },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  return { code, stdout, stderr };
+};
+
 /** `tsc -p <dir> --noEmit` against the repo's own installed TypeScript (not
  * a global `tsc` — this must typecheck the same compiler version the repo
  * is pinned to). `<dir>` is expected to already contain a `tsconfig.json` +
