@@ -21,7 +21,7 @@ const SRC = join(ROOT, "src");
 const RE_FROM = /^(?:import|export)(?!\s+type\b)[^;\n]*?\bfrom\s+["']([^"']+)["']/gm;
 const RE_BARE = /^import\s+["']([^"']+)["']/gm;
 
-function isFile(path: string): boolean {
+const isFile = (path: string): boolean => {
   try {
     return lstatSync(path).isFile();
   } catch {
@@ -29,7 +29,7 @@ function isFile(path: string): boolean {
   }
 }
 
-function resolveLocal(spec: string, fromFile: string): string | null {
+const resolveLocal = (spec: string, fromFile: string): string | null => {
   let base: string;
   if (spec.startsWith("@/")) base = join(SRC, spec.slice(2));
   else if (spec.startsWith(".")) base = resolve(dirname(fromFile), spec);
@@ -40,14 +40,14 @@ function resolveLocal(spec: string, fromFile: string): string | null {
   return null;
 }
 
-function staticSpecifiers(text: string): string[] {
+const staticSpecifiers = (text: string): string[] => {
   const specs: string[] = [];
   for (const m of text.matchAll(RE_FROM)) specs.push(m[1]);
   for (const m of text.matchAll(RE_BARE)) specs.push(m[1]);
   return specs;
 }
 
-function traceEager(entry: string, watch: string[]) {
+const traceEager = (entry: string, watch: string[]) => {
   const seen = new Set<string>([entry]);
   const queue = [entry];
   const hits: { needle: string; spec: string; file: string }[] = [];

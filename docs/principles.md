@@ -50,6 +50,13 @@ forbids the accidental re-declaration `function` allows. The one exception
 is a React class component (error boundaries need `componentDidCatch`,
 which has no hook equivalent) — those stay `class`.
 
+This is the one rule in this file a machine can decide, so it's checked
+rather than trusted: `bun run check:style` (`scripts/check-style.ts`) fails on
+any `function` declaration under `src/`, `scripts/`, or `wigl-widgets/`.
+`src/components/ui/` is exempt — `bunx shadcn add` generates `export function`
+and will keep doing so. Everything else in this file is judgment and stays
+prose; don't try to lint it.
+
 ## Name for what a thing does, not what it abbreviates to
 
 A reader should be able to guess a function's behavior from its name alone,

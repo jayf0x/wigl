@@ -40,7 +40,7 @@ const write = (events: CalendarEvent[]) =>
     [KEY, JSON.stringify(events)],
   );
 
-function parseDate(input: string): string {
+const parseDate = (input: string): string => {
   if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
   const m = input.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); // ponytail: DD/MM/YYYY assumed; swap if first part > 12
   if (m) {

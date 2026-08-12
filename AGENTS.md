@@ -30,7 +30,7 @@ If a task's outcome doesn't change any of those claims, there's nothing to updat
 
 | Task | Read first | Usually touch |
 |------|-----------|---------------|
-| Small tweak to an existing widget (UI, sorting, labels, icons) | nothing else | `wigl-widgets/<name>/index.tsx`, then `bun run widget:install wigl-widgets/<name>` |
+| Small tweak to an existing widget (UI, sorting, labels, icons) | nothing else | `wigl-widgets/<name>/index.tsx`, then `bun run widget:verify wigl-widgets/<name>` and `bun run widget:install wigl-widgets/<name>` |
 | Change what data a widget shows / how it's fetched | `docs/architecture.md` → "Data flow pattern" | the widget's `use<Name>.ts` hook and `<name>.config.ts` |
 | Add a new widget | `docs/widgets.md` (all of it), then read `wigl-widgets/calendar/` | a new `wigl-widgets/<name>/` folder — that's the only edit |
 | Change what a widget may import or which capability it needs | `docs/widgets.md` → "Build, install, and the plugin mechanism" | `src/wigl/plugins/host-modules.ts` + `registry.ts` |
@@ -55,11 +55,13 @@ If a task's outcome doesn't change any of those claims, there's nothing to updat
 
 ## Verify before claiming done
 
-Quick: `bun run typecheck`, then `bun run build`. Full app: `bun run verify` (`scripts/verify.sh`, branches on `uname`) — builds the debug app, kills any stale instance, relaunches, checks it's actually up (macOS: lists the OS windows via `scripts/winlist.swift`; Linux: process liveness + captured log, see `docs/debugging.md`'s "Verifying on Linux"), and greps for errors. `bun run kill` stops the app. Screenshots are unreliable here; `docs/debugging.md` has the full verification playbook, including the stale-bundle trap after mid-build edits.
+Quick: `bun run typecheck`, then `bun run build`. **Typecheck passing says nothing about whether a widget renders** — `bun run widget:verify` (all widgets, ~0.4s) or `bun run widget:verify wigl-widgets/<name>` builds and renders it headlessly through the real host module registry, catching jsx-runtime mismatches, an undeclared permission or host module, and first-render throws. A `PostToolUse` hook (`.claude/settings.json`) already runs it for any widget you edit and stays silent when it passes, so a failure appearing unprompted after an edit is that hook, not a stray command. Full app: `bun run verify` (`scripts/verify.sh`, branches on `uname`) — builds the debug app, kills any stale instance, relaunches, checks it's actually up (macOS: lists the OS windows via `scripts/winlist.swift`; Linux: process liveness + captured log, see `docs/debugging.md`'s "Verifying on Linux"), and greps for errors. `bun run kill` stops the app. Screenshots are unreliable here; `docs/debugging.md` has the full verification playbook, including the stale-bundle trap after mid-build edits.
 
 **After finishing any feature-sized request** (new/changed widget behavior, not a one-line tweak): end the turn by running `bun run verify` yourself, not just typecheck/build. The owner needs a freshly built, freshly relaunched app to visually QA — leaving a stale build running is the same as not finishing the task. Don't wait to be asked.
 
 For the owner's own fast build-and-look iteration (not for the agent to run unprompted), `bun run qa` / `bun run qa:app` (`scripts/qa.sh`) skip packaging and `verify`'s window/log checks — `qa` auto-detects overlay vs. windowed mode the same way the app itself does (see `docs/architecture.md`), `qa:app` forces windowed mode everywhere so both flows are QA-able on one machine.
+
+The end-of-turn ritual above is also packaged as the `/wigl-ship` skill (`.claude/skills/wigl-ship/`) — same steps, in order, without relying on anyone remembering them from prose.
 
 New debug/CLI scripts that operate on the whole repo (widget data scanners, seed scripts, anything you'd otherwise inline as a big shell string) go in `scripts/` and get a one-line root `package.json` entry, same shape as `tw-colors`/`check:eager`. A script that only makes sense for one widget (e.g. the calendar CLI) lives inside that widget's own folder instead, with its own `scripts` entry in *that* folder's `package.json` (invoked as `bun run --cwd wigl-widgets/<name> <script>`) — root `package.json` stays a thin index of repo-wide commands, not a registry of every widget's tooling.
 

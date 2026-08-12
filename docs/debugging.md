@@ -73,6 +73,8 @@ The same symptom was later reported in the *overlay* flow on X11, where the opaq
 
 Neither macOS's `log show` nor `verify.sh`'s captured stdout/stderr sees anything printed to a webview's own devtools console — that's a separate stream Rust never touches. A React crash (including a minified "Minified React error #NNN" message) can leave a monitor window blank with `bun run verify` still reporting "log errors: none", because verify only checks the native process's output, not the webview's console.
 
+The cheap move is not to need the console at all: `bun run widget:verify` builds and renders every widget headlessly outside any webview, so an import-time crash, a jsx-runtime mismatch, an undeclared permission, or a first-render throw shows up as a failed command with a real stack — no app, no window, no console. `bun run verify` runs it too (after installing), which is why a widget crash now fails verify instead of leaving it green. It runs no effects, so anything that only happens after mount still needs the app.
+
 Two things narrow this down:
 - `src/main.tsx` installs `window.onerror`/`unhandledrejection` handlers that `console.error` with a `[wigl]` prefix, and `AppErrorBoundary` (`src/App.tsx`, one level above `<Desktop>`) plus each widget's own `WidgetErrorBoundary` (`Desktop.tsx`) turn a render crash into a visible on-screen message instead of a blank window — check what's on screen for a "wigl crashed: ..." / "widget "..." crashed" line before assuming the window has no error to report.
 - To get the *un-minified* React error message, run against a dev bundle instead of a production one: `bun run tauri dev` (uses `beforeDevCommand: bun run dev`, an unminified Vite dev build) rather than `bun run tauri build`/`verify` (uses `bun run build`, minified). Minified React errors are only a numbered pointer to https://react.dev/errors/NNN — the dev bundle gives the actual message and component stack directly.
@@ -121,6 +123,8 @@ default when it doesn't look right.
 Tauri's `core:default` capability is narrower than it looks — window position read/write, for example, is *not* included and must be added explicitly to `src-tauri/capabilities/default.json` (see `docs/architecture.md`'s permissions section). A missing permission on plugin APIs (window, shell, fs, ...) generally does not throw a catchable JS error from `await` — check the unified log (`log show`, above) for "not allowed"/"denied" rather than assuming your JS logic is wrong.
 
 `shell:allow-execute` only registers `sh` and `sqlite3` (see `docs/architecture.md`'s permissions section) — run new shell-backed features as `sh -c "..."` rather than adding a new binary's `name`/`cmd` entry.
+
+A widget's *own* permissions (`package.json` → `wigl.permissions`) are a separate layer from Tauri's, and a missing one there fails loudly rather than silently: `bun run widget:verify <dir>` renders the widget through the real registry and reports e.g. `used useStorage from "@/wigl/hooks" without the "storage" permission`. Check that before going near `log show` — it's a one-command answer for anything the host registry gates.
 
 ## DMG bundling can fail in sandboxed/headless environments
 

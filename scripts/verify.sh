@@ -24,6 +24,14 @@ fi
 # every widget first so verify actually reflects widget source changes too.
 NODE_ENV=production bun scripts/widget.ts install
 
+# ...then render each one headlessly against the real host module registry.
+# The app's own log (grepped further down) only sees a widget fail if the
+# webview reports it, and a widget that throws on first render is caught by
+# Desktop.tsx's per-widget error boundary — the app stays up, verify stays
+# green, and the only symptom is a widget that isn't there. This is the step
+# that makes that loud. ~0.4s for every widget.
+NODE_ENV=production bun scripts/widget.ts check
+
 if [ "$(uname -s)" = "Darwin" ]; then
   bun run tauri build --debug --bundles app
 

@@ -48,14 +48,15 @@ This is the loading/build *mechanism* a widget is built and shipped through — 
 
 ```
 bun run widget:build   wigl-widgets/calendar   # source → .wigl/index.js
-bun run widget:check   wigl-widgets/calendar   # load it headlessly, report host modules used
+bun run widget:check   wigl-widgets/calendar   # render what's already built, report host modules used
+bun run widget:verify  wigl-widgets/calendar   # build, then check — the edit loop
 bun run widget:install wigl-widgets/calendar   # build (if there's source), then copy into app data
 bun run widget:add     <git-url> [id]          # clone, build, install — no wigl-widgets/ checkout needed
 bun run widget:list
 bun run widget:rm      calendar
 ```
 
-Omit the dir argument on `build`/`install` to sweep every `wigl-widgets/<name>/` folder at once (a folder starting with `_`, e.g. `_qa-color`, is skipped by the no-arg sweep but still buildable/installable by name). `bun run qa`/`bun run verify` already call `widget:install` with no argument before launching. **Renaming or deleting a folder does not remove its old installed copy** — run `bun run widget:rm <old-id>` yourself as part of any rename.
+Omit the dir argument on `build`/`check`/`verify`/`install` to sweep every `wigl-widgets/<name>/` folder at once (a folder starting with `_`, e.g. `_qa-color`, is skipped by the no-arg sweep but still buildable/installable by name). `bun run qa`/`bun run verify` already call `widget:install` with no argument before launching. **Renaming or deleting a folder does not remove its old installed copy** — run `bun run widget:rm <old-id>` yourself as part of any rename.
 
 `widget:add` clones the URL into a throwaway temp dir (named after the target id, so no separate override path is needed — `id` defaults to the URL's last path segment, minus a trailing `.git`), then runs the normal build+install path on it — the clone itself is discarded once installed, nothing is vendored into this repo. This only runs under `bun` (real `git`, `node:fs`, `Bun.build`), so it's a CLI-only capability — the Settings modal's Widgets section can't call into it (see that file's own comment for why). The Settings modal has its own "Install from a URL" field instead (`src/wigl/settings/sections/widgets.tsx`): it clones and copies through `sh`/`git` the same way this section's other operations do, but since a webview has no TypeScript bundler it only works for a widget whose repo already ships a prebuilt entry (`.wigl/index.js` or a package.json `main`) — one with only `index.tsx` source still needs `widget:add` from a terminal.
 
@@ -71,6 +72,8 @@ Omit the dir argument on `build`/`install` to sweep every `wigl-widgets/<name>/`
 **A widget can also ship `settingsSection.tsx`**, a sibling of `index.tsx` — built to `settingsSection.js` and installed alongside `index.js` the same way as the CSS sibling above, but loaded and registered independently of the widget's component (see "Contributing a Settings section" below).
 
 **`widget:build`/`widget:check` require `NODE_ENV=production`** (the `widget:*` package scripts already set it) — Bun resolves React's dev-vs-production build from `NODE_ENV` at process start, and a `jsxDEV` bundle meeting the host's production React crashes with "dispatcher.getOwner is not a function". `widget:check` matters because a webview's console is invisible to `bun run verify` — it loads the built bundle against the host's **real** modules and **renders it** with `renderToString`, which is also how it enforces the `<Widget>` export contract (the rendered markup must include `data-wigl-widget`). This is a headless correctness probe borrowing React's server renderer, not real SSR (wigl has no server) — `useEffect` never fires under it, so a widget's actual data-fetch path is out of scope for `widget:check`; see `docs/debugging.md` for how a widget's live behavior gets verified instead.
+
+The require it hands the bundle is the app's own `createPluginRequire`, so a widget that reads a gated export it never declared (`useStorage` without `storage`) fails the check with the same message the app would show, instead of passing here and failing on the owner's screen. `widget:verify` is `build` + `check` in one command — the same check against freshly compiled output, since checking a stale `.wigl/` reports a pass for source that was never compiled. `bun run verify` runs `widget:check` after installing, so a widget that crashes on first render fails the whole verify rather than being quietly swallowed by `Desktop.tsx`'s per-widget error boundary; the repo's `PostToolUse` hook (`.claude/settings.json` → `scripts/hooks/verify-edited-widget.ts`) runs `widget:verify` for whichever widget was just edited, and prints nothing when it passes.
 
 **Typechecking** (`bun run typecheck:widgets`) resolves `@/...` against generated `.d.ts` under `wigl-widgets/types/` (`bun run widget:types`), never `../src` directly — a widget that only compiled by accident (deep-importing something the app's root tsconfig happened to resolve) fails here even if the build already passed, since the two check different things (specifier externalization vs. path resolution) — run both.
 

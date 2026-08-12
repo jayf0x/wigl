@@ -25,6 +25,7 @@
     "test:e2e": "bun run wigl test e2e",
     "tw-colors": "bun scripts/tw-colors.ts",
     "check:eager": "bun scripts/check-eager.ts",
+    "check:style": "bun scripts/check-style.ts",
     "typecheck:widgets": "tsc -p wigl-widgets --noEmit",
     "widget:build": "NODE_ENV=production bun scripts/widget.ts build",
     "widget:install": "NODE_ENV=production bun scripts/widget.ts install",
@@ -33,7 +34,8 @@
     "widget:devkit": "bun scripts/widget.ts devkit",
     "widget:types": "tsc -p tsconfig.types.json",
     "widget:check": "NODE_ENV=production bun scripts/widget.ts check",
-    "widget:add": "NODE_ENV=production bun scripts/widget.ts add"
+    "widget:add": "NODE_ENV=production bun scripts/widget.ts add",
+    "widget:verify": "NODE_ENV=production bun scripts/widget.ts verify"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
