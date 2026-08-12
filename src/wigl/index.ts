@@ -4,6 +4,7 @@
 // import { cn, isMacos, ... } from "@/wigl/utils". Widgets never deep-import
 // past these three barrels.
 export { Desktop } from "./Desktop";
+export { ErrorOverlay } from "./ErrorOverlay";
 export { TILING } from "./grid/config";
 export type { WidgetGridProps } from "./widget";
 export { Widget, WidgetHeader } from "./widget";

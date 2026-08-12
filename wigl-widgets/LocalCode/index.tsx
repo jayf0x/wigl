@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { PanelLeft } from "lucide-react";
-import { Widget } from "@/wigl";
+import { ErrorOverlay, Widget } from "@/wigl";
 import { useStorage } from "@/wigl/hooks";
 import { cn, homeDir } from "@/wigl/utils";
 import { Sidebar } from "./components/Sidebar";
@@ -21,9 +21,7 @@ const LocalCodeWidget = () => {
     STORAGE_KEYS.sidebarOpen,
     true,
   );
-  // `status`/`restart` stay unused until the shared error-overlay component
-  // exists (TODO.md) — `baseUrl` being null is what the header dot shows.
-  const { baseUrl } = useOpencodeServer(defaultDir || null);
+  const { status, baseUrl, restart } = useOpencodeServer(defaultDir || null);
   const { sessions, loading, createSession, renameSession, togglePin, deleteSession } =
     useSessions(baseUrl, defaultDir || null);
   const catalog = useModelCatalog(baseUrl);
@@ -106,27 +104,38 @@ const LocalCodeWidget = () => {
       }
     >
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <Sidebar
-          sessions={sessions}
-          activeID={activeID}
-          open={sidebarOpen}
-          loading={loading}
-          onSelect={setActiveID}
-          onCreate={handleCreate}
-          onRename={renameSession}
-          onTogglePin={togglePin}
-          onDelete={handleDelete}
-        />
-        <SessionPanel
-          baseUrl={baseUrl}
-          sessionID={activeID}
-          catalog={catalog}
-          housekeeper={housekeeper}
-          recentSessions={sessions}
-          sessionsLoading={loading}
-          onSelect={setActiveID}
-          onCreate={handleCreate}
-        />
+        {status === "offline" ? (
+          <ErrorOverlay
+            kind="known"
+            title="opencode server isn't running"
+            message="It failed to start — check that opencode is installed and reachable, then retry."
+            onRetry={restart}
+          />
+        ) : (
+          <>
+            <Sidebar
+              sessions={sessions}
+              activeID={activeID}
+              open={sidebarOpen}
+              loading={loading}
+              onSelect={setActiveID}
+              onCreate={handleCreate}
+              onRename={renameSession}
+              onTogglePin={togglePin}
+              onDelete={handleDelete}
+            />
+            <SessionPanel
+              baseUrl={baseUrl}
+              sessionID={activeID}
+              catalog={catalog}
+              housekeeper={housekeeper}
+              recentSessions={sessions}
+              sessionsLoading={loading}
+              onSelect={setActiveID}
+              onCreate={handleCreate}
+            />
+          </>
+        )}
       </div>
     </Widget>
   );
