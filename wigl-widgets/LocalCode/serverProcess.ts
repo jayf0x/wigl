@@ -4,6 +4,7 @@
 // server process serves every session this widget knows about, same as
 // `opencode serve` is meant to be used as a personal daemon.
 import { runCmdBackground } from "@/wigl/utils";
+import { clearRunningServer, findRunningServer, recordRunningServer } from "./serverLock";
 
 const PORT_RE = /listening on http:\/\/127\.0\.0\.1:(\d+)/;
 
@@ -33,8 +34,16 @@ export interface OpencodeServerHandle {
  * client asked for. Omitting `cwd` here would leave every session this
  * widget creates pinned to wherever the wigl app process's own cwd happens
  * to be (arbitrary, and not the directory the widget's UI shows/uses). */
-export const startOpencodeServer = (cwd: string, timeoutMs = 8000): Promise<OpencodeServerHandle> =>
-  new Promise((resolve, reject) => {
+export const startOpencodeServer = async (cwd: string, timeoutMs = 8000): Promise<OpencodeServerHandle> => {
+  // Another instance (this widget on a different monitor's realm — see
+  // serverLock.ts) may already have a `serve` process up for this same
+  // `cwd`. Reusing it keeps both instances on one session list instead of
+  // silently forking into two (backlog.md B7). `stop` is a no-op here: we
+  // didn't spawn this process, so we don't own killing it.
+  const running = await findRunningServer(cwd);
+  if (running) return { baseUrl: running, stop: async () => {} };
+
+  return new Promise((resolve, reject) => {
     let settled = false;
     let stopFn: (() => Promise<void>) | null = null;
     const timer = setTimeout(() => {
@@ -64,7 +73,12 @@ export const startOpencodeServer = (cwd: string, timeoutMs = 8000): Promise<Open
               settled = true;
               clearTimeout(timer);
               stopFn = stop;
-              resolve({ baseUrl: `http://127.0.0.1:${match[1]}`, stop });
+              const baseUrl = `http://127.0.0.1:${match[1]}`;
+              recordRunningServer(cwd, baseUrl).catch(() => {});
+              resolve({
+                baseUrl,
+                stop: () => clearRunningServer(cwd).catch(() => {}).then(stop),
+              });
             }
           },
           { cwd },
@@ -82,3 +96,4 @@ export const startOpencodeServer = (cwd: string, timeoutMs = 8000): Promise<Open
 
     tryCandidate(0);
   });
+};
