@@ -128,6 +128,19 @@ the primitive to reuse — don't add a second one.
   -g`) — if opencode ships a different common install path later (Homebrew
   formula, apt package, ...), add it to that list the same way
   `commands.ts`'s `openInEditor` layers candidates for VS Code.
+- **Ollama replies arrive as one end-of-turn burst, not streamed — confirmed
+  upstream, not fixable here.** Verified live against a real `opencode
+  serve` + local Ollama models: raw Ollama `/api/generate` with
+  `stream:true` genuinely streams token-by-token, so the transport itself
+  is fine. But through opencode's SSE `/event` feed, `message.part.delta`
+  (the incremental event `eventReducer.ts` consumes) doesn't arrive
+  progressively for an Ollama-backed session — a full ~65s generation
+  produced zero deltas until the last ~150ms, then the whole reply's worth
+  of deltas landed back-to-back right before `session.idle`. `wigl`'s
+  client-side reducer is confirmed working correctly (it applies whatever
+  deltas arrive, whenever they arrive); the gap is entirely in what
+  opencode's `openai-compatible` Ollama provider sends. Nothing left to do
+  on the wigl side — this is an upstream opencode/Ollama characteristic.
 
 ## Model catalog: why `opencodeConfig.ts` exists
 
