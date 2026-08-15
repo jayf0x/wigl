@@ -1,8 +1,10 @@
 import type { ComponentType, ErrorInfo, ReactNode } from "react";
-import { Component, useEffect, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Desktop } from "@/wigl";
+import { useRegisterGlobalAction } from "@/wigl/hooks";
 import { type FailedPlugin, loadPlugins } from "@/wigl/plugins";
 import "./App.css";
 
@@ -58,8 +60,12 @@ const App = () => {
     if (label !== "main") getCurrentWindow().show().catch(console.error);
   }, [label]);
 
-  useEffect(() => {
-    if (label === "main") return;
+  // Shared by first mount, the manual "Reload widgets" menu entry, and the
+  // cross-window broadcast below — `loadPlugins()` is idempotent (re-reads
+  // disk, overwrites `__wigl_scopes__[id]`, dedupes injected styles), so
+  // calling it again after `bun run widget:install` is enough to pick up a
+  // rebuilt plugin without a full app relaunch.
+  const reload = useCallback(() => {
     loadPlugins()
       .then(({ loaded, failed }) => {
         setWidgets(Object.fromEntries(loaded.map((p) => [p.manifest.id, p.component])));
@@ -69,7 +75,37 @@ const App = () => {
         console.error("[wigl] widget discovery failed", e);
         setWidgets({});
       });
-  }, [label]);
+  }, []);
+
+  useEffect(() => {
+    if (label === "main") return;
+    reload();
+  }, [label, reload]);
+
+  // Reloading widgets is a per-window action (each monitor is its own JS
+  // realm, see docs/architecture.md) — broadcast so triggering it on one
+  // monitor reloads every monitor's widgets, not just the one under the
+  // cursor.
+  const reloadWidgetsAction = useMemo(
+    () => ({
+      id: "reload-widgets",
+      label: "Reload widgets",
+      run: () => {
+        emit("wigl-reload-widgets").catch(console.error);
+        reload();
+      },
+    }),
+    [reload],
+  );
+  useRegisterGlobalAction(reloadWidgetsAction);
+
+  useEffect(() => {
+    if (label === "main") return;
+    const un = listen("wigl-reload-widgets", reload);
+    return () => {
+      un.then((f) => f());
+    };
+  }, [label, reload]);
 
   useEffect(() => {
     if (label === "main") return;

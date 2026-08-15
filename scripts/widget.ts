@@ -208,7 +208,7 @@ const install = async (dir: string) => {
     await Bun.write(join(target, cssSibling(built.entry)), Bun.file(cssSrc));
   }
   console.log(`✓ installed ${built.id} → ${target}`);
-  console.log("  restart wigl (bun run verify) to see it.");
+  console.log('  right-click the desktop → "Reload widgets" in a running wigl to see it (no restart needed).');
 };
 
 /** Every `wigl-widgets/<name>` folder, in the same order `ls` would give —
