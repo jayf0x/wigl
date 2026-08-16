@@ -166,11 +166,18 @@ export const Composer = ({
   // still treats it as the one fixed, always-first option.
   const efforts = selected?.variants ? Object.keys(selected.variants).filter((k) => k !== EFFORT_OFF) : [];
   const effortOptions: Option[] = [EFFORT_OFF, ...efforts].map((v) => ({ value: v, label: EFFORT_LABELS[v] ?? v }));
-  const agentOptions: Option[] = agents.map((a) => ({
-    value: a.name,
-    label: a.name,
-    hint: a.description?.slice(0, 40),
-  }));
+  // `/agent` lists opencode's internal agents alongside real ones — `title`/
+  // `summary`/`compaction` come back `hidden: true` (never meant to be
+  // chosen directly, see housekeeper.ts), and `explore`/`general` are
+  // `mode: "subagent"` (spawned by a primary agent's task tool, not
+  // selectable as the main one). Neither belongs in this picker.
+  const agentOptions: Option[] = agents
+    .filter((a) => !a.hidden && a.mode !== "subagent")
+    .map((a) => ({
+      value: a.name,
+      label: a.name,
+      hint: a.description?.slice(0, 40),
+    }));
 
   // A tool-incapable model 400s the moment `build` (or any tool-using agent)
   // is attached — `ProviderModel.capabilities.toolcall` already tells us

@@ -82,6 +82,9 @@ export interface AgentDef {
   description?: string;
   mode: "primary" | "subagent" | "all";
   model?: { providerID: string; modelID: string };
+  /** opencode's own marker for internal-use agents (its native `title`,
+   * `summary`, `compaction`) — never meant to be chosen directly. */
+  hidden?: boolean;
 }
 
 export interface ModelVariant {
