@@ -60,8 +60,11 @@ Things confirmed live that aren't obvious from guessing:
   `revertToMessage` + a fresh `sendPrompt` is opencode's own intended
   composition for "redo this turn" — that's what `editAndResend` in
   `useActiveSession.ts` does. Branching (fork instead of revert, so the old
-  answer survives) would use `/session/{id}/fork`, which exists in the API
-  but nothing in this widget calls it yet — flagged in Backlog below.
+  answer survives) exists in the API as `/session/{id}/fork`, but verified
+  live against `opencode serve 1.18.15` that the running server doesn't
+  actually link a fork back to its parent — the forked session comes back
+  with 0 messages copied and no `parentID` set, despite the OpenAPI schema
+  declaring that field. Blocked upstream, not just unwired — see backlog.md.
 
 ## Host primitives added for this widget
 
