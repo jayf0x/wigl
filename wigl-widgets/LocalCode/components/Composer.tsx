@@ -18,6 +18,7 @@ import { ArrowUp, Bot, Brain, Cpu, type LucideIcon, Square } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/wigl/utils";
+import { DEFAULT_CHAT_AGENT } from "../config";
 import type { AgentDef, ModelSelection, ProviderCatalogEntry } from "../types";
 import { CrepeField, type CrepeHandle } from "./CrepeField";
 import "./composer.css";
@@ -238,11 +239,11 @@ export const Composer = ({
           />
           <ChipMenu
             icon={Bot}
-            label={toolless ? TOOLLESS_AGENT : (agent ?? "build")}
+            label={toolless ? TOOLLESS_AGENT : (agent ?? DEFAULT_CHAT_AGENT)}
             title={toolless ? "agent (no tools — model can't use them)" : "agent"}
             disabled={toolless}
             options={agentOptions}
-            selectedValue={agent ?? undefined}
+            selectedValue={agent ?? DEFAULT_CHAT_AGENT}
             onSelect={onAgentChange}
           />
           {efforts.length > 0 && (

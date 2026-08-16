@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStorage } from "@/wigl/hooks";
 import * as client from "./client";
-import { STORAGE_KEYS } from "./config";
+import { DEFAULT_CHAT_AGENT, STORAGE_KEYS } from "./config";
 import { applyEvent, emptySessionState, type SessionState } from "./eventReducer";
 import { generateSessionTitle } from "./housekeeper";
 import { endsInLoop } from "./repetition";
@@ -59,7 +59,10 @@ export const useActiveSession = (
     async (text: string, opts?: { model?: ModelSelection; agent?: string; variant?: string }) => {
       if (!baseUrl || !sessionID || !text.trim()) return;
       const model = opts?.model ?? lastModel ?? undefined;
-      const agent = opts?.agent ?? lastAgent ?? undefined;
+      // No explicit/remembered agent ⇒ the safe default (config.ts's
+      // DEFAULT_CHAT_AGENT), never opencode's own "build" fallback — see
+      // that constant's comment for why leaving this unset is a hazard.
+      const agent = opts?.agent ?? lastAgent ?? DEFAULT_CHAT_AGENT;
       const variant = opts?.variant ?? lastVariant ?? undefined;
       if (opts?.model) setLastModel(opts.model);
       if (opts?.agent) setLastAgent(opts.agent);

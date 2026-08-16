@@ -3,8 +3,9 @@
 // (see AGENTS.md's "server lifecycle" section for the tradeoffs of this
 // choice, and what a multi-monitor / multi-instance setup would need).
 import { useEffect, useRef, useState } from "react";
+import { DEFAULT_CHAT_AGENT } from "./config";
 import { listOllamaModels, modelSupportsThinking } from "./ollama";
-import { disableSkillTool, type OllamaModelSync, syncOllamaModels } from "./opencodeConfig";
+import { disableSkillTool, type OllamaModelSync, syncChatAgent, syncOllamaModels } from "./opencodeConfig";
 import { type OpencodeServerHandle, startOpencodeServer } from "./serverProcess";
 
 export type ServerStatus = "connecting" | "online" | "offline";
@@ -51,6 +52,7 @@ const syncConfigBeforeStart = async (isCancelled: () => boolean): Promise<string
   if (isCancelled()) return [];
   if (models.length > 0) await syncOllamaModels(models).catch((e) => console.error("[LocalCode]", e));
   await disableSkillTool().catch((e) => console.error("[LocalCode]", e));
+  await syncChatAgent(DEFAULT_CHAT_AGENT).catch((e) => console.error("[LocalCode]", e));
   return models.map((m) => m.name);
 };
 

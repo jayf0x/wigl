@@ -46,6 +46,7 @@ interface OpencodeConfigShape {
     }
   >;
   tools?: Record<string, boolean>;
+  agent?: Record<string, { description?: string; mode?: string; permission?: string }>;
   [key: string]: unknown;
 }
 
@@ -161,6 +162,34 @@ export const disableSkillTool = async (): Promise<boolean> => {
   if (config.tools?.skill === false) return false;
 
   config.tools = { ...config.tools, skill: false };
+  await writeRaw(path, JSON.stringify(config, null, 2));
+  return true;
+};
+
+/** Declares `config.ts`'s `DEFAULT_CHAT_AGENT` as a primary agent with every
+ * tool permission denied — verified live (a raw request against a real
+ * `opencode serve`) that this actually keeps the tool schema off the
+ * completion request entirely, not just off attempted calls: no tool-call
+ * attempt, no "does not support tools" 400 either, for a model that
+ * otherwise supports tool-calling fine. This is a *tool* gate only, not a
+ * project-context one — opencode still injects the directory's
+ * AGENTS.md/CLAUDE.md into the system prompt regardless of agent (verified
+ * live too), so a small model can still ramble about project internals on
+ * an ambiguous prompt; there's no per-agent opencode config to suppress
+ * that today (see backlog.md B16). Idempotent — a no-op once the agent
+ * entry already matches. Same not-hot-reloaded / fails-safe-on-non-JSON
+ * rules as `syncOllamaModels`. */
+export const syncChatAgent = async (agentID: string): Promise<boolean> => {
+  const path = await configPath();
+  const config = await readConfig(path);
+  if (!config) return false;
+  const existing = config.agent?.[agentID];
+  if (existing?.mode === "primary" && existing.permission === "deny") return false;
+
+  config.agent = {
+    ...config.agent,
+    [agentID]: { description: "Plain conversation — no tools, no file/shell access.", mode: "primary", permission: "deny" },
+  };
   await writeRaw(path, JSON.stringify(config, null, 2));
   return true;
 };

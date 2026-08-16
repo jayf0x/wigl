@@ -257,6 +257,38 @@ piece of design work with no concrete spec yet — don't build a "smart"
 skill-filtering system speculatively; wait for a concrete direction on
 what a local-model-appropriate skill should look like.
 
+## Default agent — never opencode's own "build" default
+
+A brand-new session (no explicit/remembered agent) used to send no `agent`
+field at all, which opencode itself defaults to `"build"` — its full-tools
+primary agent (bash, edit, ...). Verified live this is a real hazard, not a
+theoretical one: a tool-capable local model (`qwen3.5:0.8b`) given a bare
+"test?" message under `build` went looking for a "test" *tool* to run and
+attempted `bash -c 'curl https://opencode.ai/docs/test'` — a small model
+reading "test?" plus a bash tool sitting right there in its context and
+inventing a plausible-looking command, not a targeted attack or a wigl
+parsing bug. `opencodeConfig.ts`'s `syncChatAgent()` now declares
+`config.ts`'s `DEFAULT_CHAT_AGENT` (`"wigl-chat"`) as a primary agent with
+`permission: "deny"` before `serve` starts, and `useActiveSession.ts`'s
+`send()` falls back to it instead of leaving `agent` unset. Verified live
+that `permission: "deny"` at the agent level keeps the tool schema off the
+completion request entirely — no attempted call, and (bonus) no more "does
+not support tools" 400 from models that can't do function-calling at all
+either, which is what `Composer.tsx`'s existing `TOOLLESS_AGENT` fallback
+was separately working around for that narrower case. The agent chip still
+lets a session opt into `build`/`plan`/anything else when real tool use is
+actually wanted — this only changes what an untouched session starts as.
+
+**Not fixed by this, and not per-agent-configurable today:** opencode
+injects the working directory's `AGENTS.md`/`CLAUDE.md` into the system
+prompt regardless of which agent is active — verified live, `wigl-chat`
+included, a model can still ramble about wigl's own architecture on an
+unrelated prompt. `permission` only gates tool access, not this. A custom
+`prompt` override (`AgentConfig`'s `prompt` field) could replace the system
+prompt outright, but that's a bigger, riskier change with no confirmed
+opencode API for "keep the default prompt, just drop the project-file
+injection" — see backlog.md B16.
+
 ## Housekeeper model
 
 A small/fast/local model (default `ollama/smollm:135m`, `config.ts`'s

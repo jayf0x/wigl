@@ -34,3 +34,16 @@ export const ALLOWED_PROVIDER_IDS = ["ollama"];
 // so those never cost a real model call. Configurable later via
 // STORAGE_KEYS.housekeeperModel; this is only the seed default.
 export const DEFAULT_HOUSEKEEPER_MODEL = { providerID: "ollama", modelID: "smollm:135m" };
+
+// The agent a brand-new session gets when the user hasn't picked one —
+// opencode's own default (an unset `agent` on the request) is `"build"`,
+// which attaches its *full* tool schema (bash, edit, ...) to every turn.
+// For a plain "test?"-style chat message that's a real hazard with a small
+// local model: it sees bash/curl as available tools and — confirmed live —
+// will attempt to use them on an ambiguous one-word prompt instead of just
+// replying. `opencodeConfig.ts`'s `syncChatAgent` declares this id as a
+// primary agent with every permission denied (verified live: the model
+// then never even sees a tool schema, no attempted calls, no "does not
+// support tools" 400s either). The agent chip still lets a session opt
+// into `"build"`/`"plan"` when real tool use is wanted.
+export const DEFAULT_CHAT_AGENT = "wigl-chat";
