@@ -22,10 +22,19 @@ const readRaw = async (path: string): Promise<string> => {
 };
 
 // Writes via base64 so JSON's quotes/backslashes never have to survive a
-// shell string — same trick as any binary-safe shell round trip.
+// shell string — same trick as any binary-safe shell round trip. Plain
+// `btoa(content)` throws `InvalidCharacterError` the moment `content` has
+// any character outside Latin1 (verified live: an em dash in a `prompt`
+// string — see `syncChatAgent` — was enough) — caught by every caller's
+// `.catch(console.error)`, so the failure was silent: no write, no crash,
+// nothing to notice short of diffing the file by hand. Encoding through
+// `TextEncoder` first keeps this correct for real UTF-8 content (model
+// names, directory paths, and any prose a `prompt`/`description` field
+// holds) instead of quietly limiting every writer here to ASCII.
 const writeRaw = async (path: string, content: string): Promise<void> => {
   const dir = path.slice(0, path.lastIndexOf("/"));
-  const b64 = btoa(content);
+  const bytes = new TextEncoder().encode(content);
+  const b64 = btoa(String.fromCharCode(...bytes));
   const out = await runCmd("sh", ["-c", `mkdir -p ${shQuote(dir)} && echo ${shQuote(b64)} | base64 -d > ${shQuote(path)}`]);
   if (out.code !== 0) throw new Error(out.stderr || "failed to write opencode config");
 };
@@ -46,7 +55,7 @@ interface OpencodeConfigShape {
     }
   >;
   tools?: Record<string, boolean>;
-  agent?: Record<string, { description?: string; mode?: string; permission?: string }>;
+  agent?: Record<string, { description?: string; mode?: string; permission?: string; prompt?: string }>;
   [key: string]: unknown;
 }
 
@@ -166,29 +175,47 @@ export const disableSkillTool = async (): Promise<boolean> => {
   return true;
 };
 
+// `permission: "deny"` alone isn't enough — verified live it correctly
+// keeps the tool schema off the completion request (no attempted call, no
+// "does not support tools" 400 either), but opencode's *default* system
+// prompt is written for a full agentic coding agent regardless: tool-call
+// format, task/todo-tracking instructions, "mark it in_progress" workflow
+// text. A small model handed that prompt with zero actual tools attached
+// doesn't just ignore it — it tries to comply, and spirals into confused
+// meta-commentary about tools it can see described but can't call (worse
+// than the original bash-hallucination bug this agent exists to prevent).
+// This `prompt` completely replaces opencode's default for this agent
+// (verified live: switching it eliminates the spiral) rather than just
+// gating tools, so it's the one that actually matters here.
+const CHAT_AGENT_PROMPT =
+  "You are a plain conversational assistant with no tools available. Reply directly in plain text — do not describe a plan, do not mention tools, tasks, or steps you would take.";
+
 /** Declares `config.ts`'s `DEFAULT_CHAT_AGENT` as a primary agent with every
- * tool permission denied — verified live (a raw request against a real
- * `opencode serve`) that this actually keeps the tool schema off the
- * completion request entirely, not just off attempted calls: no tool-call
- * attempt, no "does not support tools" 400 either, for a model that
- * otherwise supports tool-calling fine. This is a *tool* gate only, not a
- * project-context one — opencode still injects the directory's
- * AGENTS.md/CLAUDE.md into the system prompt regardless of agent (verified
- * live too), so a small model can still ramble about project internals on
- * an ambiguous prompt; there's no per-agent opencode config to suppress
- * that today (see backlog.md B16). Idempotent — a no-op once the agent
- * entry already matches. Same not-hot-reloaded / fails-safe-on-non-JSON
+ * tool permission denied and a minimal custom `prompt` (see above). This is
+ * a *tool* gate only, not a project-context one — opencode still injects
+ * the directory's AGENTS.md/CLAUDE.md into the system prompt regardless of
+ * agent (verified live), so a small model can still ramble about project
+ * internals on an unrelated prompt; there's no per-agent opencode config to
+ * suppress that today (see backlog.md B16). Idempotent — a no-op once the
+ * agent entry already matches. Same not-hot-reloaded / fails-safe-on-non-JSON
  * rules as `syncOllamaModels`. */
 export const syncChatAgent = async (agentID: string): Promise<boolean> => {
   const path = await configPath();
   const config = await readConfig(path);
   if (!config) return false;
   const existing = config.agent?.[agentID];
-  if (existing?.mode === "primary" && existing.permission === "deny") return false;
+  if (existing?.mode === "primary" && existing.permission === "deny" && existing.prompt === CHAT_AGENT_PROMPT) {
+    return false;
+  }
 
   config.agent = {
     ...config.agent,
-    [agentID]: { description: "Plain conversation — no tools, no file/shell access.", mode: "primary", permission: "deny" },
+    [agentID]: {
+      description: "Plain conversation — no tools, no file/shell access.",
+      mode: "primary",
+      permission: "deny",
+      prompt: CHAT_AGENT_PROMPT,
+    },
   };
   await writeRaw(path, JSON.stringify(config, null, 2));
   return true;
