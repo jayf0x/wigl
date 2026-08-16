@@ -33,7 +33,8 @@ done
 # Kill any instance from a previous `qa`/`qa:app` run (or a stray `tauri
 # dev`) before rebuilding — otherwise each run stacks a new process on top
 # of the last one instead of replacing it.
-pkill -x wigl 2>/dev/null && sleep 1 || true
+pkill -x wigl 2>/dev/null || true
+pkill -f "opencode serve" 2>/dev/null && sleep 1 || true
 
 # Widgets are loaded at runtime from the app-data plugins dir (see
 # docs/widgets.md), not bundled into the frontend build below — so without
@@ -67,7 +68,8 @@ fi
 # The build can take a while; a manual `bun run qa` fired again in the
 # meantime, or `tauri dev` started separately, could have spawned another
 # instance since the check above. Clear the deck right before launch too.
-pkill -x wigl 2>/dev/null && sleep 1 || true
+pkill -x wigl 2>/dev/null || true
+pkill -f "opencode serve" 2>/dev/null && sleep 1 || true
 
 if [ "$WINDOWED" = "1" ]; then
   echo "[qa] launching in windowed mode (WIGL_MODE=windowed) — Ctrl+C to stop"

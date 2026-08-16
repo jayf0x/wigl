@@ -28,6 +28,7 @@ if [ "$(uname -s)" = "Darwin" ]; then
   bun run tauri build --debug --bundles app
 
   pkill -x wigl 2>/dev/null || true
+  pkill -f "opencode serve" 2>/dev/null || true
   sleep 1
   open src-tauri/target/debug/bundle/macos/wigl.app
   sleep 3
@@ -43,6 +44,7 @@ else
   bun run tauri build --debug --bundles deb 2>&1 | tail -20 || true
 
   pkill -x wigl 2>/dev/null || true
+  pkill -f "opencode serve" 2>/dev/null || true
   sleep 1
   LOG="/tmp/wigl-verify.log"
   # Wayland has no cross-desktop way to list a client's windows (same reason

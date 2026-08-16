@@ -18,7 +18,7 @@
     "verify": "sh scripts/verify.sh",
     "qa": "sh scripts/qa.sh",
     "qa:app": "sh scripts/qa.sh --windowed",
-    "kill": "pkill -x wigl || true",
+    "kill": "pkill -x wigl || true; pkill -f 'opencode serve' || true",
     "wigl": "bun scripts/wigl.ts",
     "tw-colors": "bun scripts/tw-colors.ts",
     "check:eager": "bun scripts/check-eager.ts",
