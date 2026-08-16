@@ -56,6 +56,8 @@ const ChipMenu = ({
   options,
   selectedValue,
   onSelect,
+  clearLabel,
+  onClear,
 }: {
   icon: LucideIcon;
   label: string;
@@ -65,6 +67,10 @@ const ChipMenu = ({
   options: Option[];
   selectedValue?: string;
   onSelect: (value: string) => void;
+  /** Row label for resetting to "nothing explicitly chosen" — omit to make
+   * this chip select-only, no way back to unset once picked. */
+  clearLabel?: string;
+  onClear?: () => void;
 }) => {
   const [open, setOpen] = useState(false);
   return (
@@ -84,6 +90,25 @@ const ChipMenu = ({
         <span className="max-w-28 truncate">{label}</span>
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="max-h-64 w-56 gap-0 overflow-y-auto p-1">
+        {onClear && (
+          <button
+            type="button"
+            data-no-drag
+            onClick={() => {
+              onClear();
+              setOpen(false);
+            }}
+            title={clearLabel}
+            className={cn(
+              "flex w-full items-center rounded-md px-2 py-1.5 text-left text-[11px] transition-colors duration-100",
+              selectedValue === undefined
+                ? "bg-primary/15 text-foreground"
+                : "text-muted-foreground/70 hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <span className="flex-1 truncate italic">{clearLabel}</span>
+          </button>
+        )}
         {options.length === 0 ? (
           <span className="px-2 py-1.5 text-[11px] text-muted-foreground/50">none available</span>
         ) : (
@@ -96,15 +121,15 @@ const ChipMenu = ({
                 onSelect(o.value);
                 setOpen(false);
               }}
+              title={o.hint ? `${o.label} — ${o.hint}` : o.label}
               className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] transition-colors duration-100",
+                "flex w-full items-center rounded-md px-2 py-1.5 text-left text-[11px] transition-colors duration-100",
                 o.value === selectedValue
                   ? "bg-primary/15 text-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <span className="flex-1 truncate">{o.label}</span>
-              {o.hint && <span className="shrink-0 truncate text-[10px] opacity-40">{o.hint}</span>}
+              <span className="truncate">{o.label}</span>
             </button>
           ))
         )}
@@ -132,7 +157,7 @@ export const Composer = ({
   agent: string | null;
   variant: string | null;
   onModelChange: (m: ModelSelection) => void;
-  onAgentChange: (a: string) => void;
+  onAgentChange: (a: string | null) => void;
   onVariantChange: (v: string | undefined) => void;
   onSend: (text: string) => void;
   onAbort: () => void;
@@ -168,15 +193,18 @@ export const Composer = ({
   const effortOptions: Option[] = [EFFORT_OFF, ...efforts].map((v) => ({ value: v, label: EFFORT_LABELS[v] ?? v }));
   // `/agent` lists opencode's internal agents alongside real ones — `title`/
   // `summary`/`compaction` come back `hidden: true` (never meant to be
-  // chosen directly, see housekeeper.ts), and `explore`/`general` are
+  // chosen directly, see housekeeper.ts), `explore`/`general` are
   // `mode: "subagent"` (spawned by a primary agent's task tool, not
-  // selectable as the main one). Neither belongs in this picker.
+  // selectable as the main one), and `DEFAULT_CHAT_AGENT` is what "nothing
+  // picked" already sends — showing it as a selectable option too would be
+  // a confusing duplicate of the chip's own clear/default state. None of
+  // these belong in this picker.
   const agentOptions: Option[] = agents
-    .filter((a) => !a.hidden && a.mode !== "subagent")
+    .filter((a) => !a.hidden && a.mode !== "subagent" && a.name !== DEFAULT_CHAT_AGENT)
     .map((a) => ({
       value: a.name,
       label: a.name,
-      hint: a.description?.slice(0, 40),
+      hint: a.description,
     }));
 
   // A tool-incapable model 400s the moment `build` (or any tool-using agent)
@@ -246,12 +274,18 @@ export const Composer = ({
           />
           <ChipMenu
             icon={Bot}
-            label={toolless ? TOOLLESS_AGENT : (agent ?? DEFAULT_CHAT_AGENT)}
-            title={toolless ? "agent (no tools — model can't use them)" : "agent"}
+            label={toolless ? TOOLLESS_AGENT : (agent ?? "default")}
+            title={
+              toolless
+                ? "agent (no tools — model can't use them)"
+                : (agent ?? `agent (default: ${DEFAULT_CHAT_AGENT} — no tools)`)
+            }
             disabled={toolless}
             options={agentOptions}
-            selectedValue={agent ?? DEFAULT_CHAT_AGENT}
+            selectedValue={agent ?? undefined}
             onSelect={onAgentChange}
+            clearLabel="default (no tools)"
+            onClear={() => onAgentChange(null)}
           />
           {efforts.length > 0 && (
             <ChipMenu
