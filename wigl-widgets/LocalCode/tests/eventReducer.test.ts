@@ -184,13 +184,48 @@ describe("applyEvent — permissions and todos", () => {
 
 describe("applyEvent — unknown event types", () => {
   test("an event type this widget doesn't know about is a no-op, not a throw", () => {
-    // opencode ships events this widget has never modeled (message.part.delta,
-    // session.status, plugin.added, ...) — see client.ts's subscribeEvents
-    // comment. Casting past the union mirrors what a real drifted/unrecognized
-    // frame from JSON.parse would look like at runtime.
+    // opencode ships events this widget has never modeled (session.status,
+    // plugin.added, ...) — see client.ts's subscribeEvents comment. Casting
+    // past the union mirrors what a real drifted/unrecognized frame from
+    // JSON.parse would look like at runtime.
     const before = emptySessionState();
-    const weird = { type: "message.part.delta", properties: {} } as unknown as OpencodeEvent;
+    const weird = { type: "session.status", properties: {} } as unknown as OpencodeEvent;
     expect(() => applyEvent(before, weird, SID)).not.toThrow();
     expect(applyEvent(before, weird, SID)).toEqual(before);
+  });
+});
+
+describe("applyEvent — message.part.delta (incremental token streaming)", () => {
+  test("deltas accumulate onto the part's text as they arrive", () => {
+    // Real shape captured from a live `opencode serve` + Ollama session
+    // (scripts/dev/ollama-stream-check.py): providers that don't send
+    // frequent message.part.updated snapshots still send these per-token.
+    const state = applyAll([
+      ...userTurn,
+      assistantStart,
+      textStart,
+      { type: "message.part.delta", properties: { sessionID: SID, messageID: ASSISTANT_MSG, partID: "prt_text", field: "text", delta: "Hel" } },
+      { type: "message.part.delta", properties: { sessionID: SID, messageID: ASSISTANT_MSG, partID: "prt_text", field: "text", delta: "lo!" } },
+    ]);
+    const assistant = state.messages.find((m) => m.info.role === "assistant");
+    const textPart = assistant?.parts.find((p) => p.type === "text");
+    expect(textPart?.text).toBe("Hello!");
+  });
+
+  test("a delta for a part that hasn't arrived yet is dropped, not crashed on", () => {
+    const state = applyEvent(emptySessionState(), {
+      type: "message.part.delta",
+      properties: { sessionID: SID, messageID: ASSISTANT_MSG, partID: "prt_text", field: "text", delta: "x" },
+    }, SID);
+    expect(state.messages).toHaveLength(0);
+  });
+
+  test("a delta for a different session is ignored", () => {
+    const state = applyAll([...userTurn, assistantStart, textStart]);
+    const next = applyEvent(state, {
+      type: "message.part.delta",
+      properties: { sessionID: "ses_other", messageID: ASSISTANT_MSG, partID: "prt_text", field: "text", delta: "x" },
+    }, SID);
+    expect(next).toEqual(state);
   });
 });

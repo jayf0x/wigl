@@ -123,6 +123,10 @@ export type OpencodeEvent =
   | { type: "message.updated"; properties: { info: OpencodeMessage } }
   | { type: "message.removed"; properties: { sessionID: string; messageID: string } }
   | { type: "message.part.updated"; properties: { part: MessagePart; delta?: string } }
+  | {
+      type: "message.part.delta";
+      properties: { sessionID: string; messageID: string; partID: string; field: "text"; delta: string };
+    }
   | { type: "message.part.removed"; properties: { sessionID: string; messageID: string; partID: string } }
   | { type: "permission.asked"; properties: PermissionRequest }
   | { type: "permission.replied"; properties: { sessionID: string; permissionID: string } }

@@ -128,19 +128,19 @@ the primitive to reuse — don't add a second one.
   -g`) — if opencode ships a different common install path later (Homebrew
   formula, apt package, ...), add it to that list the same way
   `commands.ts`'s `openInEditor` layers candidates for VS Code.
-- **Ollama replies arrive as one end-of-turn burst, not streamed — confirmed
-  upstream, not fixable here.** Verified live against a real `opencode
-  serve` + local Ollama models: raw Ollama `/api/generate` with
-  `stream:true` genuinely streams token-by-token, so the transport itself
-  is fine. But through opencode's SSE `/event` feed, `message.part.delta`
-  (the incremental event `eventReducer.ts` consumes) doesn't arrive
-  progressively for an Ollama-backed session — a full ~65s generation
-  produced zero deltas until the last ~150ms, then the whole reply's worth
-  of deltas landed back-to-back right before `session.idle`. `wigl`'s
-  client-side reducer is confirmed working correctly (it applies whatever
-  deltas arrive, whenever they arrive); the gap is entirely in what
-  opencode's `openai-compatible` Ollama provider sends. Nothing left to do
-  on the wigl side — this is an upstream opencode/Ollama characteristic.
+- **Ollama replies used to arrive as one end-of-turn dump — it was a real
+  wigl bug, fixed.** opencode's SSE feed sends two different event shapes
+  for an assistant's reply: coarse `message.part.updated` snapshots, and
+  per-token `message.part.delta` (`{ partID, field: "text", delta }`,
+  additive fragments — same pattern as its `reasoning-delta` handling).
+  `eventReducer.ts` only had a case for `message.part.updated`; for
+  providers/models that send few `part.updated` snapshots across a whole
+  turn (Ollama, confirmed live), the transcript looked frozen until
+  everything landed at once, even though `part.delta` events were arriving
+  incrementally the entire time. Fixed by adding a `message.part.delta`
+  case to `applyEvent` that appends `delta` onto the matching part's text.
+  Verify with `scripts/dev/ollama-stream-check.py`, which measures both
+  Ollama's raw HTTP streaming and opencode's `/event` feed independently.
 
 ## Model catalog: why `opencodeConfig.ts` exists
 

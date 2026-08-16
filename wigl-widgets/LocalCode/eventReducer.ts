@@ -55,6 +55,21 @@ export const applyEvent = (state: SessionState, event: OpencodeEvent, sessionID:
       if (part.sessionID !== sessionID) return state;
       return { ...state, messages: upsertPart(state.messages, part) };
     }
+    // Per-token progress. Some providers (Ollama's openai-compatible route,
+    // confirmed live) only send a handful of coarse `message.part.updated`
+    // snapshots across an entire turn — `message.part.delta` is the event
+    // that actually arrives incrementally there, so without this case the
+    // transcript looks frozen until the whole reply lands at once. See
+    // scripts/dev/ollama-stream-check.py and AGENTS.md's "Server lifecycle"
+    // section.
+    case "message.part.delta": {
+      const { sessionID: sid, messageID, partID, delta } = event.properties;
+      if (sid !== sessionID) return state;
+      const msg = state.messages.find((m) => m.info.id === messageID);
+      const part = msg?.parts.find((p) => p.id === partID);
+      if (!part) return state;
+      return { ...state, messages: upsertPart(state.messages, { ...part, text: (part.text ?? "") + delta }) };
+    }
     case "message.part.removed": {
       const { sessionID: sid, messageID, partID } = event.properties;
       if (sid !== sessionID) return state;
