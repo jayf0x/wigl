@@ -4,6 +4,61 @@
 // why this went from an always-on poll back to on-demand).
 const OLLAMA_BASE = "http://127.0.0.1:11434";
 
+import { runCmdBackground } from "@/wigl/utils";
+
+// Same PATH gap `serverProcess.ts` works around for `opencode`: a
+// GUI-launched shell's PATH often doesn't include Homebrew's bin dirs.
+const OLLAMA_CANDIDATES = ["/opt/homebrew/bin/ollama", "/usr/local/bin/ollama", "ollama"];
+
+export interface OllamaHandle {
+  /** No-op if this call found Ollama already running — we never own killing
+   * a process we didn't spawn. */
+  stop: () => Promise<void>;
+}
+
+/** Spawns `ollama serve` (trying each PATH candidate) and resolves once
+ * `isOllamaReachable()` reports true, or rejects after `timeoutMs`. If
+ * Ollama is already reachable, resolves immediately without spawning
+ * anything. */
+export const startOllama = async (timeoutMs = 8000): Promise<OllamaHandle> => {
+  if (await isOllamaReachable()) return { stop: async () => {} };
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let stopFn: (() => Promise<void>) | null = null;
+
+    const poll = setInterval(async () => {
+      if (settled) return;
+      if (await isOllamaReachable()) {
+        settled = true;
+        clearInterval(poll);
+        clearTimeout(timer);
+        resolve({ stop: () => (stopFn ? stopFn() : Promise.resolve()) });
+      }
+    }, 400);
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      clearInterval(poll);
+      stopFn?.().catch(() => {});
+      reject(new Error("ollama serve didn't become reachable in time"));
+    }, timeoutMs);
+
+    const tryCandidate = async (index: number): Promise<void> => {
+      if (settled || index >= OLLAMA_CANDIDATES.length) return;
+      try {
+        const { stop } = await runCmdBackground("sh", ["-c", `${OLLAMA_CANDIDATES[index]} serve 2>&1`], () => {});
+        stopFn = stop;
+      } catch {
+        // this candidate isn't on disk / didn't spawn — try the next one
+      }
+      setTimeout(() => tryCandidate(index + 1), 1500);
+    };
+    tryCandidate(0);
+  });
+};
+
 /** Names as Ollama itself reports them (e.g. `"smollm:135m"`) — these are
  * exactly the ids opencodeConfig.ts's `syncOllamaModels` needs, since a
  * custom `openai-compatible` provider addresses models by that same tag.

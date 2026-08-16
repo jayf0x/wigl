@@ -20,7 +20,9 @@ const LocalCodeWidget = () => {
     STORAGE_KEYS.sidebarOpen,
     true,
   );
-  const { status, baseUrl, ollamaOnline, restart, reloadModels } = useOpencodeServer(defaultDir || null);
+  const { status, baseUrl, ollamaOnline, ollamaStarting, restart, reloadModels, startOllamaNow } = useOpencodeServer(
+    defaultDir || null,
+  );
   const { sessions, loading, createSession, renameSession, togglePin, deleteSession } =
     useSessions(baseUrl, defaultDir || null);
   const catalog = useModelCatalog(baseUrl);
@@ -72,22 +74,27 @@ const LocalCodeWidget = () => {
           </span>
           {/* Ollama isn't polled (see useOpencodeServer.ts) — checked once
             per connect, and again here on click, which doubles as "I just
-            ran `ollama pull`, pick it up now" without a full app restart. */}
+            ran `ollama pull`, pick it up now" without a full app restart.
+            When unreachable, the same click spawns `ollama serve` instead
+            (F4 in backlog.md) rather than just re-checking. */}
           <button
             type="button"
             data-no-drag
-            onClick={reloadModels}
+            onClick={ollamaOnline === false ? startOllamaNow : reloadModels}
+            disabled={ollamaStarting}
             title={
-              ollamaOnline === false
-                ? "ollama unreachable — click to retry"
-                : "reload ollama models (pick up a fresh `ollama pull`)"
+              ollamaStarting
+                ? "starting ollama…"
+                : ollamaOnline === false
+                  ? "ollama unreachable — click to start it"
+                  : "reload ollama models (pick up a fresh `ollama pull`)"
             }
             className={cn(
-              "rounded-md p-0.5 transition-colors duration-150 hover:bg-muted",
+              "rounded-md p-0.5 transition-colors duration-150 hover:bg-muted disabled:opacity-50",
               ollamaOnline === false ? "text-destructive" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <RotateCw className="size-3" />
+            <RotateCw className={cn("size-3", ollamaStarting && "animate-spin")} />
           </button>
           {/* The only always-on status: is the agent server reachable. Anything
             richer belongs in the shared error surface, not a status bar. */}

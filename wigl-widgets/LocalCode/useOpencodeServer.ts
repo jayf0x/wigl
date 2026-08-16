@@ -4,7 +4,7 @@
 // choice, and what a multi-monitor / multi-instance setup would need).
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_CHAT_AGENT } from "./config";
-import { isOllamaReachable, listOllamaModels, modelSupportsThinking } from "./ollama";
+import { isOllamaReachable, listOllamaModels, modelSupportsThinking, startOllama } from "./ollama";
 import { disableSkillTool, type OllamaModelSync, syncChatAgent, syncOllamaModels } from "./opencodeConfig";
 import { type OpencodeServerHandle, startOpencodeServer } from "./serverProcess";
 
@@ -71,11 +71,24 @@ export const useOpencodeServer = (directory: string | null) => {
   // `restart()` (config isn't hot-reloaded, same reasoning as before) for a
   // manual "I just pulled a model" trigger instead of an automatic one.
   const [ollamaOnline, setOllamaOnline] = useState<boolean | null>(null);
+  const [ollamaStarting, setOllamaStarting] = useState(false);
 
   const restart = () => setAttempt((n) => n + 1);
   const reloadModels = () => {
     isOllamaReachable().then(setOllamaOnline);
     restart();
+  };
+
+  // Only offered while `ollamaOnline === false` (see index.tsx) — normally
+  // Ollama is already running as a system service (F4 in backlog.md), this
+  // is the fallback for when it isn't.
+  const startOllamaNow = () => {
+    if (ollamaStarting) return;
+    setOllamaStarting(true);
+    startOllama()
+      .then(() => reloadModels())
+      .catch((e) => console.error("[LocalCode] failed to start ollama", e))
+      .finally(() => setOllamaStarting(false));
   };
 
   useEffect(() => {
@@ -111,5 +124,5 @@ export const useOpencodeServer = (directory: string | null) => {
     };
   }, [attempt, directory]);
 
-  return { status, baseUrl, ollamaOnline, restart, reloadModels };
+  return { status, baseUrl, ollamaOnline, ollamaStarting, restart, reloadModels, startOllamaNow };
 };
