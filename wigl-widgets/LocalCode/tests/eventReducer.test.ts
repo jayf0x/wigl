@@ -120,10 +120,9 @@ describe("applyEvent — session.error (the 'no reply ever shown' bug)", () => {
   test("an errored turn surfaces a visible error instead of silently vanishing", () => {
     // Real trace from a live server given an unknown model: message.updated
     // fires for the user's own message, then session.error — no assistant
-    // message.updated ever arrives. Before this reducer existed,
-    // session.error fell through useActiveSession's switch's `default`
-    // case and did nothing: no error, no assistant bubble, spinner (if any)
-    // stuck — see TODO.md/AGENTS.md for the live trace that found this.
+    // message.updated ever arrives, so an unhandled session.error means no
+    // error, no assistant bubble, spinner (if any) stuck — see AGENTS.md's
+    // "Decisions log" for the live trace that found this.
     const state = applyAll([
       ...userTurn,
       {

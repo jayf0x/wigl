@@ -91,8 +91,8 @@ export const applyEvent = (state: SessionState, event: OpencodeEvent, sessionID:
       return { ...state, todos: event.properties.todos };
     // A turn failing (bad model, provider unreachable, ...) never produces
     // an assistant message — surfacing it here is the difference between
-    // "reply silently never arrives" and a visible error. See TODO.md /
-    // AGENTS.md for the live-server trace that found this gap.
+    // "reply silently never arrives" and a visible error. See AGENTS.md's
+    // "Decisions log" for the live-server trace that found this gap.
     case "session.error": {
       if (event.properties.sessionID !== undefined && event.properties.sessionID !== sessionID) return state;
       const message = event.properties.error?.data?.message ?? "the agent hit an error";

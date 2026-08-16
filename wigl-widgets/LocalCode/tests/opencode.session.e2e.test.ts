@@ -77,12 +77,10 @@ describe("session.error surfacing (no real generation needed)", () => {
   test.skipIf(!ready)(
     "an unknown model surfaces a visible session error instead of a silently missing reply",
     async () => {
-      // Regression test for the exact bug this session fixed: before
-      // eventReducer.ts existed, session.error fell through
-      // useActiveSession's switch's `default` case — a failed turn left no
-      // assistant message AND no error, i.e. the reported "prompt -> loading
-      // -> [nothing]" symptom. See AGENTS.md/TODO.md for the live trace.
-      // Fails fast (opencode rejects the unknown model before it ever
+      // Regression test: an unhandled session.error leaves no assistant
+      // message and no visible error, i.e. "prompt -> loading -> [nothing]".
+      // See AGENTS.md's "Decisions log" for the live trace. Fails fast
+      // (opencode rejects the unknown model before it ever
       // touches Ollama), so this belongs in the fast file despite living
       // next to real-generation concerns conceptually.
       const baseUrl = server?.baseUrl as string;

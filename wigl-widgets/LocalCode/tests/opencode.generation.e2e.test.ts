@@ -81,9 +81,8 @@ const runTurnAndCollectState = (baseUrl: string, sessionID: string, send: () => 
   });
 
 // Disabled — not flaky, reproducibly broken, and not a wigl bug. Verified
-// live (see TODO.md, "opencode `build` agent hangs against Ollama") that a
-// `build`-agent turn against Ollama's openai-compatible provider never
-// completes: the *exact same* prompt that returns in ~2s from Ollama
+// live that a `build`-agent turn against Ollama's openai-compatible provider
+// never completes: the *exact same* prompt that returns in ~2s from Ollama
 // directly (`/v1/chat/completions`, no agent involved) hangs past a 90s
 // `curl --max-time` with no response at all once opencode's `build` agent
 // (tool schema attached) is in the loop — reproduced against both

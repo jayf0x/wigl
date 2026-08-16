@@ -115,8 +115,8 @@ export const useActiveSession = (baseUrl: string | null, sessionID: string | nul
   }, [state.busy, abort]);
 
   // Runaway-loop guard. A small local model that starts restating the same
-  // phrase generally never stops on its own (see TODO.md's `build`-agent hang
-  // entry for a related failure) — it just burns GPU until someone notices.
+  // phrase generally never stops on its own — it just burns GPU until
+  // someone notices.
   // `endsInLoop` is deliberately strict (see repetition.ts) because the
   // consequence here is killing a real turn. Reasoning text counts: that's
   // where the spiral usually happens, and it's collapsed by default, so
