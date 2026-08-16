@@ -33,7 +33,6 @@ interface PluginModule {
 }
 
 declare global {
-  // biome-ignore lint/style/noVar: `declare global` requires var
   var __wigl_scopes__: Record<string, ReturnType<typeof createPluginRequire>> | undefined;
 }
 

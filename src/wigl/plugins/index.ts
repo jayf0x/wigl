@@ -4,10 +4,4 @@
 // widget importing from here would be importing the thing that loads it.
 export { HOST_MODULE_IDS, type HostModuleId } from "./host-modules";
 export { loadPlugins, pluginsDir } from "./loader";
-export {
-  type FailedPlugin,
-  type LoadedPlugin,
-  type PluginLoadResult,
-  type WidgetManifest,
-  type WidgetPermission,
-} from "./types";
+export type { FailedPlugin, LoadedPlugin, PluginLoadResult, WidgetManifest, WidgetPermission } from "./types";
