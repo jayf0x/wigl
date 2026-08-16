@@ -177,6 +177,13 @@ describe("prompt -> loading -> reply (the reported regression)", () => {
 // the same session.error surfacing path deterministically.
 
 describe("housekeeper model (session titling)", () => {
+  // No server/model involved — SHORT_PROMPT_CHARS's early return skips the
+  // network entirely, so this runs regardless of `ready`.
+  test("a short prompt is used verbatim as the title, no model call", async () => {
+    const title = await generateSessionTitle("http://unused", HOUSEKEEPER_MODEL, "  test  ", DIRECTORY);
+    expect(title).toBe("test");
+  });
+
   test.skipIf(!ready)(
     "generateSessionTitle produces a short, punctuation-stripped title",
     async () => {

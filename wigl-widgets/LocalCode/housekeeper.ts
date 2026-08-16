@@ -85,13 +85,27 @@ const runHousekeeperPrompt = async (
 /** A short (≤ a handful of words) title for `firstPrompt` — the concrete
  * first use of the housekeeper model. Falls back to `null` on any failure
  * (timeout, empty Ollama response, ...); callers keep whatever title they
- * already had in that case, they never block or show an error over this. */
+ * already had in that case, they never block or show an error over this.
+ *
+ * ponytail: below `SHORT_PROMPT_CHARS`, running the prompt through a model
+ * at all costs more than it buys. Verified live: a small housekeeper model
+ * asked to "summarize" a short prompt like "hello" or "test?" doesn't
+ * reliably produce a short title — it answers *the prompt itself* instead
+ * of describing it (a real captured case: "summarizing: hello nothing much
+ * you can say I'd be happy to h…", the model's actual reply to "hello",
+ * truncated by the 60-char cutoff below, not a title at all). A short
+ * prompt is already title-length; just use it verbatim. */
+const SHORT_PROMPT_CHARS = 24;
+
 export const generateSessionTitle = async (
   baseUrl: string,
   model: ModelSelection,
   firstPrompt: string,
   directory: string,
 ): Promise<string | null> => {
+  const trimmed = firstPrompt.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= SHORT_PROMPT_CHARS) return trimmed || null;
+
   // The date line isn't for the model to read — it's a rotating nonce.
   // Ollama runs small models with a fixed seed, so the *same* prompt yields
   // the *same* title every time; two sessions started from one prompt would
