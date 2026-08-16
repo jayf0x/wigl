@@ -301,24 +301,21 @@ this widget can configure around.
 
 ## Housekeeper model
 
-A small/fast/local model (default `ollama/smollm:135m`, `config.ts`'s
-`DEFAULT_HOUSEKEEPER_MODEL`, overridable via the `localcode_housekeeper_model`
-storage key) for internal tasks that shouldn't cost a real turn against
-whatever model the user is actually working with. `housekeeper.ts`'s
-`runHousekeeperPrompt()` runs a prompt against a throwaway session
-(created, waited on via the `session.idle` SSE event, read back, deleted —
-same event this widget already subscribes to for real sessions, no
-polling) and returns the text response.
+A small/fast/local model, for internal tasks that shouldn't cost a real
+turn against whatever model the user is actually working with.
+`housekeeper.ts`'s `runHousekeeperPrompt()` runs a prompt against a
+throwaway session (created, waited on via the `session.idle` SSE event,
+read back, deleted — same event this widget already subscribes to for real
+sessions, no polling) and returns the text response.
 
 **Pass a toolless `agent`.** A session with no `agent` defaults to
 `"build"`, which always attaches opencode's full tool schema to the
 completion request — verified live that Ollama 400s with "does not support
-tools" for models that don't support function-calling at all, and
-`smollm:135m` (the housekeeper default) is one of them. `generateSessionTitle`
-passes `agent: "title"` (opencode's own hidden, toolless, purpose-built
-title-generation agent) for exactly this reason. Any new housekeeper
-consumer needs the same treatment — omitting `agent` isn't a safe default
-here the way it might look.
+tools" for models that don't support function-calling at all. Any
+housekeeper consumer needs to pass a toolless `agent` (e.g. `"title"`,
+opencode's own hidden, purpose-built title-generation agent) for exactly
+this reason — omitting `agent` isn't a safe default here the way it might
+look.
 
 The real chat composer has the same failure mode for the same reason: no
 explicit agent selection defaults to `"build"` server-side. `Composer.tsx`
@@ -327,14 +324,14 @@ checks the selected model's `ProviderModel.capabilities.toolcall` and, when
 can't pick a tool-using agent that's guaranteed to 400) rather than letting
 the request go out with the default.
 
-**Wired today**: `generateSessionTitle()`, fired from `useActiveSession.ts`'s
-`send()` on a session's first user message — fire-and-forget, a slow/failed
-call just leaves the truncated-prompt fallback title in place. This is
-still the only caller — other consumers (greeting text, other small tasks)
-are unspecified scope, not built. `runHousekeeperPrompt()` is an unexported
-helper local to this file for exactly that reason (was a needless exported
-general-purpose primitive for a single caller); re-export it only once a
-second concrete consumer shows up.
+**Not wired today.** `generateSessionTitle()` used to fire from
+`useActiveSession.ts`'s `send()` on a session's first user message —
+deleted once live testing showed opencode already runs its own native
+title-generation agent on the same trigger, making that call pure duplicate
+work (see "Session auto-titling" above). Kept exported and covered by
+`tests/opencode.generation.e2e.test.ts` as a tested primitive for whatever
+the next concrete housekeeper task turns out to be — `runHousekeeperPrompt()`
+stays unexported until a second consumer needs it directly.
 
 ## UI shape (post-redesign) — read before adding a control
 
@@ -503,13 +500,14 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
   framing: don't rebuild what a real editor/git tool already does well: "no
   fancy features like transcribe or audio... don't repeat what other apps
   already solve."
-- **Session auto-titling uses the housekeeper model, not the user's model.**
-  Originally deferred as "costs a second model call for a cosmetic win" —
-  revisited once a free/local housekeeper model (`ollama/smollm:135m`)
-  existed to QA against, which changes that cost calculus to ~zero. See
-  "Housekeeper model" above. `useSessions.ts`'s `autoTitle` (plain
-  truncation) is still the fallback used if the housekeeper call fails or
-  times out.
+- **Session auto-titling comes from opencode itself, not a wigl-side model
+  call.** A housekeeper-model title-gen call used to run after every first
+  message; deleted once live testing showed opencode already runs its own
+  native title-generation agent on the session's first message regardless
+  (see "Housekeeper model" above) — the wigl-side call was pure duplicate
+  work racing the real turn for the same Ollama instance. `useSessions.ts`'s
+  `sanitizeTitle` only trims the stray leading/trailing quote opencode's own
+  title sometimes comes back with; it doesn't regenerate anything.
 - **A render window, not virtualization.** `MessageList.tsx` mounts only the
   last `RENDER_WINDOW` (40) messages and puts the rest behind one "N earlier
   messages" button. This is the answer to the long-standing "conversations

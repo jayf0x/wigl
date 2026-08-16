@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { PanelLeft, RotateCw } from "lucide-react";
 import { ErrorOverlay, Widget } from "@/wigl";
 import { useStorage } from "@/wigl/hooks";
 import { cn, homeDir } from "@/wigl/utils";
 import { Sidebar } from "./components/Sidebar";
 import { SessionPanel } from "./components/SessionPanel";
-import { DEFAULT_HOUSEKEEPER_MODEL, STORAGE_KEYS } from "./config";
+import { STORAGE_KEYS } from "./config";
 import { useModelCatalog } from "./useModelCatalog";
 import { useOpencodeServer } from "./useOpencodeServer";
 import { useSessions } from "./useSessions";
-import type { ModelSelection } from "./types";
 
 const LocalCodeWidget = () => {
   const [activeID, setActiveID] = useState<string | null>(null);
@@ -25,26 +24,8 @@ const LocalCodeWidget = () => {
   const { sessions, loading, createSession, renameSession, togglePin, deleteSession } =
     useSessions(baseUrl, defaultDir || null);
   const catalog = useModelCatalog(baseUrl);
-  const [housekeeperModel] = useStorage<ModelSelection>(
-    STORAGE_KEYS.housekeeperModel,
-    DEFAULT_HOUSEKEEPER_MODEL,
-  );
 
-  const activeSession = useMemo(
-    () => sessions.find((s) => s.id === activeID) ?? null,
-    [sessions, activeID],
-  );
-  const housekeeper = useMemo(
-    () =>
-      baseUrl && activeSession
-        ? {
-            model: housekeeperModel,
-            directory: activeSession.directory,
-            onTitle: renameSession,
-          }
-        : undefined,
-    [baseUrl, activeSession, housekeeperModel, renameSession],
-  );
+  const activeSession = sessions.find((s) => s.id === activeID) ?? null;
 
   // Seeds the default directory from $HOME exactly once — deliberately
   // `[]`, not `[defaultDir]`: a value already present (including one the
@@ -147,7 +128,6 @@ const LocalCodeWidget = () => {
               baseUrl={baseUrl}
               sessionID={activeID}
               catalog={catalog}
-              housekeeper={housekeeper}
               recentSessions={sessions}
               sessionsLoading={loading}
               onSelect={setActiveID}

@@ -19,6 +19,14 @@ const autoTitle = (prompt: string) => {
   return clean.length > AUTO_TITLE_LENGTH ? `${clean.slice(0, AUTO_TITLE_LENGTH).trimEnd()}…` : clean;
 };
 
+// opencode's own native title-generation agent (see housekeeper.ts) isn't
+// cleaned up before it lands in `session.title` — verified live it can come
+// back with a stray leading quote and no matching trailing one (a model
+// starting its answer mid-quote). Trims that and any wrapping whitespace;
+// doesn't touch length, opencode's own title is already prompt-length, not
+// a full paragraph.
+const sanitizeTitle = (title: string) => title.trim().replace(/^["'*_`]+/, "").replace(/["'*_`]+$/, "").trim();
+
 // `directory` scopes both the initial fetch and every live SSE event to
 // this widget's own working directory — see client.ts's listSessions doc
 // comment: opencode's session store is global across every directory
@@ -69,7 +77,7 @@ export const useSessions = (baseUrl: string | null, directory: string | null) =>
         .filter((s) => s.title !== HOUSEKEEPER_SESSION_TITLE)
         .map((s) => ({
           ...s,
-          displayTitle: titles[s.id] || s.title || "untitled",
+          displayTitle: titles[s.id] || (s.title && sanitizeTitle(s.title)) || "untitled",
           pinned: s.id in pinned,
           pinnedAt: pinned[s.id] ?? null,
         }))

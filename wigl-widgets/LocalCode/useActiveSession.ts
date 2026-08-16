@@ -4,26 +4,15 @@
 // after that is applied from SSE events — see AGENTS.md's "durable vs.
 // transient" note for why parts are updated in place rather than replayed
 // wholesale on every event.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useStorage } from "@/wigl/hooks";
 import * as client from "./client";
 import { DEFAULT_CHAT_AGENT, STORAGE_KEYS } from "./config";
 import { applyEvent, emptySessionState, type SessionState } from "./eventReducer";
-import { generateSessionTitle } from "./housekeeper";
 import { endsInLoop } from "./repetition";
-import type { MessageWithParts, ModelSelection } from "./types";
+import type { ModelSelection } from "./types";
 
-export interface HousekeeperContext {
-  model: ModelSelection;
-  directory: string;
-  onTitle: (sessionID: string, title: string) => void;
-}
-
-export const useActiveSession = (
-  baseUrl: string | null,
-  sessionID: string | null,
-  housekeeper?: HousekeeperContext,
-) => {
+export const useActiveSession = (baseUrl: string | null, sessionID: string | null) => {
   const [state, setState] = useState<SessionState>(emptySessionState);
   const [loading, setLoading] = useState(false);
   const [lastModel, setLastModel] = useStorage<ModelSelection | null>(STORAGE_KEYS.lastModel, null);
@@ -47,24 +36,6 @@ export const useActiveSession = (
     });
   }, [baseUrl, sessionID]);
 
-  // Mirrors `state.messages` for `send()` to read synchronously without
-  // becoming a dependency of it (an array that gets a new reference on
-  // every SSE event would otherwise recreate `send` constantly).
-  const messagesRef = useRef<MessageWithParts[]>([]);
-  useEffect(() => {
-    messagesRef.current = state.messages;
-  }, [state.messages]);
-
-  // Set on the first message of a session, consumed once `state.busy` goes
-  // back to false for that same session (below) — not fired alongside
-  // `sendPrompt`. Both used to run concurrently: harmless for a cloud
-  // provider, but locally both the main turn and the housekeeper's own
-  // throwaway session compete for the same single Ollama instance, slowing
-  // down the turn the user is actually waiting on. Deferring until the
-  // real reply is in removes that contention; it's still fire-and-forget
-  // from there (a title arriving a few seconds late is fine).
-  const pendingTitleRef = useRef<{ sessionID: string; text: string } | null>(null);
-
   const send = useCallback(
     async (text: string, opts?: { model?: ModelSelection; agent?: string; variant?: string }) => {
       if (!baseUrl || !sessionID || !text.trim()) return;
@@ -77,23 +48,11 @@ export const useActiveSession = (
       if (opts?.model) setLastModel(opts.model);
       if (opts?.agent) setLastAgent(opts.agent);
       if (opts?.variant !== undefined) setLastVariant(opts.variant);
-      const isFirstMessage = messagesRef.current.length === 0;
       setState((prev) => ({ ...prev, busy: true, error: null }));
       await client.sendPrompt(baseUrl, sessionID, { text, model, agent, variant });
-      if (isFirstMessage && housekeeper) pendingTitleRef.current = { sessionID, text };
     },
-    [baseUrl, sessionID, lastModel, lastAgent, lastVariant, setLastModel, setLastAgent, setLastVariant, housekeeper],
+    [baseUrl, sessionID, lastModel, lastAgent, lastVariant, setLastModel, setLastAgent, setLastVariant],
   );
-
-  useEffect(() => {
-    if (state.busy || !baseUrl || !housekeeper) return;
-    const pending = pendingTitleRef.current;
-    if (!pending || pending.sessionID !== sessionID) return;
-    pendingTitleRef.current = null;
-    generateSessionTitle(baseUrl, housekeeper.model, pending.text, housekeeper.directory)
-      .then((title) => title && housekeeper.onTitle(pending.sessionID, title))
-      .catch((e) => console.error("[LocalCode] session auto-title failed", e));
-  }, [state.busy, baseUrl, sessionID, housekeeper]);
 
   // Edit-and-resend: revert to the target message (undoes its effects
   // server-side per opencode's own semantics), then send the corrected text

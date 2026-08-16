@@ -1,9 +1,16 @@
-// The "housekeeper" model: a small/fast/local model (default
-// ollama/smollm:135m, see config.ts's DEFAULT_HOUSEKEEPER_MODEL) used for
-// small internal tasks — session titles today, more later (greeting text,
-// etc. — see TODO.md) — so those never cost a real turn against whatever
-// model the user is actually working with. Runs in its own scratch
-// session, deleted afterward; the user never sees it as a session.
+// The "housekeeper" model: a small/fast/local model used for small internal
+// tasks so those never cost a real turn against whatever model the user is
+// actually working with. Runs in its own scratch session, deleted
+// afterward; the user never sees it as a session.
+//
+// `generateSessionTitle` below isn't called from the widget today — opencode
+// already runs its own native title-generation agent automatically on a
+// session's first message (verified live: `agent=title` fires against the
+// session's own model, no client call needed), so a second title-gen call
+// from here was pure duplicate work racing the real turn for the same
+// Ollama instance. Kept as a tested primitive (see
+// tests/opencode.generation.e2e.test.ts) for whatever the next concrete
+// housekeeper task turns out to be.
 import * as client from "./client";
 import { HOUSEKEEPER_SESSION_TITLE } from "./config";
 import type { ModelSelection } from "./types";

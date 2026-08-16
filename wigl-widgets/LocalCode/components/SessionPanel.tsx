@@ -1,6 +1,5 @@
 import { MessageSquarePlus, X } from "lucide-react";
 import { relativeTime } from "@/wigl/utils";
-import type { HousekeeperContext } from "../useActiveSession";
 import { useActiveSession } from "../useActiveSession";
 import type { useModelCatalog } from "../useModelCatalog";
 import type { SessionView } from "../useSessions";
@@ -76,7 +75,6 @@ export const SessionPanel = ({
   baseUrl,
   sessionID,
   catalog,
-  housekeeper,
   recentSessions,
   sessionsLoading,
   onSelect,
@@ -85,13 +83,12 @@ export const SessionPanel = ({
   baseUrl: string | null;
   sessionID: string | null;
   catalog: ReturnType<typeof useModelCatalog>;
-  housekeeper?: HousekeeperContext;
   recentSessions: SessionView[];
   sessionsLoading: boolean;
   onSelect: (id: string) => void;
   onCreate: () => void;
 }) => {
-  const session = useActiveSession(baseUrl, sessionID, housekeeper);
+  const session = useActiveSession(baseUrl, sessionID);
 
   if (!sessionID) {
     return (

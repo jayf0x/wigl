@@ -6,7 +6,6 @@ export const STORAGE_KEYS = {
   lastModel: "localcode_last_model", // ModelSelection | null — sticky across sessions
   lastAgent: "localcode_last_agent", // string | null
   lastVariant: "localcode_last_variant", // string | null
-  housekeeperModel: "localcode_housekeeper_model", // ModelSelection — see housekeeper.ts
   sidebarOpen: "localcode_sidebar_open", // boolean — sessions rail collapsed state
 } as const;
 
@@ -28,12 +27,6 @@ export const HOUSEKEEPER_SESSION_TITLE = "__wigl_housekeeper";
 // for now, later we will add claude code." Extend this list, not a
 // special-case branch, when that happens.
 export const ALLOWED_PROVIDER_IDS = ["ollama"];
-
-// smollm:135m — small/fast/free, run entirely local via Ollama. Used for
-// housekeeping (session titles, and whatever else lands in housekeeper.ts)
-// so those never cost a real model call. Configurable later via
-// STORAGE_KEYS.housekeeperModel; this is only the seed default.
-export const DEFAULT_HOUSEKEEPER_MODEL = { providerID: "ollama", modelID: "smollm:135m" };
 
 // The agent a brand-new session gets when the user hasn't picked one —
 // opencode's own default (an unset `agent` on the request) is `"build"`,
