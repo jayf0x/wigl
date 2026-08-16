@@ -1,12 +1,16 @@
-// Reachability/metadata reads against Ollama's local API — no polling here
-// (see TODO.md's "status polling removed" entry for why the old always-on
-// status UI and its poll loop are gone; a real error surface is future
-// work, not this file's job).
+// Reachability/metadata reads against Ollama's local API — no polling here.
+// `useOpencodeServer.ts` owns when these get called (once at connect, and
+// on the manual "reload" action — see its "Ollama reachability" section for
+// why this went from an always-on poll back to on-demand).
 const OLLAMA_BASE = "http://127.0.0.1:11434";
 
 /** Names as Ollama itself reports them (e.g. `"smollm:135m"`) — these are
  * exactly the ids opencodeConfig.ts's `syncOllamaModels` needs, since a
- * custom `openai-compatible` provider addresses models by that same tag. */
+ * custom `openai-compatible` provider addresses models by that same tag.
+ * Empty on any failure — same as `isOllamaReachable() === false`, but this
+ * doesn't distinguish "unreachable" from "reachable, zero models pulled";
+ * use `isOllamaReachable` when that distinction actually matters (the
+ * status indicator). */
 export const listOllamaModels = async (): Promise<string[]> => {
   try {
     const res = await fetch(`${OLLAMA_BASE}/api/tags`);
@@ -15,6 +19,19 @@ export const listOllamaModels = async (): Promise<string[]> => {
     return (data.models ?? []).map((m) => m.name);
   } catch {
     return [];
+  }
+};
+
+/** A dedicated reachability check (not just "did listOllamaModels find
+ * anything") — for the "is Ollama actually running" status indicator,
+ * where an empty model list and an unreachable server must read
+ * differently to the user. */
+export const isOllamaReachable = async (): Promise<boolean> => {
+  try {
+    const res = await fetch(`${OLLAMA_BASE}/api/tags`);
+    return res.ok;
+  } catch {
+    return false;
   }
 };
 

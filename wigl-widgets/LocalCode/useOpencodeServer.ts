@@ -4,7 +4,7 @@
 // choice, and what a multi-monitor / multi-instance setup would need).
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_CHAT_AGENT } from "./config";
-import { listOllamaModels, modelSupportsThinking } from "./ollama";
+import { isOllamaReachable, listOllamaModels, modelSupportsThinking } from "./ollama";
 import { disableSkillTool, type OllamaModelSync, syncChatAgent, syncOllamaModels } from "./opencodeConfig";
 import { type OpencodeServerHandle, startOpencodeServer } from "./serverProcess";
 
@@ -17,12 +17,6 @@ export type ServerStatus = "connecting" | "online" | "offline";
 // Best-effort and time-boxed as a whole: Ollama might not even be running,
 // and this must never hang the server startup waiting for it.
 const OLLAMA_SYNC_TIMEOUT_MS = 2000;
-
-// How often to check for a newly-pulled Ollama model once the server is
-// already up — config isn't hot-reloaded (see opencodeConfig.ts), so the
-// only way a `ollama pull` mid-session ever becomes selectable is noticing
-// the catalog changed and restarting `serve` ourselves (backlog.md B5).
-const OLLAMA_POLL_INTERVAL_MS = 15_000;
 
 const prepareOllamaModelSync = async (isCancelled: () => boolean): Promise<OllamaModelSync[]> => {
   const names = await listOllamaModels();
@@ -41,19 +35,16 @@ const prepareOllamaModelSync = async (isCancelled: () => boolean): Promise<Ollam
 // write could silently clobber the first). Neither is Ollama-availability
 // dependent for the skill-tool step, so only the model sync half gets the
 // timeout race — disabling the skill tool is a local file write with
-// nothing external to hang on. Returns the model names actually seen, so
-// the caller can remember what's already synced and later notice a
-// `ollama pull` that added to that set.
-const syncConfigBeforeStart = async (isCancelled: () => boolean): Promise<string[]> => {
+// nothing external to hang on.
+const syncConfigBeforeStart = async (isCancelled: () => boolean): Promise<void> => {
   const models = await Promise.race([
     prepareOllamaModelSync(isCancelled),
     new Promise<OllamaModelSync[]>((resolve) => setTimeout(() => resolve([]), OLLAMA_SYNC_TIMEOUT_MS)),
   ]);
-  if (isCancelled()) return [];
+  if (isCancelled()) return;
   if (models.length > 0) await syncOllamaModels(models).catch((e) => console.error("[LocalCode]", e));
   await disableSkillTool().catch((e) => console.error("[LocalCode]", e));
   await syncChatAgent(DEFAULT_CHAT_AGENT).catch((e) => console.error("[LocalCode]", e));
-  return models.map((m) => m.name);
 };
 
 // `directory` is where opencode's sessions actually get scoped — see
@@ -66,17 +57,36 @@ export const useOpencodeServer = (directory: string | null) => {
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
   const handleRef = useRef<OpencodeServerHandle | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const syncedModelsRef = useRef<Set<string>>(new Set());
+
+  // — Ollama reachability ————————————————————————————————————————————
+  // Used to poll `listOllamaModels()` every 15s for as long as the server
+  // was "online", purely to notice a model pulled mid-session. Verified
+  // live this was expensive for what it bought: a GET plus a POST /api/show
+  // per model, forever, in the background, whether or not anything ever
+  // changed — and it gave no positive signal either (an unreachable Ollama
+  // just silently kept polling with nothing to show for it). Replaced with
+  // a check on connect/reload only, surfaced as `ollamaOnline` so the UI can
+  // actually show "Ollama isn't running" instead of nothing — see
+  // index.tsx's status dot. `reloadModels` re-runs the check plus a full
+  // `restart()` (config isn't hot-reloaded, same reasoning as before) for a
+  // manual "I just pulled a model" trigger instead of an automatic one.
+  const [ollamaOnline, setOllamaOnline] = useState<boolean | null>(null);
 
   const restart = () => setAttempt((n) => n + 1);
+  const reloadModels = () => {
+    isOllamaReachable().then(setOllamaOnline);
+    restart();
+  };
 
   useEffect(() => {
     if (!directory) return;
     let cancelled = false;
     setStatus("connecting");
+    isOllamaReachable().then((reachable) => {
+      if (!cancelled) setOllamaOnline(reachable);
+    });
     syncConfigBeforeStart(() => cancelled)
-      .then((names) => {
-        syncedModelsRef.current = new Set(names);
+      .then(() => {
         if (cancelled) return undefined;
         return startOpencodeServer(directory);
       })
@@ -101,23 +111,5 @@ export const useOpencodeServer = (directory: string | null) => {
     };
   }, [attempt, directory]);
 
-  // Notices a model pulled via `ollama pull` while this widget's server is
-  // already running — config isn't hot-reloaded (opencodeConfig.ts), so the
-  // only way it becomes selectable is restarting `serve` after re-syncing
-  // (backlog.md B5). Only *new* names trigger it: a model removed via
-  // `ollama rm` staying configured is harmless (syncOllamaModels never
-  // removes entries either) and not worth a restart on its own.
-  useEffect(() => {
-    if (status !== "online") return;
-    const interval = setInterval(() => {
-      listOllamaModels()
-        .then((names) => {
-          if (names.some((name) => !syncedModelsRef.current.has(name))) restart();
-        })
-        .catch(() => {});
-    }, OLLAMA_POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [status]);
-
-  return { status, baseUrl, restart };
+  return { status, baseUrl, ollamaOnline, restart, reloadModels };
 };

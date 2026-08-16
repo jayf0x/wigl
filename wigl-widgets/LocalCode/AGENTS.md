@@ -160,13 +160,14 @@ while a `serve` instance was already running had zero effect until
 restart. So the sync must run *before* `startOpencodeServer()`, not after
 — `useOpencodeServer.ts` does exactly that, best-effort and time-boxed
 (`OLLAMA_SYNC_TIMEOUT_MS`, currently 2s) so a not-yet-running Ollama never
-blocks the widget from starting. A model pulled mid-session used to need a
-manual restart to show up; `useOpencodeServer.ts` now polls
-`listOllamaModels()` every `OLLAMA_POLL_INTERVAL_MS` (15s) while the server
-is online, diffs the names against what was last synced, and calls its own
-`restart()` when a new one appears — no UI trigger needed (the button that
-used to call `restart()`, `ServerStatusBar.tsx`, was removed along with the
-rest of the always-on status UI).
+blocks the widget from starting. A model pulled mid-session needs a manual
+`reloadModels()` (re-syncs, then restarts `serve`) to become selectable —
+this used to be an automatic 15s poll instead, removed after owner
+feedback that constant background polling for a rare event ("did the user
+just run `ollama pull`") wasn't worth it, especially with nothing to show
+for it when Ollama was down (see `useOpencodeServer.ts`'s "Ollama
+reachability" section). `ollamaOnline` (checked once per connect/reload,
+not polled) is what index.tsx's status area shows instead.
 
 `opencodeConfig.ts` uses plain `JSON.parse`/`stringify`, not a real JSONC
 parser — no widget bundles its own npm dependency yet (every widget's

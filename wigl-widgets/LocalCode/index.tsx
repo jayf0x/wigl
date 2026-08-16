@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { PanelLeft } from "lucide-react";
+import { PanelLeft, RotateCw } from "lucide-react";
 import { ErrorOverlay, Widget } from "@/wigl";
 import { useStorage } from "@/wigl/hooks";
 import { cn, homeDir } from "@/wigl/utils";
@@ -21,7 +21,7 @@ const LocalCodeWidget = () => {
     STORAGE_KEYS.sidebarOpen,
     true,
   );
-  const { status, baseUrl, restart } = useOpencodeServer(defaultDir || null);
+  const { status, baseUrl, ollamaOnline, restart, reloadModels } = useOpencodeServer(defaultDir || null);
   const { sessions, loading, createSession, renameSession, togglePin, deleteSession } =
     useSessions(baseUrl, defaultDir || null);
   const catalog = useModelCatalog(baseUrl);
@@ -89,6 +89,25 @@ const LocalCodeWidget = () => {
           <span className="min-w-0 flex-1 truncate text-[11px] text-foreground/70">
             {activeSession?.displayTitle ?? "localcode"}
           </span>
+          {/* Ollama isn't polled (see useOpencodeServer.ts) — checked once
+            per connect, and again here on click, which doubles as "I just
+            ran `ollama pull`, pick it up now" without a full app restart. */}
+          <button
+            type="button"
+            data-no-drag
+            onClick={reloadModels}
+            title={
+              ollamaOnline === false
+                ? "ollama unreachable — click to retry"
+                : "reload ollama models (pick up a fresh `ollama pull`)"
+            }
+            className={cn(
+              "rounded-md p-0.5 transition-colors duration-150 hover:bg-muted",
+              ollamaOnline === false ? "text-destructive" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <RotateCw className="size-3" />
+          </button>
           {/* The only always-on status: is the agent server reachable. Anything
             richer belongs in the shared error surface, not a status bar. */}
           <span
