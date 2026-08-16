@@ -81,6 +81,16 @@ interface DragState {
   snapshot: GridItem[];
   target: { mon: number; col: number; row: number };
   frozen: boolean;
+  // `PointerEvent.screenX/screenY` (confirmed live — B8): screenX reports a
+  // true global coordinate, but screenY reports a coordinate relative to
+  // the *capturing* window's own origin, not the global one, once the
+  // drag's pointer capture keeps events flowing after the cursor leaves
+  // that window (e.g. onto a monitor at a different y). Calibrated once at
+  // drag start from `clientY` (always window-relative, unambiguous) against
+  // this window's known global monitor origin, then reused for every move —
+  // self-correcting rather than assuming which axis needs it or by how much,
+  // so a platform where screenX/Y are already global just calibrates to ~0.
+  screenCorrection: { x: number; y: number };
 }
 
 /** Broadcast on every drag move while the cursor is on a foreign monitor
@@ -736,6 +746,7 @@ export const Desktop = ({
       const item = layout.find((i) => i.id === id)!;
       const el = els.current[id]!;
       el.setPointerCapture(e.pointerId);
+      const own = monitors.current?.[monitorIndex];
       drag.current = {
         id,
         el,
@@ -744,6 +755,10 @@ export const Desktop = ({
         snapshot: layout.map((i) => ({ ...i })),
         target: { mon: monitorIndex, col: item.col, row: item.row },
         frozen: false,
+        screenCorrection: {
+          x: own ? own.x + e.clientX - e.screenX : 0,
+          y: own ? own.y + e.clientY - e.screenY : 0,
+        },
       };
       setDragId(id);
       // A fast drag sweeps the pointer across other widgets' content, which
@@ -771,10 +786,11 @@ export const Desktop = ({
     const item = layoutNow.find((i) => i.id === d.id)!;
 
     // Which monitor is the cursor on? screenX/Y and the monitor rects share
-    // the same global logical space.
+    // the same global logical space once corrected against d.screenCorrection
+    // (see DragState's comment).
     const ms = monitors.current;
-    const sx = e.screenX;
-    const sy = e.screenY;
+    const sx = e.screenX + d.screenCorrection.x;
+    const sy = e.screenY + d.screenCorrection.y;
     let tgt = monitorIndex;
     if (ms && !windowed) {
       const hit = ms.findIndex(

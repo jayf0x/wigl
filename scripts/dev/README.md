@@ -72,3 +72,13 @@ report numbers. All require an X11 session and a running app (`bun run qa`).
   persistent mismatch strip at the screen edge. That is not a bug in wigl.
 - `damage-watch.py` — the XDamage rects the overlay reports during a drag,
   i.e. what the compositor is being told to re-upload.
+
+## macOS drag probe
+
+- `b8-drag-probe.sh` — a bounded, cliclick-driven synthetic cross-monitor
+  drag, for exercising `Desktop.tsx`'s drag/foreign-monitor logic without a
+  screenshot. Needs `cliclick` (`brew install cliclick`) and macOS
+  Accessibility permission granted to whatever's driving it. See the
+  script's own header for coordinate-space gotchas (cliclick needs `=`-
+  prefixed negative absolute coordinates; a widget must be reachable — not
+  covered by another app's window — for the initial click to land).
