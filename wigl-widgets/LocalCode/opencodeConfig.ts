@@ -42,6 +42,7 @@ const writeRaw = async (path: string, content: string): Promise<void> => {
 interface OpencodeModelConfig {
   name?: string;
   variants?: Record<string, { reasoningEffort: string }>;
+  limit?: { context: number; output: number };
 }
 
 interface OpencodeConfigShape {
@@ -50,7 +51,7 @@ interface OpencodeConfigShape {
     {
       npm?: string;
       name?: string;
-      options?: { baseURL?: string };
+      options?: { baseURL?: string; num_ctx?: number };
       models?: Record<string, OpencodeModelConfig>;
     }
   >;
@@ -99,13 +100,27 @@ const REASONING_VARIANTS: Record<string, { reasoningEffort: string }> = {
   off: { reasoningEffort: "none" },
 };
 
+// Ollama's own default context window is a few thousand tokens — an
+// agentic tool-call transcript blows through that fast (backlog.md B15).
+// `num_ctx` on the provider's `options` block applies to every request
+// against this Ollama instance; `limit.context`/`limit.output` on each
+// model entry tell opencode itself the same numbers. ponytail: one flat
+// default for every model rather than a per-model/per-machine setting —
+// add an owner-facing override if a model or machine actually needs a
+// different number.
+const DEFAULT_CONTEXT_WINDOW = { context: 8192, output: 4096 };
+
 /** Adds any of `models` that aren't already declared under the ollama
  * provider block, creating that block if it doesn't exist yet, and gives a
  * thinking-capable model's entry a `variants` block if it doesn't have one
  * yet, or patches in a missing `off` key if it already has one from before
  * `off` was a real variant (covers a brand-new model, one synced by an
  * older version of this function before `variants` existed, and one synced
- * before `off` was added to `REASONING_VARIANTS`). Never removes a model or a
+ * before `off` was added to `REASONING_VARIANTS`). Also backfills
+ * `DEFAULT_CONTEXT_WINDOW` onto the provider's `options.num_ctx` and every
+ * model's `limit` whenever either is missing or stale, so a config written
+ * by an older version of this function still gets the context-window fix.
+ * Never removes a model or a
  * variant once written — one pulled via `ollama rm` just stops being
  * offered from Ollama's own list, and quietly stays declared in opencode's
  * config (harmless: opencode just can't reach it, same as any
@@ -125,18 +140,30 @@ export const syncOllamaModels = async (models: OllamaModelSync[]): Promise<boole
   config.provider ??= {};
   const existing = config.provider[OLLAMA_PROVIDER_ID];
   const configuredModels = { ...existing?.models };
-  let changed = !existing;
+  let changed = !existing || existing.options?.num_ctx !== DEFAULT_CONTEXT_WINDOW.context;
   for (const { name, thinking } of models) {
     const entry = configuredModels[name];
     if (!entry) {
-      configuredModels[name] = thinking ? { name, variants: REASONING_VARIANTS } : { name };
+      configuredModels[name] = {
+        name,
+        limit: DEFAULT_CONTEXT_WINDOW,
+        ...(thinking ? { variants: REASONING_VARIANTS } : {}),
+      };
       changed = true;
-    } else if (thinking && !entry.variants) {
-      configuredModels[name] = { ...entry, variants: REASONING_VARIANTS };
-      changed = true;
-    } else if (thinking && entry.variants && !entry.variants.off) {
-      configuredModels[name] = { ...entry, variants: { ...entry.variants, off: REASONING_VARIANTS.off } };
-      changed = true;
+    } else {
+      let next = entry;
+      if (thinking && !next.variants) {
+        next = { ...next, variants: REASONING_VARIANTS };
+        changed = true;
+      } else if (thinking && next.variants && !next.variants.off) {
+        next = { ...next, variants: { ...next.variants, off: REASONING_VARIANTS.off } };
+        changed = true;
+      }
+      if (!next.limit || next.limit.context !== DEFAULT_CONTEXT_WINDOW.context) {
+        next = { ...next, limit: DEFAULT_CONTEXT_WINDOW };
+        changed = true;
+      }
+      if (next !== entry) configuredModels[name] = next;
     }
   }
   if (!changed) return false;
@@ -144,7 +171,7 @@ export const syncOllamaModels = async (models: OllamaModelSync[]): Promise<boole
   config.provider[OLLAMA_PROVIDER_ID] = {
     npm: existing?.npm ?? "@ai-sdk/openai-compatible",
     name: existing?.name ?? "Ollama (local)",
-    options: { baseURL: existing?.options?.baseURL ?? OLLAMA_BASE_URL },
+    options: { baseURL: existing?.options?.baseURL ?? OLLAMA_BASE_URL, num_ctx: DEFAULT_CONTEXT_WINDOW.context },
     models: configuredModels,
   };
 
