@@ -41,8 +41,8 @@ import { RESERVED_PLUGIN_IDS, resolvePluginConfig } from "../src/wigl/plugins/ty
 const repoRoot = resolve(import.meta.dir, "..");
 
 // Override for a widgets folder that lives outside this repo (a personal
-// widget stash, or the e2e suite under scripts/e2e/ proving the tooling
-// isn't secretly repo-root-coupled — see scripts/e2e/README.md). Only the
+// widget stash, or the e2e suite under tests/e2e/ proving the tooling
+// isn't secretly repo-root-coupled — see tests/e2e/README.md). Only the
 // no-arg "every widget" sweep reads this; `widget:build <dir>`/`widget:install
 // <dir>` already take any path, in or out of the repo, with no override needed.
 // A relative override is resolved against repoRoot (not cwd) for the same
@@ -50,7 +50,7 @@ const repoRoot = resolve(import.meta.dir, "..");
 const WIDGETS_ROOT = resolve(repoRoot, process.env.WIGL_WIDGETS_ROOT ?? "wigl-widgets");
 // "types": widget:types' generated .d.ts output. "node_modules": present at
 // widgets-root level only when a devkit's react type deps were copied
-// alongside it (widget:devkit, see scripts/e2e/README.md) — a widget's own
+// alongside it (widget:devkit, see tests/e2e/README.md) — a widget's own
 // deps live inside its own folder, never at the root.
 const NON_WIDGET_DIRS = new Set(["types", "node_modules"]);
 // A leading "_" opts a wigl-widgets/ folder out of discovery/build entirely —
@@ -335,7 +335,7 @@ const check = async (dir: string) => {
  * that points `@/*` at it. Copy destination becomes a drop-in root — put
  * widget folders directly under it and `tsc -p <dest> --noEmit` typechecks
  * them exactly like `bun run typecheck:widgets` does in-repo. This is the
- * actual mechanism the e2e suite exercises (scripts/e2e/README.md) — not a
+ * actual mechanism the e2e suite exercises (tests/e2e/README.md) — not a
  * test-only shim, since a widget author working outside this repo needs the
  * same export to typecheck against at all (see docs/widgets.md). */
 const devkit = async (dest: string) => {
@@ -360,7 +360,7 @@ const devkit = async (dest: string) => {
   // wigl-widgets/ lives inside the repo. Moved anywhere else, that walk hits
   // nothing and every widget fails to typecheck with "This JSX tag requires
   // the module path 'react/jsx-runtime' to exist" even though the widget
-  // itself has no error — a real bug this e2e suite (scripts/e2e/) caught.
+  // itself has no error — a real bug this e2e suite (tests/e2e/) caught.
   // Vendoring the exact same `@types/react` (+ its one dependency,
   // `csstype`) this repo is pinned to fixes it without asking a widget
   // author to separately `bun install` anything, and guarantees the types

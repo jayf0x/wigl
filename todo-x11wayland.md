@@ -13,7 +13,7 @@
   on X11 it was dropping the web process onto software compositing, ~83% vs
   ~28% CPU per drag on a fractionally-scaled 4K desktop). See
   `todo-ghosting.md` for the measurements, the disproven hypotheses, and the
-  `scripts/dev/` harness. **Open**: owner confirmation that the visual
+  `tests/manual/` harness. **Open**: owner confirmation that the visual
   symptom is actually gone — it has never been reproducible from synthetic
   input.
 - [ ] Heap corruption seen once: `malloc_consolidate(): unaligned fastbin
@@ -23,7 +23,7 @@
   **Do not chase this by hammering drags again.** It has now failed to
   recur across ~140 scripted drags under `gdb` in two sessions, which is
   enough to say randomized dragging is not a trigger — it only burns the
-  owner's machine (see the input-budget note in `scripts/dev/README.md`).
+  owner's machine (see the input-budget note in `tests/manual/README.md`).
   The one observation was on a build that still had
   `WEBKIT_DISABLE_DMABUF_RENDERER=1` forced on X11, i.e. software
   compositing under heavy load; that path is gone as of `4d42394`, so this

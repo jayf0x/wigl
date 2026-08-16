@@ -1,15 +1,16 @@
-// A fake `../storage/client` + `@tauri-apps/api/event` for testing anything
-// that goes through `useStorage`/`useQuery` (see hooks/useStorage.ts,
-// hooks/useQuery.ts) without a real sqlite3 binary or Tauri IPC — an
-// in-memory Map standing in for the kv table, and a same-process pub/sub
-// standing in for wigl's cross-window "wigl-kv" broadcast.
+// A fake `src/wigl/storage/client` + `@tauri-apps/api/event` for testing
+// anything that goes through `useStorage`/`useQuery`
+// (src/wigl/hooks/useStorage.ts, useQuery.ts) without a real sqlite3 binary
+// or Tauri IPC — an in-memory Map standing in for the kv table, and a
+// same-process pub/sub standing in for wigl's cross-window "wigl-kv"
+// broadcast.
 //
 // Usage — call this BEFORE importing the hook under test, since
 // `mock.module` only affects modules resolved after it runs:
 //
-//   import { mockStorage } from "@/wigl/test-utils/mock-storage";
+//   import { mockStorage } from "./mock-storage";
 //   const storage = mockStorage();
-//   const { useStorage } = await import("../useStorage");
+//   const { useStorage } = await import("../src/wigl/hooks/useStorage");
 //   // ...render a component using useStorage, then:
 //   storage.kv.get("some_key"); // inspect what got written
 //
@@ -24,7 +25,7 @@ export const mockStorage = () => {
   const kv = new Map<string, string>();
   const listeners = new Map<string, Set<Listener<unknown>>>();
 
-  mock.module("../storage/client", () => ({
+  mock.module("../src/wigl/storage/client", () => ({
     sql: async (query: string): Promise<string> => {
       // Just enough SQL-shape recognition for what useStorage/useQuery
       // actually send — not a real parser. Extend here if a future test

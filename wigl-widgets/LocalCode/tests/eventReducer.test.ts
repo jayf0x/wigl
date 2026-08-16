@@ -197,7 +197,7 @@ describe("applyEvent — unknown event types", () => {
 describe("applyEvent — message.part.delta (incremental token streaming)", () => {
   test("deltas accumulate onto the part's text as they arrive", () => {
     // Real shape captured from a live `opencode serve` + Ollama session
-    // (scripts/dev/ollama-stream-check.py): providers that don't send
+    // (tests/manual/ollama-stream-check.py): providers that don't send
     // frequent message.part.updated snapshots still send these per-token.
     const state = applyAll([
       ...userTurn,

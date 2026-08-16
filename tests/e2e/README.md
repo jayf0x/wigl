@@ -40,7 +40,7 @@ genuine bugs (all now fixed in `scripts/widget.ts`):
 ```bash
 bun run wigl test e2e     # only this suite
 bun run wigl test         # everything: widgets + shared + e2e
-bun test scripts/e2e      # same suite, bypassing the wigl dispatcher
+bun test tests/e2e      # same suite, bypassing the wigl dispatcher
 ```
 
 Slower than the rest of the repo's tests (low single-digit seconds, not

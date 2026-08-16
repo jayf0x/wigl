@@ -1,7 +1,7 @@
 // DEMO — proves the DOM tier (bunfig.toml's happy-dom preload) actually
 // works, nothing more. Not a real regression test for anything; replace/
-// delete once a real DOM-level test exists (see tests-backlog.md at the
-// repo root for what's actually queued).
+// delete once a real DOM-level test exists (see tests/backlog.md for what's
+// actually queued).
 //
 // The one non-obvious thing this demo confirms: happy-dom's PointerEvent
 // constructor accepts and round-trips `screenX`/`screenY` directly — the

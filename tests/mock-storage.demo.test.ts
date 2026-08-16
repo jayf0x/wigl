@@ -1,8 +1,9 @@
 // DEMO — proves mock-storage.ts's `mock.module` swap actually intercepts
-// `useStorage`'s real import of `../storage/client` and `@tauri-apps/api/event`,
-// with no real sqlite3 or Tauri runtime involved. Not a real regression
-// test for useStorage's own behavior (polling, write-ordering, etc.) —
-// replace/delete once a real one exists (see tests-backlog.md).
+// `useStorage`'s real import of `src/wigl/storage/client` and
+// `@tauri-apps/api/event`, with no real sqlite3 or Tauri runtime involved.
+// Not a real regression test for useStorage's own behavior (polling,
+// write-ordering, etc.) — replace/delete once a real one exists (see
+// tests/backlog.md).
 //
 // `mock.module` must run before the module under test is first imported —
 // hence the dynamic `await import(...)` after calling mockStorage(),
@@ -16,7 +17,7 @@ describe("storage-mock tier demo", () => {
   afterAll(() => storage.restore());
 
   test("useStorage reads back what it writes, through the mock kv store", async () => {
-    const { useStorage } = await import("../hooks/useStorage");
+    const { useStorage } = await import("../src/wigl/hooks/useStorage");
     const { result } = renderHook(() => useStorage("demo_key", "initial"));
 
     await waitFor(() => expect(result.current[2].loading).toBe(false));

@@ -6,7 +6,7 @@ Most of this file is macOS-specific tooling (`log show`, `swift scripts/winlist.
 
 Hard-won, in the order that would have saved the most time:
 
-1. **Get the environment facts before forming a theory.** `python3 scripts/dev/x11-report.py`
+1. **Get the environment facts before forming a theory.** `python3 tests/manual/x11-report.py`
    answers session type, compositor, fractional scaling, GPU and WebKitGTK
    version in one no-input command. A rendering bug that reproduces on
    exactly one machine is usually a property of that machine's display stack,
@@ -23,13 +23,13 @@ Hard-won, in the order that would have saved the most time:
    order). Before believing a metric, point it at a case where you already
    know the answer.
 3. **Measure cost, not just pixels.** Two builds can render identical pixels
-   and emit identical XDamage while differing 3x in CPU. `scripts/dev/perf-drag.py`
+   and emit identical XDamage while differing 3x in CPU. `tests/manual/perf-drag.py`
    A/Bs that. The DMA-BUF renderer bug was invisible to every pixel-level
    check and obvious the moment cost was measured.
 4. **A bug that won't reproduce from synthetic input is telling you
    something.** After a bounded attempt, stop and treat "not reproducible
    this way" as the finding. Randomised input until something breaks is not a
-   test — see `scripts/dev/README.md`'s input-budget rules, which exist
+   test — see `tests/manual/README.md`'s input-budget rules, which exist
    because this was gotten wrong.
 
 ## You often can't take a screenshot
@@ -148,6 +148,6 @@ The windowed flow's `WebviewWindowBuilder` calls `.visible(true)`/`.show()` dire
 
 If the window now maps/shows but stays blank/white, that's a different failure mode: WebKitGTK's DMA-BUF renderer (the default since 2.42) can silently fail to present anything on certain GPU/driver combinations, most commonly hybrid-GPU laptops, dual-discrete-GPU desktops, and **external-display/docking-station setups** under Wayland. `lib.rs`'s `run()` sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` to work around exactly this (visible in the mode line above) — **on Wayland sessions only**, and only if you haven't already set that env var yourself, so `WEBKIT_DISABLE_DMABUF_RENDERER= bun run qa` (forcing it unset) is how to confirm whether that's actually the cause on a machine where the workaround still isn't enough. `WEBKIT_DISABLE_COMPOSITING_MODE=1` is a blunter fallback (disables WebKit's compositor entirely) if DMA-BUF alone doesn't resolve it.
 
-The Wayland-only gate matters and isn't cosmetic. WebKitGTK dropped its X11 accelerated backing store, so on an X11 session that variable no longer selects a different accelerated path — it drops the web process onto software compositing. Measured on an X11 GNOME session driving a fractionally-scaled 4K desktop (a 6144x3456 framebuffer), an identical scripted drag costs the `WebKitWebProcess` **~83% CPU with the variable set vs. ~28% without it** — reproducible across runs, and the reason a big enough desktop shows half-updated frames mid-drag. If you ever need to set it on X11 to debug something, expect drags to feel bad while it's on. `scripts/dev/` has the harness used to measure this (see its README).
+The Wayland-only gate matters and isn't cosmetic. WebKitGTK dropped its X11 accelerated backing store, so on an X11 session that variable no longer selects a different accelerated path — it drops the web process onto software compositing. Measured on an X11 GNOME session driving a fractionally-scaled 4K desktop (a 6144x3456 framebuffer), an identical scripted drag costs the `WebKitWebProcess` **~83% CPU with the variable set vs. ~28% without it** — reproducible across runs, and the reason a big enough desktop shows half-updated frames mid-drag. If you ever need to set it on X11 to debug something, expect drags to feel bad while it's on. `tests/manual/` has the harness used to measure this (see its README).
 
 If the window is still invisible with that workaround in place, next things to try, in order: `WEBKIT_DISABLE_COMPOSITING_MODE=1` (a blunter, older fallback that disables WebKit's compositor entirely), unplugging the external display to test on the laptop's own panel (isolates whether it's specifically the external-display/docking path), and `journalctl --user -b 0 | grep -i webkit` for a GPU/driver-level crash the app's own stderr wouldn't surface.

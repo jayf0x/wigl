@@ -2,8 +2,8 @@
 
 Pending automated coverage for `src/wigl` (core) — not a priority-ordered
 roadmap, not a place to log every bug. See `AGENTS.md`'s "Testing" section
-for what belongs here versus what doesn't, and for the actual test
-infrastructure (`src/wigl/test-utils/`, `bunfig.toml`).
+for what belongs here versus what doesn't, and `tests/README.md` for the
+actual test infrastructure.
 
 Each entry is something a test-writing pass (an agent, a subagent it
 spawns, or a human) can pick up and turn into a real `*.test.ts` file
@@ -32,8 +32,8 @@ Rules for keeping this file real (same spirit as `backlog.md`):
   `PointerEvent.screenY` is window-relative to the *capturing* window during
   a cross-monitor drag, not a true global coordinate (screenX has no such
   issue). Test shape: synthesize `pointerdown` + a few `pointermove`s (real
-  `PointerEvent`s work fine in happy-dom — see
-  `src/wigl/test-utils/dom.demo.test.ts`) against two mocked monitors at
+  `PointerEvent`s work fine in happy-dom — see `tests/dom.demo.test.ts`)
+  against two mocked monitors at
   different `y` offsets (e.g. one at `y: 0`, one at `y: -388`, matching the
   real repro), and assert the computed `col`/`row` on the foreign monitor
   match what a correct conversion would give — not the exact live numbers

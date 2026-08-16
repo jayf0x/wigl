@@ -1,6 +1,6 @@
 [test]
 # Registers a DOM (happy-dom) before every `bun test` run — see
-# src/wigl/test-utils/register-dom.ts. Harmless for pure-logic tests that
-# never touch `document`/`window`; required for anything that mounts a
-# component or dispatches a synthetic event.
-preload = ["./src/wigl/test-utils/register-dom.ts"]
+# tests/register-dom.ts. Harmless for pure-logic tests that never touch
+# `document`/`window`; required for anything that mounts a component or
+# dispatches a synthetic event.
+preload = ["./tests/register-dom.ts"]

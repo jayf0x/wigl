@@ -1,5 +1,5 @@
+import { autoPlace, collides, type GridItem, reflow } from "../src/wigl/grid/math";
 import { describe, expect, test } from "bun:test";
-import { autoPlace, collides, type GridItem, reflow } from "./math";
 
 describe("collides", () => {
   test("overlapping items collide", () => {

@@ -6,13 +6,11 @@
  * `bun scripts/widget.ts <cmd>` subprocess against it, and asserts on real
  * exit codes / real files on disk. No mocking of fs, tsc, or Bun.build.
  *
- * Run: `bun run wigl test e2e` (or `bun test scripts/e2e`). Slower than the
+ * Run: `bun run wigl test e2e` (or `bun test tests/e2e`). Slower than the
  * unit-style suites elsewhere in the repo — it shells out to `tsc` and
  * `Bun.build` for real — expect low-teens seconds, not milliseconds.
  */
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { access } from "node:fs/promises";
-import { join } from "node:path";
+
 import {
   cleanupTemp,
   exportDevkit,
@@ -23,6 +21,9 @@ import {
   runWidgetCliFrom,
   typecheck,
 } from "./helpers";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { access } from "node:fs/promises";
+import { join } from "node:path";
 
 const exists = (p: string) =>
   access(p)

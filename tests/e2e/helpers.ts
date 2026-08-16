@@ -5,11 +5,11 @@
  * filesystem, and hand back what happened" so the test file itself can stay
  * readable as a list of scenarios.
  */
-import { mkdtemp, cp as fsCp, readFile, rm, stat } from "node:fs/promises";
+import { cp as fsCp, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-/** scripts/e2e/ -> repo root. Every subprocess this suite spawns runs with
+/** tests/e2e/ -> repo root. Every subprocess this suite spawns runs with
  * this as `cwd`, since scripts/widget.ts resolves its own repo-relative
  * paths (wigl-widgets/tsconfig.json, src-tauri/tauri.conf.json, ...) against
  * the process cwd, not against import.meta.dir. */
@@ -133,7 +133,7 @@ export const exportDevkit = async (): Promise<string> => {
 
 /** Builds one scenario's external "widgets root": a fresh temp dir seeded
  * with a copy of the shared devkit's tsconfig.json + types/, plus a copy of
- * each named fixture under scripts/e2e/fixtures/. This is deliberately a
+ * each named fixture under tests/e2e/fixtures/. This is deliberately a
  * copy, not a symlink or shared dir across scenarios — each scenario gets
  * its own root so a build/install in one can't leak state into another. */
 export const makeScenarioRoot = async (devkitDir: string, fixtureNames: string[]): Promise<string> => {

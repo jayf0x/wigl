@@ -142,7 +142,7 @@ the primitive to reuse — don't add a second one.
   everything landed at once, even though `part.delta` events were arriving
   incrementally the entire time. Fixed by adding a `message.part.delta`
   case to `applyEvent` that appends `delta` onto the matching part's text.
-  Verify with `scripts/dev/ollama-stream-check.py`, which measures both
+  Verify with `tests/manual/ollama-stream-check.py`, which measures both
   Ollama's raw HTTP streaming and opencode's `/event` feed independently.
 
 ## Model catalog: why `opencodeConfig.ts` exists

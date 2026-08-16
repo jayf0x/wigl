@@ -1,10 +1,17 @@
-# scripts/dev
+# tests/manual
 
-Reusable, rerunnable scripts (bash/python/AppleScript/whatever fits) for
-manually exercising a specific flow — not automated tests, not CI. The point
-is a lightweight, predictable way to QA something ("does drag still work
-across monitors", "does the composer still stream a reply") without writing
-and maintaining a full test suite for it.
+Reusable, rerunnable scripts (bash/python/AppleScript/whatever fits — no
+"must be TypeScript" rule here, unlike the rest of `tests/`) for manually
+exercising a specific flow — not automated tests, not CI. The point is a
+lightweight, predictable way to QA something ("does drag still work across
+monitors", "does the composer still stream a reply") without writing and
+maintaining a full test suite for it.
+
+**Never wired into `bun run test`/`wigl test`, and never should be** — see
+`AGENTS.md`'s "Testing" section. Everything in here either drives a real OS
+cursor or needs a live display; an agent (or a script) running one of these
+unprompted can leave the machine unusable for as long as it runs. Run them
+by hand, on purpose, one at a time.
 
 - One script per flow, named for what it checks (`check-drag.sh`, not `test1.sh`).
 - A script that only makes sense for one widget lives in that widget's own

@@ -60,7 +60,7 @@ export const applyEvent = (state: SessionState, event: OpencodeEvent, sessionID:
     // snapshots across an entire turn — `message.part.delta` is the event
     // that actually arrives incrementally there, so without this case the
     // transcript looks frozen until the whole reply lands at once. See
-    // scripts/dev/ollama-stream-check.py and AGENTS.md's "Server lifecycle"
+    // tests/manual/ollama-stream-check.py and AGENTS.md's "Server lifecycle"
     // section.
     case "message.part.delta": {
       const { sessionID: sid, messageID, partID, delta } = event.properties;
