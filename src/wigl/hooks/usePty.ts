@@ -47,6 +47,7 @@ export const usePty = (
   const onDataRef = useRef(onData);
   onDataRef.current = onData;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: options/args compared by shape, not identity, so spawning stays a one-shot per mount rather than re-keying on every render
   useEffect(() => {
     let cancelled = false;
     setReady(false);
@@ -102,7 +103,6 @@ export const usePty = (
       if (idRef.current !== null) invoke("pty_kill", { id: idRef.current }).catch(() => {});
       idRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- options/args compared by shape, not identity, so spawning stays a one-shot per mount rather than re-keying on every render
   }, [file, JSON.stringify(args), options.cols, options.rows, options.cwd, JSON.stringify(options.env)]);
 
   const write = (data: string) => {
