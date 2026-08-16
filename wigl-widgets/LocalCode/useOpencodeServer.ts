@@ -23,8 +23,15 @@ const OLLAMA_SYNC_TIMEOUT_MS = 2000;
 // the catalog changed and restarting `serve` ourselves (backlog.md B5).
 const OLLAMA_POLL_INTERVAL_MS = 15_000;
 
-const prepareOllamaModelSync = async (): Promise<OllamaModelSync[]> => {
+const prepareOllamaModelSync = async (isCancelled: () => boolean): Promise<OllamaModelSync[]> => {
   const names = await listOllamaModels();
+  // React 19 StrictMode (main.tsx) deliberately double-invokes this effect
+  // on mount — verified live via the Ollama server's own request log: two
+  // near-simultaneous `GET /api/tags` plus a full `POST /api/show` fanout
+  // for every pulled model, twice. Bailing here (right after the one
+  // network round trip that already happened) is what stops the throwaway
+  // invocation from also firing the `/api/show` fanout for nothing.
+  if (isCancelled()) return [];
   return Promise.all(names.map(async (name) => ({ name, thinking: await modelSupportsThinking(name) })));
 };
 
@@ -36,11 +43,12 @@ const prepareOllamaModelSync = async (): Promise<OllamaModelSync[]> => {
 // nothing external to hang on. Returns the model names actually seen, so
 // the caller can remember what's already synced and later notice a
 // `ollama pull` that added to that set.
-const syncConfigBeforeStart = async (): Promise<string[]> => {
+const syncConfigBeforeStart = async (isCancelled: () => boolean): Promise<string[]> => {
   const models = await Promise.race([
-    prepareOllamaModelSync(),
+    prepareOllamaModelSync(isCancelled),
     new Promise<OllamaModelSync[]>((resolve) => setTimeout(() => resolve([]), OLLAMA_SYNC_TIMEOUT_MS)),
   ]);
+  if (isCancelled()) return [];
   if (models.length > 0) await syncOllamaModels(models).catch((e) => console.error("[LocalCode]", e));
   await disableSkillTool().catch((e) => console.error("[LocalCode]", e));
   return models.map((m) => m.name);
@@ -64,7 +72,7 @@ export const useOpencodeServer = (directory: string | null) => {
     if (!directory) return;
     let cancelled = false;
     setStatus("connecting");
-    syncConfigBeforeStart()
+    syncConfigBeforeStart(() => cancelled)
       .then((names) => {
         syncedModelsRef.current = new Set(names);
         if (cancelled) return undefined;
