@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStorage } from "@/wigl/hooks";
 import * as client from "./client";
-import { AUTO_TITLE_LENGTH, HOUSEKEEPER_SESSION_TITLE, STORAGE_KEYS } from "./config";
+import { HOUSEKEEPER_SESSION_TITLE, STORAGE_KEYS } from "./config";
 import type { OpencodeSession } from "./types";
 
 export interface SessionView extends OpencodeSession {
@@ -13,11 +13,6 @@ export interface SessionView extends OpencodeSession {
   pinned: boolean;
   pinnedAt: number | null;
 }
-
-const autoTitle = (prompt: string) => {
-  const clean = prompt.replace(/\s+/g, " ").trim();
-  return clean.length > AUTO_TITLE_LENGTH ? `${clean.slice(0, AUTO_TITLE_LENGTH).trimEnd()}…` : clean;
-};
 
 // opencode's own native title-generation agent (see housekeeper.ts) isn't
 // cleaned up before it lands in `session.title` — verified live it can come
@@ -90,10 +85,9 @@ export const useSessions = (baseUrl: string | null, directory: string | null) =>
   );
 
   const createSession = useCallback(
-    async (directory: string, firstPrompt?: string) => {
+    async (directory: string) => {
       if (!baseUrl) throw new Error("opencode server not connected");
-      const title = firstPrompt ? autoTitle(firstPrompt) : undefined;
-      const session = await client.createSession(baseUrl, { directory, title });
+      const session = await client.createSession(baseUrl, { directory });
       setSessions((prev) => [session, ...prev]);
       return session;
     },

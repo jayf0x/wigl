@@ -195,7 +195,7 @@ describe("housekeeper model (session titling)", () => {
         DIRECTORY,
       );
       expect(title).toBeTruthy();
-      expect(title?.length).toBeLessThanOrEqual(61); // AUTO_TITLE_LENGTH-ish ceiling, see generateSessionTitle
+      expect(title?.length).toBeLessThanOrEqual(61); // 60-char ceiling, see generateSessionTitle
       expect(title).not.toMatch(/["'*_`]/);
     },
     TURN_TIMEOUT_MS + 5000,
