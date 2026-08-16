@@ -222,10 +222,15 @@ const CHAT_AGENT_PROMPT =
  * a *tool* gate only, not a project-context one — opencode still injects
  * the directory's AGENTS.md/CLAUDE.md into the system prompt regardless of
  * agent (verified live), so a small model can still ramble about project
- * internals on an unrelated prompt; there's no per-agent opencode config to
- * suppress that today (see backlog.md B16). Idempotent — a no-op once the
- * agent entry already matches. Same not-hot-reloaded / fails-safe-on-non-JSON
- * rules as `syncOllamaModels`. */
+ * internals on an unrelated prompt. There's no config-level switch to
+ * suppress that injection (confirmed against opencode's published config
+ * schema — no per-agent or global "skip project instructions" field), and
+ * telling the model in `prompt` to ignore project context doesn't work
+ * either (verified live against qwen3.5:0.8b: it rambled about the project
+ * anyway) — a known limitation of small local models with negative
+ * instructions, not something this widget can configure around. Idempotent
+ * — a no-op once the agent entry already matches. Same not-hot-reloaded /
+ * fails-safe-on-non-JSON rules as `syncOllamaModels`. */
 export const syncChatAgent = async (agentID: string): Promise<boolean> => {
   const path = await configPath();
   const config = await readConfig(path);

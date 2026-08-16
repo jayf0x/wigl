@@ -280,15 +280,24 @@ was separately working around for that narrower case. The agent chip still
 lets a session opt into `build`/`plan`/anything else when real tool use is
 actually wanted — this only changes what an untouched session starts as.
 
-**Not fixed by this, and not per-agent-configurable today:** opencode
+`syncChatAgent()` also sets a custom `prompt` on `wigl-chat` (`AgentConfig`'s
+`prompt` field, which replaces opencode's default system prompt outright) —
+without it, a toolless model handed opencode's default agentic-coding
+prompt doesn't just ignore the tool-call/task-tracking instructions it
+can't act on, it spirals into confused meta-commentary about them, verified
+live to be worse than the bash-hallucination bug this agent exists to
+prevent.
+
+**Not fixed by this, and not per-agent-configurable at all:** opencode
 injects the working directory's `AGENTS.md`/`CLAUDE.md` into the system
-prompt regardless of which agent is active — verified live, `wigl-chat`
-included, a model can still ramble about wigl's own architecture on an
-unrelated prompt. `permission` only gates tool access, not this. A custom
-`prompt` override (`AgentConfig`'s `prompt` field) could replace the system
-prompt outright, but that's a bigger, riskier change with no confirmed
-opencode API for "keep the default prompt, just drop the project-file
-injection" — see backlog.md B16.
+prompt regardless of which agent is active or what its `prompt` says —
+verified live, `wigl-chat` included, a model can still ramble about wigl's
+own architecture on an unrelated prompt like "what is this project about?".
+Confirmed against opencode's published config schema that no per-agent or
+global field suppresses that injection, and confirmed live that telling the
+model in `prompt` to ignore project context doesn't work either — a known
+limitation of small local models with negative instructions, not something
+this widget can configure around.
 
 ## Housekeeper model
 
