@@ -40,6 +40,8 @@ If a task's outcome doesn't change any of those claims, there's nothing to updat
 | Rendering/perf bug that only happens on one machine | `docs/debugging.md` → "Diagnosing a 'only happens on my machine' rendering bug", then run `scripts/dev/x11-report.py` | — |
 | Feature idea, scope question, "should we add X?" | `docs/future-ideas.md` + `docs/architecture.md` → "The rule" | — |
 | Known defect / ceiling / pending decision | `backlog.md` | — |
+| Fixed a core bug / landed a core feature, wondering about test coverage | this file's "Testing" section | `tests-backlog.md` (append, don't write the test) |
+| Picking up a queued test to actually write | `tests-backlog.md` + this file's "Testing" section | `src/wigl/**/*.test.ts` (or a widget's own `tests/`) |
 
 ## Hard rules (violating these is the main way to fail here)
 
@@ -59,6 +61,56 @@ Quick: `bun run typecheck`, then `bun run build`. Full app: `bun run verify` (`s
 For the owner's own fast build-and-look iteration (not for the agent to run unprompted), `bun run qa` / `bun run qa:app` (`scripts/qa.sh`) skip packaging and `verify`'s window/log checks — `qa` auto-detects overlay vs. windowed mode the same way the app itself does (see `docs/architecture.md`), `qa:app` forces windowed mode everywhere so both flows are QA-able on one machine.
 
 New debug/CLI scripts that operate on the whole repo (widget data scanners, seed scripts, anything you'd otherwise inline as a big shell string) go in `scripts/` and get a one-line root `package.json` entry, same shape as `tw-colors`/`check:eager`. A script that only makes sense for one widget (e.g. the calendar CLI) lives inside that widget's own folder instead, with its own `scripts` entry in *that* folder's `package.json` (invoked as `bun run --cwd wigl-widgets/<name> <script>`) — root `package.json` stays a thin index of repo-wide commands, not a registry of every widget's tooling.
+
+## Testing
+
+**Core only** — `src/wigl` (grid math, drag/reflow, hooks, the plugin
+registry/permission gating) — never an individual widget's own logic. A
+widget's own bugs get colocated coverage in its own `tests/` folder if it
+wants any (already the convention — see `wigl-widgets/LocalCode/tests/`),
+but that's the widget author's call, not this file's rule. And not every
+core bug becomes a test either — only a real defect in shared surface
+everything depends on, and once fixed, tracked as one queue entry (see
+below), not a test written reflexively per commit.
+
+Three tiers, all `bun test` (Bun's built-in runner — no new test-runner
+dependency, same reasoning `scripts/widget.ts` uses `Bun.build` over a
+bundler dep):
+
+1. **Pure logic** — a colocated `<name>.test.ts` next to the code it tests
+   (`src/wigl/grid/math.test.ts` is the existing example). No DOM, fastest,
+   and where most coverage should live.
+2. **DOM/component-level** — a real `document`/`window` via happy-dom,
+   preloaded into every `bun test` run by `bunfig.toml` →
+   `src/wigl/test-utils/register-dom.ts`. Exists for `Desktop.tsx`-level
+   drag/pointer logic: happy-dom's `PointerEvent` constructor accepts
+   `screenX`/`screenY` directly (verified — see
+   `src/wigl/test-utils/dom.demo.test.ts`), so a cross-monitor drag is
+   exercisable with a synthetic event, no real cursor needed.
+3. **Storage/host-module mocks** — `src/wigl/test-utils/mock-storage.ts`
+   swaps `../storage/client` and `@tauri-apps/api/event` for an in-memory kv
+   store via `bun:test`'s `mock.module`, so `useStorage`/`useQuery` (and
+   anything built on them) are testable with no real `sqlite3` binary or
+   Tauri runtime.
+
+A **real OS cursor** (`cliclick` on macOS, the X11 harness in `scripts/dev/`
+on Linux) stays manual, in `scripts/dev/` — never part of `bun test`. It
+needs OS-level permissions granted by a human, and is genuinely flaky
+against window occlusion and click-through-poller timing (see B8's fix in
+git history for exactly how flaky, and what it took to get a clean live
+repro) — it can prove "this works on this machine right now," not gate a
+commit.
+
+**When you fix a core bug or land a core feature: don't write the test
+yourself.** Append one entry to `tests-backlog.md` instead — what to test,
+why it matters, and a pointer to the commit — then move on. A separate,
+periodic pass (an agent, a subagent it spawns, or a human) turns queue
+entries into real tests later. This keeps a fix's own commit small and
+turns test-writing into a deliberate pass instead of ad hoc, uneven
+per-fix noise.
+
+`bun run wigl test shared` runs everything under `src/wigl`; `bun run wigl
+test` runs widgets + shared + e2e together (see `scripts/wigl.ts`).
 
 ## Working tips
 
