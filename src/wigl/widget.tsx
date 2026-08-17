@@ -25,6 +25,7 @@ export interface WidgetGridReport {
   col?: number;
   row?: number;
   hidden?: boolean;
+  minimized?: boolean;
 }
 
 /** Desktop.tsx provides one of these per widget instance: the report callback
@@ -67,17 +68,12 @@ export const Widget = ({
   const minimized = !!slot?.minimized;
   // Layout effect, not a plain effect: this must resolve (and Desktop must
   // reflow) before the browser paints, or the placeholder size flashes.
-  // Minimized forces a 1x1 report regardless of the widget's own w/h props —
-  // un-minimizing just reports the real props again next render, and the
-  // desktop's existing reflow puts it back where it fits.
+  // Reports the widget's own w/h plus the minimized flag — Desktop resolves
+  // the final size (1x1 while minimized, else a user-resized size if one was
+  // saved, else these props) rather than this component deciding it, so a
+  // resize the user made survives a minimize/un-minimize round trip.
   useLayoutEffect(() => {
-    slot?.report({
-      w: minimized ? 1 : w,
-      h: minimized ? 1 : h,
-      col,
-      row,
-      hidden,
-    });
+    slot?.report({ w, h, col, row, hidden, minimized });
   }, [slot, minimized, w, h, col, row, hidden]);
 
   return (
@@ -113,8 +109,9 @@ export const Widget = ({
 // browser/webview context menu instead. Dragging is scoped even tighter —
 // only the grip at the top-right corner carries data-drag-handle — so the
 // rest of the header (close/minimize, title, custom buttons) is ordinary
-// interactive/selectable content, and a future resize handle has somewhere
-// (the opposite corner) to live without fighting drag.
+// interactive/selectable content. Resize handles live on the widget's outer
+// edges (Desktop.tsx's WidgetItem), inset just enough to stay clear of this
+// header's own controls.
 export const WidgetHeader = ({
   className,
   children = null,

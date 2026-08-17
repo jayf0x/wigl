@@ -54,7 +54,11 @@ const INTERACTIVE = "button, a, input, select, textarea, [data-no-drag]";
 // storage key, one broadcast, no separate sync path to keep in sync with
 // drag/drop. `closed` maps straight onto GridItem.hidden (already "not
 // rendered, not reflowed, not hit-tested" — see widget.tsx), just driven by
-// the header/menu instead of a widget's own report.
+// the header/menu instead of a widget's own report. `w`/`h` are only ever
+// written by a resize (see endResize) — a plain drag/drop never touches
+// them, unlike col/row/m — so a widget whose author changes its default
+// size in code later still picks that new default up for anyone who never
+// resized it themselves.
 type SavedPositions = Record<
   string,
   {
@@ -63,6 +67,8 @@ type SavedPositions = Record<
     m?: number;
     closed?: boolean;
     minimized?: boolean;
+    w?: number;
+    h?: number;
   }
 >;
 
@@ -91,6 +97,25 @@ interface DragState {
   // self-correcting rather than assuming which axis needs it or by how much,
   // so a platform where screenX/Y are already global just calibrates to ~0.
   screenCorrection: { x: number; y: number };
+}
+
+// One edge dragged at a time — no corner (two-axis) resize, matching the
+// "all edges resizable" ask rather than the fuller react-grid-layout-style
+// 8-handle set. `startCol`/`startRow`/`startW`/`startH` are the anchor: every
+// move recomputes from these (like DragState.snapshot) so the item never
+// drifts across a long gesture. `w`/`e` hold the opposite edge fixed and grow
+// from the dragged one; `n`/`s` do the same on the row axis.
+interface ResizeState {
+  id: string;
+  edge: "n" | "s" | "e" | "w";
+  el: HTMLDivElement;
+  startX: number;
+  startY: number;
+  startCol: number;
+  startRow: number;
+  startW: number;
+  startH: number;
+  snapshot: GridItem[];
 }
 
 /** Broadcast on every drag move while the cursor is on a foreign monitor
@@ -158,26 +183,32 @@ class WidgetErrorBoundary extends Component<
 // position is already applied imperatively (see the `useLayoutEffect` below
 // that writes `transform` directly from `els`), so re-rendering here would
 // just be wasted React work chasing a DOM write that already happened.
+const RESIZE_EDGES = ["n", "s", "e", "w"] as const;
+
 const WidgetItem = memo(function WidgetItem({
   id,
   Component,
   w,
   h,
   lifted,
+  resizing,
   slot,
   els,
   onPointerDown,
   onContextMenu,
+  onResizeStart,
 }: {
   id: string;
   Component: ComponentType;
   w: number;
   h: number;
   lifted: boolean;
+  resizing: boolean;
   slot: WidgetSlotValue;
   els: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
   onPointerDown: (e: React.PointerEvent, id: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  onResizeStart: (e: React.PointerEvent, id: string, edge: "n" | "s" | "e" | "w") => void;
 }) {
   const setRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -188,7 +219,7 @@ const WidgetItem = memo(function WidgetItem({
   return (
     <div
       ref={setRef}
-      className={`wigl-widget${lifted ? " lifted" : ""}`}
+      className={`wigl-widget${lifted ? " lifted" : ""}${resizing ? " resizing" : ""}`}
       style={{ width: spanToPx(w), height: spanToPx(h) }}
       onPointerDown={(e) => onPointerDown(e, id)}
       onContextMenu={onContextMenu}
@@ -200,6 +231,22 @@ const WidgetItem = memo(function WidgetItem({
           </Suspense>
         </WidgetSlotProvider>
       </WidgetErrorBoundary>
+      {/* Inset within the widget's own bounds (not overflowing past its edge)
+          so they stay inside the click-through hit-rect Rust polls against —
+          a handle poking past the grid rect would be unclickable in overlay
+          mode. Skipped while minimized: a 1x1 tile has nothing to resize. */}
+      {!slot.minimized &&
+        RESIZE_EDGES.map((edge) => (
+          <div
+            key={edge}
+            data-resize-handle={edge}
+            className={`wigl-resize-handle wigl-resize-${edge}`}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onResizeStart(e, id, edge);
+            }}
+          />
+        ))}
     </div>
   );
 });
@@ -223,6 +270,7 @@ export const Desktop = ({
   );
   const [layout, setLayout] = useState<GridItem[] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [resizeId, setResizeId] = useState<string | null>(null);
   // Right-click menu of global actions (see actions.ts), page-px position.
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   // Where the "Settings" entry was clicked — the settings popover's virtual
@@ -241,6 +289,7 @@ export const Desktop = ({
     { col: number; row: number; x: number; y: number }[]
   >([]);
   const drag = useRef<DragState | null>(null);
+  const resize = useRef<ResizeState | null>(null);
   const ghostCell = useRef<GridItem | null>(null);
   const monitors = useRef<MonitorRect[] | null>(null);
   // Incoming cross-monitor preview: snapshot of our layout from before the
@@ -343,7 +392,9 @@ export const Desktop = ({
           ? s.m!
           : 0;
       if (mon !== monitorIndex) continue;
-      const { w, h } = TILING.defaultSize;
+      const validSize = s != null && Number.isFinite(s.w) && Number.isFinite(s.h);
+      const w = validSize ? s!.w! : TILING.defaultSize.w;
+      const h = validSize ? s!.h! : TILING.defaultSize.h;
       const pos = validPos ? s : autoPlace(items, w, h, cols);
       items.push({
         id,
@@ -370,17 +421,24 @@ export const Desktop = ({
       const cur = prev.find((i) => i.id === id);
       if (!cur) return prev;
       const cols = colsForWidth(window.innerWidth);
-      const hasSavedPos = savedRef.current[id] != null;
+      const savedPos = savedRef.current[id];
+      const hasSavedPos = savedPos != null;
+      // A resized size (savedPos.w/h) wins over the widget's own reported
+      // size, same as a dragged col/row wins over its col/row hint — except
+      // while minimized, which always forces 1x1 regardless of either.
+      const hasSavedSize = savedPos?.w != null && savedPos?.h != null;
+      const w = g.minimized ? 1 : hasSavedSize ? savedPos!.w! : g.w;
+      const h = g.minimized ? 1 : hasSavedSize ? savedPos!.h! : g.h;
       const col =
         !hasSavedPos && g.col != null
-          ? Math.max(0, Math.min(g.col, cols - g.w))
+          ? Math.max(0, Math.min(g.col, cols - w))
           : cur.col;
       const row = !hasSavedPos && g.row != null ? Math.max(0, g.row) : cur.row;
       const hidden = !!g.hidden;
       const pending = pendingReports.current;
       if (
-        cur.w === g.w &&
-        cur.h === g.h &&
+        cur.w === w &&
+        cur.h === h &&
         cur.col === col &&
         cur.row === row &&
         !!cur.hidden === hidden
@@ -389,7 +447,7 @@ export const Desktop = ({
         return prev; // no-op, bail out
       }
       const next = prev.map((i) =>
-        i.id === id ? { ...i, w: g.w, h: g.h, col, row, hidden } : { ...i },
+        i.id === id ? { ...i, w, h, col, row, hidden } : { ...i },
       );
       if (pending.has(id)) {
         pending.delete(id);
@@ -466,12 +524,12 @@ export const Desktop = ({
   useLayoutEffect(() => {
     if (!layout) return;
     for (const it of layout) {
-      if (it.id === drag.current?.id) continue;
+      if (it.id === drag.current?.id || it.id === resize.current?.id) continue;
       const el = els.current[it.id];
       if (el)
         el.style.transform = `translate(${colToPx(it.col)}px, ${rowToPx(it.row)}px)`;
     }
-  }, [layout, dragId]);
+  }, [layout, dragId, resizeId]);
 
   // Tell the Rust cursor poller where our widgets are. During a drag the
   // poller is paused entirely (set_drag_active), so no fullscreen rect games.
@@ -735,6 +793,112 @@ export const Desktop = ({
     };
   }, [monitorIndex]);
 
+  // --- resize ------------------------------------------------------------------
+  // Local to the home monitor only — unlike drag, a resize never hands off
+  // to a foreign monitor window; there's no meaningful "resize onto another
+  // screen" gesture.
+  const onResizeStart = useCallback(
+    (e: React.PointerEvent, id: string, edge: "n" | "s" | "e" | "w") => {
+      const layout = layoutRef.current;
+      if (e.button !== 0 || !layout) return;
+      const item = layout.find((i) => i.id === id)!;
+      const el = els.current[id]!;
+      el.setPointerCapture(e.pointerId);
+      resize.current = {
+        id,
+        edge,
+        el,
+        startX: e.clientX,
+        startY: e.clientY,
+        startCol: item.col,
+        startRow: item.row,
+        startW: item.w,
+        startH: item.h,
+        snapshot: layout.map((i) => ({ ...i })),
+      };
+      setResizeId(id);
+      window.getSelection()?.removeAllRanges();
+      if (!windowed)
+        invoke("set_drag_active", { active: true }).catch(console.error);
+    },
+    [windowed],
+  );
+
+  const onResizeMove = (e: React.PointerEvent, r: ResizeState) => {
+    const cols = colsForWidth(window.innerWidth);
+    const pitch = TILING.cell + TILING.gap;
+    const dCols = Math.round((e.clientX - r.startX) / pitch);
+    const dRows = Math.round((e.clientY - r.startY) / pitch);
+    let col = r.startCol;
+    let row = r.startRow;
+    let w = r.startW;
+    let h = r.startH;
+    if (r.edge === "e") {
+      w = Math.max(1, Math.min(cols - r.startCol, r.startW + dCols));
+    } else if (r.edge === "w") {
+      const rightEdge = r.startCol + r.startW;
+      col = Math.max(0, Math.min(rightEdge - 1, r.startCol + dCols));
+      w = rightEdge - col;
+    } else if (r.edge === "s") {
+      h = Math.max(1, r.startH + dRows);
+      if (TILING.rows != null)
+        h = Math.min(h, Math.max(1, TILING.rows - r.startRow));
+    } else {
+      const bottomEdge = r.startRow + r.startH;
+      row = Math.max(0, Math.min(bottomEdge - 1, r.startRow + dRows));
+      h = bottomEdge - row;
+    }
+
+    // Recompute from the resize-start snapshot each move, same reasoning as
+    // drag's onPointerMove: never accumulate drift across a long gesture.
+    const next = r.snapshot.map((i) => ({ ...i }));
+    const moved = next.find((i) => i.id === r.id)!;
+    moved.col = col;
+    moved.row = row;
+    moved.w = w;
+    moved.h = h;
+    reflow(next, moved, cols);
+    r.el.style.width = `${spanToPx(moved.w)}px`;
+    r.el.style.height = `${spanToPx(moved.h)}px`;
+    r.el.style.transform = `translate(${colToPx(moved.col)}px, ${rowToPx(moved.row)}px)`;
+    for (const it of next) {
+      if (it.id === r.id) continue;
+      const el = els.current[it.id];
+      if (el)
+        el.style.transform = `translate(${colToPx(it.col)}px, ${rowToPx(it.row)}px)`;
+    }
+    layoutRef.current = next;
+  };
+
+  const endResize = () => {
+    const r = resize.current;
+    const layoutNow = layoutRef.current;
+    if (!r || !layoutNow) return;
+    const item = layoutNow.find((i) => i.id === r.id)!;
+    resize.current = null;
+    setResizeId(null);
+    if (!windowed)
+      invoke("set_drag_active", { active: false }).catch(console.error);
+    setLayout(layoutNow);
+    // Same col/row/m merge as persist(), plus the resized id's new w/h —
+    // one combined write so it doesn't race persist()'s own async setSaved.
+    setSaved({
+      ...savedRef.current,
+      ...Object.fromEntries(
+        layoutNow.map((it) => [
+          it.id,
+          {
+            ...savedRef.current[it.id],
+            col: it.col,
+            row: it.row,
+            m: monitorIndex,
+            ...(it.id === r.id ? { w: item.w, h: item.h } : {}),
+          },
+        ]),
+      ),
+    });
+  };
+
   // --- drag ------------------------------------------------------------------
   const onPointerDown = useCallback(
     (e: React.PointerEvent, id: string) => {
@@ -780,6 +944,10 @@ export const Desktop = ({
   );
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (resize.current) {
+      onResizeMove(e, resize.current);
+      return;
+    }
     const d = drag.current;
     const layoutNow = layoutRef.current;
     if (!d || !layoutNow) return;
@@ -946,12 +1114,17 @@ export const Desktop = ({
   // was used (see the layout-build effect above).
   const closedIds = Object.keys(widgets).filter((id) => saved[id]?.closed);
 
+  const onPointerUp = () => {
+    if (resize.current) endResize();
+    else endDrag();
+  };
+
   return (
     <div
-      className={`wigl-desktop${dragId ? " dragging" : ""}`}
+      className={`wigl-desktop${dragId ? " dragging" : ""}${resizeId ? " resizing" : ""}`}
       onPointerMove={onPointerMove}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
       // Widget dragging is a pointer-event gesture (see onPointerDown), so
       // the browser's own HTML5 drag never does anything useful here — it
       // just renders a translucent snapshot of whatever got grabbed (text,
@@ -1001,10 +1174,12 @@ export const Desktop = ({
             w={it.w}
             h={it.h}
             lifted={dragId === it.id}
+            resizing={resizeId === it.id}
             slot={getSlot(it.id, !!saved[it.id]?.minimized)}
             els={els}
             onPointerDown={onPointerDown}
             onContextMenu={openMenu}
+            onResizeStart={onResizeStart}
           />
         );
       })}

@@ -122,8 +122,55 @@ html.wigl-windowed #root {
   will-change: transform;
   transition:
     transform 0.5s var(--wigl-spring, cubic-bezier(0.22, 1.3, 0.36, 1)),
+    width 0.5s var(--wigl-spring, cubic-bezier(0.22, 1.3, 0.36, 1)),
+    height 0.5s var(--wigl-spring, cubic-bezier(0.22, 1.3, 0.36, 1)),
     filter 0.25s ease;
   touch-action: none;
+}
+
+/* Inset resize handles on all four edges — see Desktop.tsx's WidgetItem.
+   Thin enough to stay clear of the header's own controls (close/minimize,
+   drag grip), which sit a few px in from the same edges. */
+.wigl-resize-handle {
+  position: absolute;
+  z-index: 5;
+  touch-action: none;
+}
+.wigl-resize-n,
+.wigl-resize-s {
+  left: 0;
+  right: 0;
+  height: 5px;
+  cursor: ns-resize;
+}
+.wigl-resize-e,
+.wigl-resize-w {
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: ew-resize;
+}
+.wigl-resize-n {
+  top: 0;
+}
+.wigl-resize-s {
+  bottom: 0;
+}
+.wigl-resize-e {
+  right: 0;
+}
+.wigl-resize-w {
+  left: 0;
+}
+.wigl-resize-handle:hover {
+  background: color-mix(in srgb, var(--wigl-accent) 35%, transparent);
+}
+/* Resizing turns off the transform/size transition (same reasoning as
+   .lifted for drag) so the card tracks the cursor exactly, then it springs
+   to its settled size/position once dragId/resizeId clears on drop. */
+.wigl-widget.resizing {
+  transition: filter 0.25s ease;
+  z-index: 10;
 }
 
 /* Selection is off for the grid and every widget's chrome, and opts back in
@@ -148,8 +195,11 @@ html.wigl-windowed #root {
    pointer never leaves the dragged card. Selection goes off desktop-wide for
    the duration of the drag and comes straight back on drop (Desktop.tsx adds
    .dragging while dragId is set, and clears any in-flight selection there).
+   .resizing gets the same treatment: a resize handle drag can sweep the
+   cursor across a neighboring widget's content just as easily.
    Specificity beats the opt-in rule above, so no !important needed. */
-.wigl-desktop.dragging [data-wigl-widget] > :not([data-widget-header]) {
+.wigl-desktop.dragging [data-wigl-widget] > :not([data-widget-header]),
+.wigl-desktop.resizing [data-wigl-widget] > :not([data-widget-header]) {
   user-select: none;
   -webkit-user-select: none;
 }
