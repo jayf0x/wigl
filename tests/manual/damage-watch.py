@@ -7,7 +7,7 @@ covers that area, the compositor keeps showing stale pixels — that's the
 ghosting symptom. This prints the damaged rects so they can be compared
 against the region that actually changed.
 
-    python3 scripts/dev/damage-watch.py <seconds> [dragX dragY dx dy]
+    python3 tests/manual/damage-watch.py <seconds> [dragX dragY dx dy]
 """
 
 import ctypes

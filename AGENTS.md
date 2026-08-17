@@ -22,6 +22,7 @@ Each `docs/*.md` file owns one slice of ground truth. When a change in this sess
 | `docs/future-ideas.md` | Product ideas and closed/rejected scope decisions — defects and open gaps go in `backlog.md` instead |
 | `docs/principles.md` | Code-shape and file-organization rules (functional core / imperative shell, 80/20 file focus, naming) — short on purpose |
 | `docs/theming.md` | The theme token contract, preset vs. parametric generation, and the no-hardcoded-color rule for widgets |
+| `docs/testing.md` | The `./tests` layout, how to write a test per tier, and how to mock storage/host modules |
 
 If a task's outcome doesn't change any of those claims, there's nothing to update — most small tweaks won't.
 
@@ -41,7 +42,7 @@ If a task's outcome doesn't change any of those claims, there's nothing to updat
 | Feature idea, scope question, "should we add X?" | `docs/future-ideas.md` + `docs/architecture.md` → "The rule" | — |
 | Known defect / ceiling / pending decision | `backlog.md` | — |
 | Fixed a core bug / landed a core feature, wondering about test coverage | this file's "Testing" section | `tests/backlog.md` (append, don't write the test) |
-| Picking up a queued test to actually write | `tests/backlog.md` + `tests/README.md` | `tests/*.test.ts` (or a widget's own `tests/`) |
+| Picking up a queued test to actually write | `tests/backlog.md` + `docs/testing.md` | `tests/*.test.ts` (or a widget's own `tests/`) |
 
 ## Hard rules (violating these is the main way to fail here)
 
@@ -64,9 +65,9 @@ New debug/CLI scripts that operate on the whole repo (widget data scanners, seed
 
 ## Testing
 
-Everything test-related lives under `./tests` — see `tests/README.md` for
-the layout (flat core tests, `tests/e2e/`, `tests/manual/`) and how to run
-each piece. This section is the policy, not the mechanics.
+Everything test-related lives under `./tests` — see `docs/testing.md` for
+the layout, how to write a test per tier, and how to mock storage/host
+modules. This section is the policy, not the mechanics.
 
 **Core only** — `src/wigl` (grid math, drag/reflow, hooks, the plugin
 registry/permission gating) — never an individual widget's own logic. A
@@ -80,11 +81,19 @@ below), not a test written reflexively per commit.
 A **real OS cursor** (`cliclick` on macOS, the X11 harness on Linux —
 `tests/manual/`) stays manual, never part of `bun run test`. It needs
 OS-level permissions granted by a human, and is genuinely flaky against
-window occlusion and click-through-poller timing (see B8's fix in git
-history for exactly how flaky, and what it took to get a clean live repro)
-— it can prove "this works on this machine right now," not gate a commit.
-Never run anything in `tests/manual/` unprompted — it can tie up the
-owner's real cursor/machine for as long as it runs.
+window occlusion and click-through-poller timing (see commit `0f792ec`'s
+cross-monitor-drag fix in git history for exactly how flaky, and what it
+took to get a clean live repro) — it can prove "this works on this machine
+right now," not gate a commit. Never run anything in `tests/manual/`
+unprompted — it can tie up the owner's real cursor/machine for as long as
+it runs.
+
+Reference a specific bug by **commit hash**, not by backlog ticket id, in
+anything meant to outlive the fix (a test's name/comments, a manual
+script) — a ticket like "B8" gets deleted from `backlog.md` the moment
+it's resolved (that file's own rule), so a name or comment that only makes
+sense by cross-referencing it goes stale silently. `git log`/`git show
+<hash>` always resolves; a ticket id doesn't.
 
 **When you fix a core bug or land a core feature: don't write the test
 yourself.** Append one entry to `tests/backlog.md` instead — what to test,

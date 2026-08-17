@@ -20,16 +20,30 @@ by hand, on purpose, one at a time.
 - Delete a script once the flow it checks no longer exists or is covered by
   a real automated test instead. This folder isn't an archive.
 
+## Shared logic — use these instead of reinventing them per script
+
+- `input_budget.py` — `BudgetGuard`: the hard-cap-and-guaranteed-release
+  pattern below, factored out so any script that seizes real input (XTest,
+  cliclick, whatever comes next) gets it via one line instead of its own
+  copy. Hand it your platform's own "let go of everything" callback.
+- `drag_path.py` — `interpolate(waypoints, step_px)`: pure point
+  interpolation for walking through a drag's waypoints, shared by
+  `ghost-probe.py`'s `wander_drag()` and `cross-monitor-drag-probe.py`
+  alike, so "how far apart are two motion events" is answered the same way
+  everywhere instead of each script hand-rolling its own lerp. Has its own
+  runnable self-check (`python3 tests/manual/drag_path.py`, no input/display
+  needed) — extend it there before reaching for a per-script reimplementation.
+
 ## Rules for anything that drives synthetic input
 
 These scripts move the **real cursor on the owner's real desktop**. While one
 runs, the machine is unusable.
 
-- **Hard cap: 60 seconds of input per run.** `ghost-probe.py` enforces this
-  itself — past the budget every motion/press raises `BudgetExhausted` and any
-  held button is released, including on Ctrl+C, SIGTERM, and interpreter exit.
-  Override via `WIGL_PROBE_BUDGET` only for a bounded, deterministic run, never
-  to let a loop grind longer.
+- **Hard cap: 60 seconds of input per run.** Any script using `input_budget.py`'s
+  `BudgetGuard` gets this for free — past the budget every checked call raises
+  `BudgetExhausted` and the registered release callback runs, including on
+  Ctrl+C, SIGTERM, and interpreter exit. Override via `WIGL_PROBE_BUDGET` only
+  for a bounded, deterministic run, never to let a loop grind longer.
 - **Never run one of these in the background**, and never `sleep`-poll waiting
   on one. Run it in the foreground where it can be interrupted.
 - **Never "wait for it to crash."** If a bug doesn't reproduce inside a bounded
@@ -82,10 +96,12 @@ report numbers. All require an X11 session and a running app (`bun run qa`).
 
 ## macOS drag probe
 
-- `b8-drag-probe.sh` — a bounded, cliclick-driven synthetic cross-monitor
-  drag, for exercising `Desktop.tsx`'s drag/foreign-monitor logic without a
-  screenshot. Needs `cliclick` (`brew install cliclick`) and macOS
-  Accessibility permission granted to whatever's driving it. See the
-  script's own header for coordinate-space gotchas (cliclick needs `=`-
-  prefixed negative absolute coordinates; a widget must be reachable — not
-  covered by another app's window — for the initial click to land).
+- `cross-monitor-drag-probe.py` — a bounded, cliclick-driven synthetic
+  cross-monitor drag, for exercising `Desktop.tsx`'s drag/foreign-monitor
+  logic without a screenshot. Needs `cliclick` (`brew install cliclick`)
+  and macOS Accessibility permission granted to whatever's driving it. Uses
+  `drag_path.interpolate()` for its waypoints and `input_budget.BudgetGuard`
+  for the release guarantee — see the script's own header for
+  coordinate-space gotchas (cliclick needs `=`-prefixed negative absolute
+  coordinates; a widget must be reachable — not covered by another app's
+  window — for the initial click to land).

@@ -9,7 +9,7 @@ pre-existing `ollama serve` alone.
 
 Usage:
     ollama serve &                      # if not already running
-    python3 scripts/dev/ollama-stream-check.py [model]
+    python3 tests/manual/ollama-stream-check.py [model]
 
 Requires `opencode` and `ollama` on PATH, and at least one Ollama model
 pulled (`ollama list`). Prints two independent measurements and a verdict.

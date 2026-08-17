@@ -8,12 +8,12 @@ question is "is change X actually cheaper/more expensive", or "why does this
 feel bad only on this machine" — a repeatable number beats an opinion, and a
 rendering bug that only shows on big displays usually shows up as cost first.
 
-    python3 scripts/dev/perf-drag.py [repeats]
+    python3 tests/manual/perf-drag.py [repeats]
 
 A/B usage — run it against one build/env, then the other, and compare:
 
-    WEBKIT_DISABLE_DMABUF_RENDERER=1 <launch app>; python3 scripts/dev/perf-drag.py 3
-    <launch app without it>;                       python3 scripts/dev/perf-drag.py 3
+    WEBKIT_DISABLE_DMABUF_RENDERER=1 <launch app>; python3 tests/manual/perf-drag.py 3
+    <launch app without it>;                       python3 tests/manual/perf-drag.py 3
 
 Same drag path every run (fixed seed) so the numbers are comparable. Bounded
 by ghost-probe's synthetic-input budget — see this folder's README.

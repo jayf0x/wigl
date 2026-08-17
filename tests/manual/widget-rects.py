@@ -2,7 +2,7 @@
 """Print the overlay's current widget rects (screen coords) and each one's
 drag-grip point, derived from the window's own alpha channel.
 
-    python3 scripts/dev/widget-rects.py
+    python3 tests/manual/widget-rects.py
 
 The grip is the small square at a widget's top-right corner (see
 src/wigl/widget.tsx) — this prints a point inside it, ready to feed to

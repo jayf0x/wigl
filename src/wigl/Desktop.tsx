@@ -81,7 +81,7 @@ interface DragState {
   snapshot: GridItem[];
   target: { mon: number; col: number; row: number };
   frozen: boolean;
-  // `PointerEvent.screenX/screenY` (confirmed live — B8): screenX reports a
+  // `PointerEvent.screenX/screenY` (confirmed live): screenX reports a
   // true global coordinate, but screenY reports a coordinate relative to
   // the *capturing* window's own origin, not the global one, once the
   // drag's pointer capture keeps events flowing after the cursor leaves

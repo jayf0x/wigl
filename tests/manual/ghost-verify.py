@@ -6,8 +6,8 @@ composited root framebuffer must show that exact RGB. Anything else means
 the compositor is presenting stale content for that pixel. That is the
 ghosting symptom, measured directly.
 
-    python3 scripts/dev/ghost-verify.py                 # one-shot check
-    python3 scripts/dev/ghost-verify.py drag X Y DX DY  # drag, then sample
+    python3 tests/manual/ghost-verify.py                 # one-shot check
+    python3 tests/manual/ghost-verify.py drag X Y DX DY  # drag, then sample
                                                         # over time (clicks
                                                         # vs. idle vs. motion)
 

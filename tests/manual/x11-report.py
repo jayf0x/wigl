@@ -6,7 +6,7 @@ session was once spent on a "there is no compositor running" theory that was
 purely an artifact of checking it the wrong way, and on a "stale pixel band"
 that turned out to be the Ubuntu dock. Both are answered here in one command.
 
-    python3 scripts/dev/x11-report.py
+    python3 tests/manual/x11-report.py
 
 Touches no input and changes nothing — safe to run any time.
 """

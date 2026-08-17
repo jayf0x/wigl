@@ -3,8 +3,8 @@ import { DynamicIcon } from "lucide-react/dynamic";
 import dynamicIconImports from "lucide-react/dynamicIconImports";
 
 // The eager `import * as LucideReact from "lucide-react"` this replaces
-// pulled every icon's SVG node data into one chunk (backlog.md's B14) purely
-// because the host can't know ahead of time which icons any given plugin
+// pulled every icon's SVG node data into one chunk purely because the host
+// can't know ahead of time which icons any given plugin
 // will use. This proxy hands out a small wrapper component per name instead
 // — the underlying icon only gets dynamically imported (via lucide-react's
 // own `DynamicIcon`) the first time that wrapper actually renders.

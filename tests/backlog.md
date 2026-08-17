@@ -2,7 +2,7 @@
 
 Pending automated coverage for `src/wigl` (core) — not a priority-ordered
 roadmap, not a place to log every bug. See `AGENTS.md`'s "Testing" section
-for what belongs here versus what doesn't, and `tests/README.md` for the
+for what belongs here versus what doesn't, and `docs/testing.md` for the
 actual test infrastructure.
 
 Each entry is something a test-writing pass (an agent, a subagent it
@@ -24,7 +24,7 @@ Rules for keeping this file real (same spirit as `backlog.md`):
 
 ## Queue
 
-- **Drag coordinate correction across monitors (B8).** `Desktop.tsx`'s
+- **Drag coordinate correction across monitors.** `Desktop.tsx`'s
   `onPointerDown`/`onPointerMove` — `DragState.screenCorrection`, computed
   once at drag start from `clientY` against the drag-origin monitor's own
   `y`, then applied to every subsequent `screenX`/`screenY` read for that
@@ -43,7 +43,7 @@ Rules for keeping this file real (same spirit as `backlog.md`):
   in isolation (single monitor's own `<Desktop monitorIndex>` instance,
   `monitors.current` seeded via whatever seam `availableMonitors()` goes
   through today — check if that needs its own small mock).
-- **Lazy per-icon lucide-react loading (B14).** `src/wigl/plugins/lucide-lazy.ts`'s
+- **Lazy per-icon lucide-react loading.** `src/wigl/plugins/lucide-lazy.ts`'s
   `nameToKebab` derivation + the `lucideLazy` Proxy — fixed in commit
   `717609d`. Test shape: assert the Proxy resolves both a plain name
   (`ChevronDown`) and its "Icon"-suffixed current-style alias

@@ -5,9 +5,10 @@
 //
 // The one non-obvious thing this demo confirms: happy-dom's PointerEvent
 // constructor accepts and round-trips `screenX`/`screenY` directly — the
-// exact fields Desktop.tsx's drag logic reads (see B8 in git history) —
-// so a future drag/reflow test can synthesize a cross-monitor pointer move
-// without a real cursor or Tauri runtime.
+// exact fields Desktop.tsx's drag logic reads (see commit 0f792ec's
+// cross-monitor drag fix in git history) — so a future drag/reflow test
+// can synthesize a cross-monitor pointer move without a real cursor or
+// Tauri runtime.
 import { describe, expect, test } from "bun:test";
 
 describe("DOM tier demo", () => {
