@@ -43,13 +43,3 @@ Rules for keeping this file real (same spirit as `backlog.md`):
   in isolation (single monitor's own `<Desktop monitorIndex>` instance,
   `monitors.current` seeded via whatever seam `availableMonitors()` goes
   through today — check if that needs its own small mock).
-- **Lazy per-icon lucide-react loading.** `src/wigl/plugins/lucide-lazy.ts`'s
-  `nameToKebab` derivation + the `lucideLazy` Proxy — fixed in commit
-  `717609d`. Test shape: assert the Proxy resolves both a plain name
-  (`ChevronDown`) and its "Icon"-suffixed current-style alias
-  (`ChevronDownIcon`) to a component, returns `undefined` for an unknown
-  name, and — the actual regression this guards — that accessing a name
-  does *not* eagerly import every icon (e.g. spy/count dynamic `import()`
-  calls, or just assert the returned component is the *same* lazy wrapper
-  both times rather than a freshly-resolved one, proving no per-access
-  re-derivation of the whole map).
