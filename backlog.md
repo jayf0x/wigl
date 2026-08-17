@@ -33,7 +33,6 @@ Rules for keeping this file real:
 
 ## Bugs
 
-- [ ] **B16 — `widgets-root` e2e suite's "cwd elsewhere" scenario fails on at least one real machine.** `tests/e2e/widgets-root.test.ts`'s "invoked from an unrelated working directory > build/check/install of an absolute-path widget work with cwd elsewhere" fails consistently (`bun test tests/e2e/widgets-root.test.ts`, reproduces in isolation) with `error: Cannot find module '/private/var/.../wigl-check-good-widget-<ts>.mjs' from ''` — the `check` step can't resolve the `.mjs` it (or `build`) just wrote into the OS temp dir. Every other scenario in the suite passes. Not yet investigated for cause (macOS temp-dir/module-resolution quirk vs. a real ordering bug between the `build` and `check` subprocesses) — next step is adding a print of the actual path `build` wrote vs. what `check` looked for, to see if they disagree.
 - [ ] **B11 — Escape doesn't cancel a drag.** Deliberate gap: `screen-*` windows are `alwaysOnBottom` and rarely become key, so a `keydown` listener isn't reliably reachable today. Revisit only if/when one of these windows does become key for another reason (e.g. a command palette), since that would give a reliable focus target to hang the listener off.
 
 ## Features

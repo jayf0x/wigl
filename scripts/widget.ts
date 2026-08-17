@@ -25,7 +25,7 @@
  * keeps exactly one React in the process, and it's what makes permissions
  * enforceable rather than decorative.
  */
-import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { cp, mkdir, readdir, realpath, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { HOST_MODULE_IDS } from "../src/wigl/plugins/host-modules";
@@ -304,7 +304,11 @@ const check = async (dir: string) => {
   await Bun.write(tmp, header + (await Bun.file(entry).text()));
   let mod: { default?: unknown };
   try {
-    mod = (await import(tmp)) as { default?: unknown };
+    // Bun's dynamic import() can't resolve an absolute path when the
+    // process cwd sits inside the same symlinked tmpdir tree (macOS aliases
+    // /var/folders -> /private/var/folders) — realpath collapses both sides
+    // onto the same canonical path so resolution isn't fooled by the alias.
+    mod = (await import(await realpath(tmp))) as { default?: unknown };
   } finally {
     await rm(tmp, { force: true });
   }
