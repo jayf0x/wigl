@@ -24,22 +24,4 @@ Rules for keeping this file real (same spirit as `backlog.md`):
 
 ## Queue
 
-- **Drag coordinate correction across monitors.** `Desktop.tsx`'s
-  `onPointerDown`/`onPointerMove` — `DragState.screenCorrection`, computed
-  once at drag start from `clientY` against the drag-origin monitor's own
-  `y`, then applied to every subsequent `screenX`/`screenY` read for that
-  drag. Real bug, fixed in commit `0f792ec` after a live repro showed
-  `PointerEvent.screenY` is window-relative to the *capturing* window during
-  a cross-monitor drag, not a true global coordinate (screenX has no such
-  issue). Test shape: synthesize `pointerdown` + a few `pointermove`s (real
-  `PointerEvent`s work fine in happy-dom — see `tests/dom.demo.test.ts`)
-  against two mocked monitors at
-  different `y` offsets (e.g. one at `y: 0`, one at `y: -388`, matching the
-  real repro), and assert the computed `col`/`row` on the foreign monitor
-  match what a correct conversion would give — not the exact live numbers
-  from the repro, since those were specific to that display arrangement,
-  but the *shape*: a monitor offset in y must not distort where the widget
-  lands, regardless of which axis or direction. Needs `Desktop` mountable
-  in isolation (single monitor's own `<Desktop monitorIndex>` instance,
-  `monitors.current` seeded via whatever seam `availableMonitors()` goes
-  through today — check if that needs its own small mock).
+_Empty — nothing queued right now._
