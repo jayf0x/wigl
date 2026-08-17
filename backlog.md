@@ -33,6 +33,7 @@ Rules for keeping this file real:
 
 ## Bugs
 
+- [ ] **B12 — `bun run verify` intermittently launches with only the hidden 1x1 `main` bootstrap window, no `screen-<i>` windows.** Both displays stay physically connected and `system_profiler SPDisplaysDataType` sees them the whole time — reproduces on a clean checkout with no local changes too (bisected by running `verify` against a `git worktree` of an older commit with symlinked `node_modules`/`target`), so it's an environment/timing issue in `setup()`'s monitor-window spawn (`src-tauri/src/lib.rs`), not a regression tied to any specific frontend change. `log show --predicate 'process == "wigl"' --last 2m` shows only one `WebPageProxy` ever loads (the bootstrap page) — `setup()` never gets to (or silently fails at) spawning the per-monitor windows. Next step: add a log line right before/after the `available_monitors()` call and the window-spawn loop in `setup()`, reproduce with `bun run kill && bun run verify`, and check whether the monitor list comes back empty/short at that moment or the spawn calls themselves are erroring.
 - [ ] **B11 — Escape doesn't cancel a drag.** Deliberate gap: `screen-*` windows are `alwaysOnBottom` and rarely become key, so a `keydown` listener isn't reliably reachable today. Revisit only if/when one of these windows does become key for another reason (e.g. a command palette), since that would give a reliable focus target to hang the listener off.
 
 ## Features
