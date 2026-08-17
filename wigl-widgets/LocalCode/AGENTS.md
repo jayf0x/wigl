@@ -212,7 +212,7 @@ before this fix, patches that block onto an already-declared model entry
 that's missing one, so nobody needs to delete `opencode.jsonc` by hand to
 pick this up.
 
-**Verified live** (backlog.md B1): `reasoningEffort` in a `variants` entry
+**Verified live:** `reasoningEffort` in a `variants` entry
 does reach Ollama — confirmed by putting a logging HTTP proxy in front of
 Ollama's own port, pointing opencode's `ollama` provider `baseURL` at it,
 and diffing the outgoing `/v1/chat/completions` body. `variants: { low:

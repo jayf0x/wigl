@@ -134,5 +134,5 @@ loading/build *mechanism* itself (`docs/widgets.md`'s "Build, install, and the p
 `scripts/widget.ts`, `wigl.permissions` in `package.json`) — the machinery a
 widget happens to be built and shipped through, not what it's called. The
 CLI commands (`widget:build`/`widget:install`/`widget:check`/...) say
-**widget** too, per B15 in `backlog.md` — they build and install a widget,
-even though the mechanism underneath keeps the "plugin" name.
+**widget** too — they build and install a widget, even though the mechanism
+underneath keeps the "plugin" name.

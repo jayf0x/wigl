@@ -1,9 +1,9 @@
 // Lets a second widget instance (another monitor's realm — each `Desktop`
 // is its own JS realm and process, see docs/architecture.md) discover and
 // reuse an `opencode serve` already running for the same `cwd`, instead of
-// silently spawning a second one with its own disconnected session list
-// (backlog.md B7). The lock file is the only thing two separate realms
-// share on disk for this purpose — no IPC between them otherwise.
+// silently spawning a second one with its own disconnected session list.
+// The lock file is the only thing two separate realms share on disk for
+// this purpose — no IPC between them otherwise.
 import { runCmd } from "@/wigl/utils";
 
 // Cheap non-crypto hash so the lock file name never needs escaping — same

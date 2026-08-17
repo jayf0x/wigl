@@ -93,7 +93,7 @@ export interface OllamaModelSync {
 // response with and without it for the same prompt against a thinking
 // model. `off` has to be a real variant like the others, not the absence of
 // one: `variant: undefined` (no override) just leaves Ollama on its default
-// thinking behavior, which is the bug this fixes (backlog.md B1).
+// thinking behavior, which is the bug this fixes.
 const REASONING_VARIANTS: Record<string, { reasoningEffort: string }> = {
   high: { reasoningEffort: "high" },
   low: { reasoningEffort: "low" },
@@ -101,7 +101,7 @@ const REASONING_VARIANTS: Record<string, { reasoningEffort: string }> = {
 };
 
 // Ollama's own default context window is a few thousand tokens — an
-// agentic tool-call transcript blows through that fast (backlog.md B15).
+// agentic tool-call transcript blows through that fast.
 // `num_ctx` on the provider's `options` block applies to every request
 // against this Ollama instance; `limit.context`/`limit.output` on each
 // model entry tell opencode itself the same numbers. ponytail: one flat

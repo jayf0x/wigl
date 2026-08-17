@@ -25,7 +25,7 @@ import "./composer.css";
 
 // `off` is a real variant now (opencodeConfig.ts maps it to Ollama's
 // `reasoning_effort: "none"`, the one value that actually suppresses
-// thinking — backlog.md B1), always offered first regardless of what the
+// thinking), always offered first regardless of what the
 // model's own `variants` map declares. Effort keys themselves are otherwise
 // per-model (see below); this is only the display map for the ones we know
 // by name.
@@ -34,8 +34,7 @@ const EFFORT_LABELS: Record<string, string> = { off: "off", low: "low", high: "h
 
 // opencode's own hidden toolless agent (see housekeeper.ts) — the one thing
 // guaranteed not to attach a tool schema, so it's what a tool-incapable
-// model gets forced onto instead of 400ing on the default `build` agent
-// (backlog.md B2).
+// model gets forced onto instead of 400ing on the default `build` agent.
 const TOOLLESS_AGENT = "title";
 
 interface Option {
@@ -210,7 +209,7 @@ export const Composer = ({
   // A tool-incapable model 400s the moment `build` (or any tool-using agent)
   // is attached — `ProviderModel.capabilities.toolcall` already tells us
   // this per-model, so force the toolless fallback rather than let the user
-  // pick an agent that's guaranteed to error (backlog.md B2).
+  // pick an agent that's guaranteed to error.
   const toolless = selected?.capabilities.toolcall === false;
 
   // With ALLOWED_PROVIDER_IDS scoped to Ollama alone there's often exactly

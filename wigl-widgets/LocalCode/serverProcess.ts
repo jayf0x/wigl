@@ -38,7 +38,7 @@ export const startOpencodeServer = async (cwd: string, timeoutMs = 8000): Promis
   // Another instance (this widget on a different monitor's realm — see
   // serverLock.ts) may already have a `serve` process up for this same
   // `cwd`. Reusing it keeps both instances on one session list instead of
-  // silently forking into two (backlog.md B7). `stop` is a no-op here: we
+  // silently forking into two. `stop` is a no-op here: we
   // didn't spawn this process, so we don't own killing it.
   const running = await findRunningServer(cwd);
   if (running) return { baseUrl: running, stop: async () => {} };

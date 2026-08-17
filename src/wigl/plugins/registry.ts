@@ -146,9 +146,9 @@ export const createPluginRequire = (pluginId: string, permissions: WidgetPermiss
     }
     // `useStorage`/`useQuery` write into one shared kv table keyed by
     // whatever string the caller passes — two widgets picking the same key
-    // would otherwise silently share (and clobber) state (backlog.md's
-    // B12). Scope every key to the widget that owns it, right here, so no
-    // widget author has to remember to do it themselves.
+    // would otherwise silently share (and clobber) state. Scope every key
+    // to the widget that owns it, right here, so no widget author has to
+    // remember to do it themselves.
     if (spec === "@/wigl/hooks") {
       const prefix = `${pluginId}:`;
       if (typeof view.useStorage === "function") {
