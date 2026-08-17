@@ -41,8 +41,8 @@ If a task's outcome doesn't change any of those claims, there's nothing to updat
 | Rendering/perf bug that only happens on one machine | `docs/debugging.md` → "Diagnosing a 'only happens on my machine' rendering bug", then run `tests/manual/x11-report.py` | — |
 | Feature idea, scope question, "should we add X?" | `docs/future-ideas.md` + `docs/architecture.md` → "The rule" | — |
 | Known defect / ceiling / pending decision | `backlog.md` | — |
-| Fixed a core bug / landed a core feature, wondering about test coverage | this file's "Testing" section | `tests/backlog.md` (append, don't write the test) |
-| Picking up a queued test to actually write | `tests/backlog.md` + `docs/testing.md` | `tests/*.test.ts` (or a widget's own `tests/`) |
+| Fixed a core bug / landed a core feature yourself, in the moment | this file's "Testing" section | `tests/backlog.md` (append, don't write the test) |
+| Explicitly asked to write tests (for a bug/feature/queue entry) | this file's "Testing" section + `docs/testing.md` | `tests/*.test.ts` (core-only, ~20% bar — zero new tests is a valid outcome) |
 
 ## Hard rules (violating these is the main way to fail here)
 
@@ -78,6 +78,27 @@ core bug becomes a test either — only a real defect in shared surface
 everything depends on, and once fixed, tracked as one queue entry (see
 below), not a test written reflexively per commit.
 
+**This is deliberately not full coverage.** The bar is roughly 20% of the
+surface covering the 80% that actually breaks things — real invariants and
+algorithms (grid math, the drag/reflow reducer, a coordinate correction,
+permission gating), not thin React wiring, prop-drilling, or anything
+`bun run typecheck`/`build` already catches. Given a task to write tests —
+for a bug just fixed, a feature just landed, or a direct "write tests for
+what you just built" ask — the correct output is sometimes zero new tests
+(say so, and why, instead of forcing one to exist), sometimes one new
+`expect()` added to an existing file instead of a new one. Never pad a pass
+with coverage for code that isn't a shared invariant just to have something
+to show.
+
+**Two different requests, two different behaviors — don't conflate them:**
+- **Fixing/landing something yourself, in the moment:** don't write the
+  test — append one entry to `tests/backlog.md` (see below) and move on.
+  Keeps the fix's own commit small.
+- **Explicitly asked to write tests** (for a bug, a feature, "what you just
+  implemented," or a queue entry) — write real test(s) directly, right now,
+  same file. Still core-only, still the 20%-bar above; check
+  `tests/backlog.md` for entries this closes, and delete any that do.
+
 A **real OS cursor** (`cliclick` on macOS, the X11 harness on Linux —
 `tests/manual/`) stays manual, never part of `bun run test`. It needs
 OS-level permissions granted by a human, and is genuinely flaky against
@@ -95,13 +116,10 @@ it's resolved (that file's own rule), so a name or comment that only makes
 sense by cross-referencing it goes stale silently. `git log`/`git show
 <hash>` always resolves; a ticket id doesn't.
 
-**When you fix a core bug or land a core feature: don't write the test
-yourself.** Append one entry to `tests/backlog.md` instead — what to test,
-why it matters, and a pointer to the commit — then move on. A separate,
-periodic pass (an agent, a subagent it spawns, or a human) turns queue
-entries into real tests later. This keeps a fix's own commit small and
-turns test-writing into a deliberate pass instead of ad hoc, uneven
-per-fix noise.
+A separate, periodic pass (an agent, a subagent it spawns, or a human) is
+what normally turns `tests/backlog.md` queue entries into real tests — see
+"Two different requests" above for when to queue vs. when to write
+directly.
 
 `bun run test` runs everything safe (core + `tests/e2e` + every widget's
 own tests); `bun run test:e2e` / `bun run test:widgets` isolate one slice —
