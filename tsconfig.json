@@ -5,6 +5,7 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
+    "types": ["bun"],
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -23,6 +24,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "tests/*.ts", "tests/e2e/*.ts"],
+  "include": ["src", "tests/**/*.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
