@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AlertTriangle, RotateCw, ShieldAlert } from "lucide-react";
 import { cn } from "@/wigl/utils";
 
@@ -14,6 +15,7 @@ export const ErrorOverlay = ({
   message,
   onRetry,
   className,
+  children,
 }: {
   kind: "known" | "unknown";
   title: string;
@@ -21,6 +23,10 @@ export const ErrorOverlay = ({
   /** Shown as a retry button when provided — omit if there's nothing to retry. */
   onRetry?: () => void;
   className?: string;
+  /** Extra actions below the message, e.g. a widget-specific recovery
+   * button — kept generic (children, not a prop per action) so a second
+   * widget's own escape hatch never needs a new prop here. */
+  children?: ReactNode;
 }) => (
   <div
     className={cn(
@@ -35,16 +41,19 @@ export const ErrorOverlay = ({
     )}
     <p className="font-medium text-foreground/90 text-xs">{title}</p>
     {message && <p className="max-w-xs text-[11px] text-muted-foreground">{message}</p>}
-    {onRetry && (
-      <button
-        type="button"
-        data-no-drag
-        onClick={onRetry}
-        className="mt-1 flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-foreground/80 transition-colors duration-150 hover:bg-muted"
-      >
-        <RotateCw className="size-3" />
-        retry
-      </button>
-    )}
+    <div className="mt-1 flex items-center gap-2">
+      {onRetry && (
+        <button
+          type="button"
+          data-no-drag
+          onClick={onRetry}
+          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-foreground/80 transition-colors duration-150 hover:bg-muted"
+        >
+          <RotateCw className="size-3" />
+          retry
+        </button>
+      )}
+      {children}
+    </div>
   </div>
 );

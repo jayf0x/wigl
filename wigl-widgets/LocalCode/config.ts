@@ -9,14 +9,6 @@ export const STORAGE_KEYS = {
   sidebarOpen: "localcode_sidebar_open", // boolean — sessions rail collapsed state
 } as const;
 
-// Every housekeeper turn runs in a throwaway session that opencode's global
-// session store briefly exposes over SSE before it's deleted (see
-// housekeeper.ts). Tagging those sessions with this sentinel title lets
-// useSessions filter them out of the sidebar — otherwise one prompt looks
-// like it spawned several duplicate "untitled" sessions. Race-free because
-// the title is set at creation, so it rides the `session.created` event.
-export const HOUSEKEEPER_SESSION_TITLE = "__wigl_housekeeper";
-
 // Only providers in this list are offered anywhere in the UI (model picker)
 // — explicit owner scoping: "We only work with Ollama for now, later we
 // will add claude code." Extend this list, not a special-case branch, when

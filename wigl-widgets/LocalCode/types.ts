@@ -33,7 +33,10 @@ export interface MessagePart {
   type: PartType;
   // text / reasoning
   text?: string;
-  time?: { start?: number; end?: number };
+  // `created` only appears on a real `RetryPart`, not read by this widget
+  // (see AGENTS.md) — declared just so the field doesn't conflict with the
+  // real per-part-type union when assigning from client.ts.
+  time?: { start?: number; end?: number; created?: number };
   // tool
   tool?: string;
   callID?: string;
@@ -53,7 +56,11 @@ export interface OpencodeMessage {
   time: { created: number; completed?: number };
   modelID?: string;
   providerID?: string;
-  error?: { message: string };
+  // opencode's real error shape (verified against @opencode-ai/sdk/v2's
+  // generated types): a discriminated union of error kinds, message text
+  // nested under `data`, not flat — some variants (`MessageOutputLengthError`)
+  // don't guarantee a `message` at all, hence both levels optional.
+  error?: { name?: string; data?: { message?: string } };
 }
 
 export interface MessageWithParts {
@@ -71,10 +78,14 @@ export interface PermissionRequest {
 }
 
 export interface Todo {
-  id: string;
   content: string;
-  status: "pending" | "in_progress" | "completed" | "cancelled";
-  priority: "high" | "medium" | "low";
+  // opencode's own schema doesn't constrain these beyond `string` at the
+  // type level (verified against @opencode-ai/sdk/v2) — this widget only
+  // ever reads `todos.length` (see AGENTS.md), never branches on a
+  // specific value, so there's nothing here that needs the tighter literal
+  // union to catch.
+  status: string;
+  priority: string;
 }
 
 export interface AgentDef {
@@ -87,16 +98,16 @@ export interface AgentDef {
   hidden?: boolean;
 }
 
-export interface ModelVariant {
-  reasoningEffort: string;
-}
-
 export interface ProviderModel {
   id: string;
   providerID: string;
   name: string;
   capabilities: { reasoning: boolean; toolcall: boolean };
-  variants?: Record<string, ModelVariant>;
+  // Real shape is an open bag per variant (verified against
+  // @opencode-ai/sdk/v2) — this widget only ever reads the *keys* (see
+  // Composer.tsx), never a variant's own fields, so nothing here needs a
+  // named shape for values it doesn't touch.
+  variants?: Record<string, unknown>
 }
 
 export interface ProviderCatalogEntry {

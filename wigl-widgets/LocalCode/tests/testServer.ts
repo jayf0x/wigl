@@ -168,9 +168,9 @@ export const subscribeEventsViaFetch = (baseUrl: string, onEvent: (event: unknow
 
 /** Minimal `EventSource`-alike backed by the same fetch-stream parsing as
  * `subscribeEventsViaFetch`, installed as `globalThis.EventSource` so
- * `client.ts`'s real `subscribeEvents` (and anything built on it, e.g.
- * `housekeeper.ts`) can run unmodified under `bun test` — exercising the
- * actual production code path instead of a test-only reimplementation. */
+ * `client.ts`'s real `subscribeEvents` (and anything built on it) can run
+ * unmodified under `bun test` — exercising the actual production code path
+ * instead of a test-only reimplementation. */
 export const installEventSourcePolyfill = (): void => {
   if (typeof globalThis.EventSource !== "undefined") return;
   class FetchEventSource {

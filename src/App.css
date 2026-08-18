@@ -128,9 +128,11 @@ html.wigl-windowed #root {
   touch-action: none;
 }
 
-/* Inset resize handles on all four edges — see Desktop.tsx's WidgetItem.
-   Thin enough to stay clear of the header's own controls (close/minimize,
-   drag grip), which sit a few px in from the same edges. */
+/* Inset resize handles on all four edges plus all four corners — see
+   Desktop.tsx's WidgetItem. Thin enough to stay clear of the header's own
+   controls (close/minimize, drag grip), which sit a few px in from the same
+   edges. Corner handles sit inside the edge handles' own corners (higher
+   z-index) so the diagonal cursor wins over the straight one there. */
 .wigl-resize-handle {
   position: absolute;
   z-index: 5;
@@ -162,8 +164,33 @@ html.wigl-windowed #root {
 .wigl-resize-w {
   left: 0;
 }
-.wigl-resize-handle:hover {
-  background: color-mix(in srgb, var(--wigl-accent) 35%, transparent);
+.wigl-resize-ne,
+.wigl-resize-nw,
+.wigl-resize-se,
+.wigl-resize-sw {
+  z-index: 6;
+  width: 10px;
+  height: 10px;
+}
+.wigl-resize-ne {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+.wigl-resize-nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+.wigl-resize-se {
+  bottom: 0;
+  right: 0;
+  cursor: nwse-resize;
+}
+.wigl-resize-sw {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
 }
 /* Resizing turns off the transform/size transition (same reasoning as
    .lifted for drag) so the card tracks the cursor exactly, then it springs

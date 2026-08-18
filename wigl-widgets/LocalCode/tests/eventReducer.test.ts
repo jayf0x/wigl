@@ -173,7 +173,7 @@ describe("applyEvent — permissions and todos", () => {
       type: "todo.updated",
       properties: {
         sessionID: SID,
-        todos: [{ id: "t1", content: "write tests", status: "in_progress", priority: "high" }],
+        todos: [{ content: "write tests", status: "in_progress", priority: "high" }],
       },
     }, SID);
     expect(state.todos).toHaveLength(1);

@@ -90,32 +90,48 @@ export const isOllamaReachable = async (): Promise<boolean> => {
   }
 };
 
-// Process-lifetime cache: a model's capabilities don't change without a
-// re-pull under the same tag, and `useOpencodeServer`'s hot-reload poll only
-// notices a *new* model name appearing, not an existing one being re-pulled
-// with different capabilities — a rare enough edge case not to invalidate
-// this cache over.
-const thinkingCache = new Map<string, boolean>();
+export interface OllamaModelInfo {
+  thinking: boolean;
+  /** The model's real trained context window, straight from Ollama's own
+   * GGUF metadata (`model_info["<architecture>.context_length"]` — verified
+   * live: `2048` for `smollm:135m`, `262144` for `qwen3.5:0.8b`, keyed by
+   * whatever `general.architecture` reports since the field name is
+   * per-architecture). Null when Ollama doesn't report one for this model —
+   * callers fall back to a flat guess in that case, not here. */
+  contextLength: number | null;
+}
 
-/** Whether Ollama reports `"thinking"` in `POST /api/show`'s `capabilities`
- * array for this model — verified live (`ollama show <model>` / the same
- * endpoint): present for a real reasoning model (e.g. `qwen3.5:0.8b`),
- * absent for a plain one (e.g. `smollm:135m`). This is the ground truth for
- * "does this model have a reasoning-effort control at all" — opencode's own
- * `/config/providers` has no such signal for a custom `openai-compatible`
- * provider unless `opencodeConfig.ts` puts a `variants` block in config
- * first, which is what this is for. */
-export const modelSupportsThinking = async (modelName: string): Promise<boolean> => {
-  const cached = thinkingCache.get(modelName);
-  if (cached !== undefined) return cached;
-  const supports = await fetch(`${OLLAMA_BASE}/api/show`, {
+// Process-lifetime cache: a model's capabilities/metadata don't change
+// without a re-pull under the same tag, and `useOpencodeServer`'s
+// hot-reload poll only notices a *new* model name appearing, not an
+// existing one being re-pulled with different metadata — a rare enough
+// edge case not to invalidate this cache over.
+const modelInfoCache = new Map<string, OllamaModelInfo>();
+
+/** Ground truth for both "does this model have a reasoning-effort control
+ * at all" (opencode's own `/config/providers` has no such signal for a
+ * custom `openai-compatible` provider unless `opencodeConfig.ts` puts a
+ * `variants` block in config first) and "how much context can this model
+ * actually take" (opencode has no dynamic-discovery of that either for a
+ * custom provider) — one `/api/show` call per model covers both instead of
+ * two round trips. */
+export const getModelInfo = async (modelName: string): Promise<OllamaModelInfo> => {
+  const cached = modelInfoCache.get(modelName);
+  if (cached) return cached;
+  const info = await fetch(`${OLLAMA_BASE}/api/show`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: modelName }),
   })
-    .then((r) => (r.ok ? (r.json() as Promise<{ capabilities?: string[] }>) : null))
-    .then((d) => d?.capabilities?.includes("thinking") ?? false)
-    .catch(() => false);
-  thinkingCache.set(modelName, supports);
-  return supports;
+    .then((r) => (r.ok ? (r.json() as Promise<{ capabilities?: string[]; model_info?: Record<string, unknown> }>) : null))
+    .catch(() => null);
+  const modelInfo = info?.model_info ?? {};
+  const architecture = modelInfo["general.architecture"];
+  const rawContextLength = typeof architecture === "string" ? modelInfo[`${architecture}.context_length`] : undefined;
+  const result: OllamaModelInfo = {
+    thinking: info?.capabilities?.includes("thinking") ?? false,
+    contextLength: typeof rawContextLength === "number" ? rawContextLength : null,
+  };
+  modelInfoCache.set(modelName, result);
+  return result;
 };

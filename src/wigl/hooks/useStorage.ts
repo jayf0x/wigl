@@ -67,7 +67,14 @@ export const useStorage = <T>(key: string, initialValue: T) => {
     read();
     const id = setInterval(read, POLL_MS);
     const unlisten = listen<KvMsg>("wigl-kv", ({ payload: p }) => {
-      if (p.from === SESSION_ID || p.key !== key || p.json === lastJson.current) return;
+      // Not `p.from === SESSION_ID` — two useStorage instances on the same
+      // key in the *same* window (e.g. a settings section writing while
+      // another component reads) both need this broadcast; the json-equality
+      // check below already suppresses the originating hook's own echo
+      // (its lastJson is set before emit), so a same-window sender filter
+      // isn't needed for that and only holds other instances back until the
+      // next poll (see commit fixing the Settings-modal theme-apply lag).
+      if (p.key !== key || p.json === lastJson.current) return;
       lastJson.current = p.json;
       setValue(JSON.parse(p.json));
     });

@@ -5,6 +5,7 @@
   },
   "dependencies": {
     "@milkdown/crepe": "^7.22.0",
-    "@milkdown/kit": "^7.22.0"
+    "@milkdown/kit": "^7.22.0",
+    "@opencode-ai/sdk": "^1.18.18"
   }
 }

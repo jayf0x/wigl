@@ -16,7 +16,10 @@ import { SCRATCH_DIRECTORY, setupE2eSuite, subscribeEventsViaFetch } from "./tes
 import type { OpencodeEvent } from "../types";
 
 const REPLY_MODEL_ID = "qwen3.5:0.8b";
-const HOUSEKEEPER_MODEL_ID = "smollm:135m";
+// opencode's own server-side "title" agent fires automatically on a
+// session's first message and needs a real model to run against — this
+// isn't a wigl-side concept, just what setupE2eSuite must have pulled.
+const TITLE_AGENT_MODEL_ID = "smollm:135m";
 // Never the real repo/home directory a human would actually point the
 // widget at — see testServer.ts's SCRATCH_DIRECTORY doc comment for why
 // that matters (opencode's session store is global, not per-test-run).
@@ -26,7 +29,7 @@ const DIRECTORY = SCRATCH_DIRECTORY;
 // this module's top level is still running — a `beforeAll` callback runs
 // too late to gate it (it would always see the pre-`beforeAll` value and
 // skip everything). Bun supports top-level `await`, so setup happens here.
-const { ready, server, teardown } = await setupE2eSuite([REPLY_MODEL_ID, HOUSEKEEPER_MODEL_ID]);
+const { ready, server, teardown } = await setupE2eSuite([REPLY_MODEL_ID, TITLE_AGENT_MODEL_ID]);
 
 const createdSessionIds: string[] = [];
 const createTrackedSession = async (

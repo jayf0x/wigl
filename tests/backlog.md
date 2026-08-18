@@ -24,4 +24,13 @@ Rules for keeping this file real (same spirit as `backlog.md`):
 
 ## Queue
 
-_Empty — nothing queued right now._
+- **Corner resize (two-axis) in `Desktop.tsx`'s `onResizeMove`.** Edge resize
+  (`tests/desktop-resize.test.ts`) only exercises single-axis handles ("e",
+  "w"). Corner handles ("ne"/"nw"/"se"/"sw") now exist and rely on the same
+  function applying both the col-axis and row-axis branches in one move
+  (`r.edge.includes("e"|"w")` and `r.edge.includes("n"|"s")` independently,
+  not mutually exclusive like the old single-edge `if/else if` chain) — a
+  regression here would silently drop one axis on a diagonal drag rather
+  than throwing. Worth one test: drag a "se" handle diagonally and assert
+  both `w` and `h` grew together (same fixture/pitch-math pattern as the
+  existing east/west tests).

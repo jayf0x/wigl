@@ -87,7 +87,7 @@ The shape, in dependency order (any widget in `wigl-widgets/` with a hook is the
 Everything shared lives behind exactly three barrels — widgets never deep-import past them:
 
 - **`@/wigl`** — visual/layout primitives: `Widget`, `Desktop`, `TILING`.
-- **`@/wigl/hooks`** — stateful/React helpers: `useStorage`, `useQuery`, `useRelativeTime`, `useRegisterGlobalAction`.
+- **`@/wigl/hooks`** — stateful/React helpers: `useStorage`, `useQuery`, `useRelativeTime`, `useRegisterGlobalAction`, `useRegisterSettings`.
 - **`@/wigl/utils`** — plain non-React helpers: `cn`, `runCmd`, `isMacos`, `relativeTime`.
 
 **Read each barrel's `index.ts` for the current list**; each module carries its own doc comment. The two you'll always use from `@/wigl`:
@@ -113,6 +113,21 @@ useRegisterGlobalAction({ id: "<widget>_do-thing", label: "Do thing", run: () =>
 ```
 
 Adds an entry to the desktop's right-click menu for as long as the calling component is mounted — no `Desktop.tsx` or `wigl` edit needed. `id` should be prefixed with the widget's folder name, same rule as storage keys, since the registry is a single flat namespace across every widget's menu entries.
+
+## Contributing a Settings section (`useRegisterSettings`)
+
+```tsx
+import { useRegisterSettings, useStorage } from "@/wigl/hooks";
+
+useRegisterSettings({
+  id: "<widget>",
+  label: "Widget Name",
+  fields: [{ id: "<widget>-thing", label: "Thing", keywords: ["optional", "search", "terms"] }],
+  render: () => <MyWidgetSettings />,
+});
+```
+
+Same register-while-mounted/unregister-on-unmount shape as `useRegisterGlobalAction`, but adds a section to the general Settings modal (right-click → Settings) instead of the right-click menu itself — no `SettingsModal.tsx` edit needed. `render` returns your own hand-built UI for the section body (a toggle row, a form, whatever fits — same freedom as the widget's own rendering); `fields` is a separate, lightweight list purely for the modal's search box to match against, not a second description of the UI — one entry per control is enough. Back the section's own state with `useStorage` the same way any other widget state would be (see `wigl-widgets/todo/index.tsx` for a minimal real example: one boolean field that flips the widget's own background live) — a widget's settings are exactly the kind of thing that should apply instantly, no restart. The object passed to `useRegisterSettings` should be a stable reference (module-scoped, or memoized) — a fresh object every render re-fires the register/unregister effect for nothing, same caution as `useRegisterGlobalAction`.
 
 ## Persistent storage (`useStorage`)
 

@@ -35,27 +35,52 @@ needed regardless of what origin the Tauri webview reports itself as.
 
 ## Where the API shapes come from
 
-Verified against a **live `opencode serve` v1.18.15** instance on this
-machine during development (`curl` against `/session`, `/event`,
-`/config/providers`, ...) — not just read from a spec. `.idea/OpenCode_UI/openapi.json`
-(bundled in that repo, `info.version: "0.0.3"`) was useful for discovering
-which endpoints exist (`/session/{id}/revert`, `/permission/{id}/reply`,
-`/session/{id}/children`, ...) but its version string doesn't correspond to
-any real opencode release — **don't trust its schemas over a live check**.
-`types.ts` only declares the fields this widget reads/writes, not full
-objects; if a new feature needs another field, add it there and confirm it
-against a running server, don't assume the openapi.json is current.
+`client.ts` is backed by `@opencode-ai/sdk/v2/client`'s generated
+`createOpencodeClient` — not hand-rolled `fetch` anymore. That package
+ships *two* differently-vintaged generated schemas: the default/top-level
+export is stale (verified live: missing the `variant` field this widget's
+reasoning-effort chip depends on entirely), while `/v2` was verified field-
+by-field against a live **`opencode serve` v1.18.15** instance's own `/doc`
+OpenAPI dump to actually match — **always import from `@opencode-ai/sdk/v2/client`
+specifically**, never the bare `/v2` or top-level export (the latter two
+re-export `./server.js`, which requires the Node builtin `cross-spawn` and
+breaks widget bundling outright — verified live, `Bun.build` targets a
+browser environment). Don't assume a future SDK bump keeps matching this
+server; re-verify against a live `/doc` dump the way this was, don't trust
+a version number alone.
+
+`types.ts` still declares its own trimmed types (only the fields this
+widget reads/writes, not full objects) rather than importing the SDK's —
+those are real request/response types generated straight from opencode's
+schema, and using them for `client.ts`'s inputs is exactly the point (a
+field rename becomes a `bun run typecheck` error, not a silent mismatch).
+But the SDK's *response* shapes are wide, deeply-nested, and change often;
+re-deriving `types.ts`'s narrow domain types from them on every field would
+turn every unrelated opencode schema change into a wave of unrelated
+widget edits. `types.ts`'s types are kept structurally close enough that a
+real SDK response satisfies them (verified live, not just typechecked in
+isolation), and a mismatch surfaces the same way — a compile error in
+`client.ts`'s return statements — the moment the two drift.
 
 Things confirmed live that aren't obvious from guessing:
 - SSE frames are plain `data: {...}\n\n` with no custom `event:` name, so
   `new EventSource(...).onmessage` catches everything — no per-type
-  listener wiring needed.
+  listener wiring needed. `subscribeEvents` stays on plain `EventSource`
+  rather than the generated client's own `event.subscribe()` — see that
+  function's doc comment in `client.ts` for why (a real streaming-body
+  risk on WKWebView, not proven broken but not worth risking against this
+  widget's entire live-chat UX for an optional swap).
 - Reasoning-effort options are **per-model**, not a fixed enum: each
   model in `/config/providers` may have a `variants` map (e.g.
   `{ high: { reasoningEffort: "high" } }`); a model with no `variants` has
   no effort control at all. `Composer.tsx` shows the effort chip only when
   the selected model declares `variants` — never hardcode a global
   low/medium/high list.
+- opencode's own error union isn't internally consistent about where the
+  message text lives — verified live: most error kinds are `{ name, data:
+  { message } }`, but `SessionBusyError` (the 409 a revert-mid-turn throws)
+  is a flat `{ _tag, message }` instead. `client.ts`'s `unwrap` checks both
+  shapes rather than assuming one.
 - There's no dedicated "edit message" endpoint. `client.ts`'s
   `revertToMessage` + a fresh `sendPrompt` is opencode's own intended
   composition for "redo this turn" — that's what `editAndResend` in
@@ -198,13 +223,14 @@ else — no `variants` field, ever, for any Ollama model. The effort control
 catalog entry has a `variants` map, so with every synced model missing one,
 it was permanently unavailable regardless of which model was picked — not a
 per-model bug, a structural one. Fixed: `ollama.ts`'s
-`modelSupportsThinking(name)` calls Ollama's own `POST /api/show` and checks
+`getModelInfo(name)` calls Ollama's own `POST /api/show` and checks
 whether `"thinking"` is in the returned `capabilities` array (verified
-live: present for `qwen3.5:0.8b`, absent for `smollm:135m`), cached per
-model name for the process lifetime. `useOpencodeServer.ts`'s
+live: present for `qwen3.5:0.8b`, absent for `smollm:135m`) — the same call
+also reads the model's real context length off `model_info`, so both live
+in one cached-per-model-name result. `useOpencodeServer.ts`'s
 `prepareOllamaModelSync()` resolves this for every installed model
 (parallelized, still inside the same `OLLAMA_SYNC_TIMEOUT_MS` budget as the
-rest of the sync) and hands `{ name, thinking }` pairs to
+rest of the sync) and hands `{ name, thinking, contextLength }` triples to
 `syncOllamaModels()`, which now writes a fixed `variants: { high: {
 reasoningEffort: "high" }, low: { reasoningEffort: "low" } }` block for any
 model that came back thinking-capable — and, on an existing config from
@@ -302,39 +328,24 @@ model in `prompt` to ignore project context doesn't work either — a known
 limitation of small local models with negative instructions, not something
 this widget can configure around.
 
-## Housekeeper model
+## No housekeeper model
 
-A small/fast/local model, for internal tasks that shouldn't cost a real
-turn against whatever model the user is actually working with.
-`housekeeper.ts`'s `runHousekeeperPrompt()` runs a prompt against a
-throwaway session (created, waited on via the `session.idle` SSE event,
-read back, deleted — same event this widget already subscribes to for real
-sessions, no polling) and returns the text response.
+There used to be a `housekeeper.ts` running small internal-task prompts
+(session title generation) against a throwaway session on a small/fast
+local model. Deleted — see "Session titles are a plain timestamp" below for
+why. If a real second use case for a scratch-session/toolless-model pattern
+shows up, re-derive it fresh rather than resurrecting the deleted file;
+`git log` has it if the shape is worth stealing.
 
-**Pass a toolless `agent`.** A session with no `agent` defaults to
-`"build"`, which always attaches opencode's full tool schema to the
-completion request — verified live that Ollama 400s with "does not support
-tools" for models that don't support function-calling at all. Any
-housekeeper consumer needs to pass a toolless `agent` (e.g. `"title"`,
-opencode's own hidden, purpose-built title-generation agent) for exactly
-this reason — omitting `agent` isn't a safe default here the way it might
-look.
-
-The real chat composer has the same failure mode for the same reason: no
-explicit agent selection defaults to `"build"` server-side. `Composer.tsx`
-checks the selected model's `ProviderModel.capabilities.toolcall` and, when
-`false`, forces `agent: "title"` and disables the agent chip (so the user
-can't pick a tool-using agent that's guaranteed to 400) rather than letting
-the request go out with the default.
-
-**Not wired today.** `generateSessionTitle()` used to fire from
-`useActiveSession.ts`'s `send()` on a session's first user message —
-deleted once live testing showed opencode already runs its own native
-title-generation agent on the same trigger, making that call pure duplicate
-work (see "Session auto-titling" above). Kept exported and covered by
-`tests/opencode.generation.e2e.test.ts` as a tested primitive for whatever
-the next concrete housekeeper task turns out to be — `runHousekeeperPrompt()`
-stays unexported until a second consumer needs it directly.
+The real chat composer has an unrelated but similarly-shaped failure mode:
+no explicit agent selection defaults to `"build"` server-side, which always
+attaches opencode's full tool schema — verified live that Ollama 400s with
+"does not support tools" for models that don't support function-calling at
+all. `Composer.tsx` checks the selected model's
+`ProviderModel.capabilities.toolcall` and, when `false`, forces
+`agent: "title"` (opencode's own hidden, toolless, purpose-built agent —
+guaranteed not to attach a tool schema) and disables the agent chip, rather
+than letting the request go out with the default.
 
 ## UI shape (post-redesign) — read before adding a control
 
@@ -449,7 +460,7 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
 
 - **`session.error` must be handled, not just typed.** Found live: a failed
   turn (unknown model, or a tool-incapable model under the default `"build"`
-  agent — see "Housekeeper model" above) produces a `session.error` event
+  agent — see "No housekeeper model" above) produces a `session.error` event
   and *no* assistant `message.updated` at all — nothing else signals the
   failure. Before this was handled, that event fell through
   `useActiveSession`'s event switch's `default` case and did nothing: no
@@ -503,14 +514,16 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
   framing: don't rebuild what a real editor/git tool already does well: "no
   fancy features like transcribe or audio... don't repeat what other apps
   already solve."
-- **Session auto-titling comes from opencode itself, not a wigl-side model
-  call.** A housekeeper-model title-gen call used to run after every first
-  message; deleted once live testing showed opencode already runs its own
-  native title-generation agent on the session's first message regardless
-  (see "Housekeeper model" above) — the wigl-side call was pure duplicate
-  work racing the real turn for the same Ollama instance. `useSessions.ts`'s
-  `sanitizeTitle` only trims the stray leading/trailing quote opencode's own
-  title sometimes comes back with; it doesn't regenerate anything.
+- **Session titles are a plain timestamp until the user renames one —
+  opencode's own auto-generated title is never shown.** opencode runs a
+  native title-generation agent on a session's first message regardless of
+  anything this widget does, and a wigl-side housekeeper-model call used to
+  duplicate that work (deleted — see "No housekeeper model" above). But the
+  bigger reason opencode's title isn't surfaced at all anymore: its output
+  quality wasn't reliable enough to show as-is (owner's call). `useSessions.ts`'s
+  `defaultTitle()` formats the session's own `time.created` instead;
+  `titles[id]` (manual rename, unchanged) still overrides it immediately.
+  Revisit if/when a replacement titling approach lands (see backlog.md).
 - **A render window, not virtualization.** `MessageList.tsx` mounts only the
   last `RENDER_WINDOW` (40) messages and puts the rest behind one "N earlier
   messages" button. This is the answer to the long-standing "conversations
@@ -567,9 +580,10 @@ for a final pass once changes are batched.
   model generation (an unknown-model turn fails fast, before ever reaching
   Ollama). Cheap enough to run while iterating on anything that isn't
   reply-generation logic itself.
-- `opencode.generation.e2e.test.ts` — the expensive half: real
+- `opencode.generation.e2e.test.ts` — the expensive half: a real
   `qwen3.5:0.8b` (a real thinking model, so reasoning content can be
-  asserted on) and `smollm:135m` (the housekeeper default) generations.
+  asserted on) generation. `smollm:135m` is pulled alongside it only
+  because opencode's own native title agent needs a model to run against.
   Content is deterministic given the fixed seed, but **wall-clock isn't**
   — the same exact generation measured ~6s to ~50s across runs on one dev
   machine (Ollama serializes generation per model, `-np 1`, so GPU
@@ -601,11 +615,11 @@ over a raw `fetch` stream.
 ## Backlog
 
 Open, not-yet-built work for this widget (branching, sub-agent visibility,
-multi-monitor server sharing, Ollama start/stop, the shared error surface,
-the housekeeper inline-vs-extend call) lives in root `backlog.md`, not
-here — that's the one canonical backlog for the whole repo (see root
-`AGENTS.md`'s docs table). Skills are not backlog material — see "Skills —
-disabled for now" above for that decision's actual current state.
+multi-monitor server sharing, session-title replacement) lives in root
+`backlog.md`, not here — that's the one canonical backlog for the whole
+repo (see root `AGENTS.md`'s docs table). Skills are not backlog material —
+see "Skills — disabled for now" above for that decision's actual current
+state.
 
 ## Hard rules specific to this widget
 

@@ -1,26 +1,29 @@
 // Slow half of the live-server e2e coverage: tests that need a REAL Ollama
 // generation to complete — qwen3.5:0.8b (a real thinking model, so we can
-// assert on reasoning content) and smollm:135m (the housekeeper default).
-// Deterministic via fixed seed + greedy decoding + a capped output (see
-// testServer.ts's withDeterministicModels) per owner instruction, but
-// wall-clock still isn't free: per-token latency on the dev machine this
-// was written on ranged ~6s-50s for the *same* generation across runs
-// (Ollama serializes per model, `-np 1`, so GPU contention matters) — this
-// file alone can take over a minute. Don't rerun it after every small
-// edit; `opencode.session.e2e.test.ts` covers everything that doesn't need
-// real model output, and `eventReducer.test.ts` covers the pure logic with
-// zero server/model cost at all — reach for those first while iterating.
+// assert on reasoning content). Deterministic via fixed seed + greedy
+// decoding + a capped output (see testServer.ts's withDeterministicModels)
+// per owner instruction, but wall-clock still isn't free: per-token latency
+// on the dev machine this was written on ranged ~6s-50s for the *same*
+// generation across runs (Ollama serializes per model, `-np 1`, so GPU
+// contention matters) — this file alone can take over a minute. Don't
+// rerun it after every small edit; `opencode.session.e2e.test.ts` covers
+// everything that doesn't need real model output, and
+// `eventReducer.test.ts` covers the pure logic with zero server/model cost
+// at all — reach for those first while iterating.
 //
 // Skips (not fails) if qwen3.5:0.8b / smollm:135m aren't pulled locally.
 import { afterAll, describe, expect, test } from "bun:test";
 import * as client from "../client";
 import { applyEvent, emptySessionState, type SessionState } from "../eventReducer";
-import { generateSessionTitle } from "../housekeeper";
 import { SCRATCH_DIRECTORY, setupE2eSuite, subscribeEventsViaFetch } from "./testServer";
 import type { OpencodeEvent } from "../types";
 
 const REPLY_MODEL = { providerID: "ollama", modelID: "qwen3.5:0.8b" };
-const HOUSEKEEPER_MODEL = { providerID: "ollama", modelID: "smollm:135m" };
+// Only pulled so opencode's own native title-generation agent (which fires
+// on every session's first message regardless of anything this widget
+// does) has a small/fast model to run against during these tests — not a
+// wigl-side concept.
+const TITLE_AGENT_MODEL_ID = "smollm:135m";
 const DIRECTORY = SCRATCH_DIRECTORY;
 // Content is deterministic (fixed seed + temperature 0 + capped output) but
 // wall-clock isn't — see the file banner above. Needs real headroom.
@@ -29,7 +32,7 @@ const TURN_TIMEOUT_MS = 90_000;
 // See opencode.session.e2e.test.ts for why this is top-level `await`, not
 // `beforeAll` — `test.skipIf` evaluates its condition before `beforeAll`
 // would ever run.
-const { ready, server, teardown } = await setupE2eSuite([REPLY_MODEL.modelID, HOUSEKEEPER_MODEL.modelID]);
+const { ready, server, teardown } = await setupE2eSuite([REPLY_MODEL.modelID, TITLE_AGENT_MODEL_ID]);
 
 const createdSessionIds: string[] = [];
 const createTrackedSession = async (
@@ -49,10 +52,10 @@ afterAll(async () => {
 });
 
 /** Drives `sessionID`'s SSE stream through `eventReducer.applyEvent` until
- * `session.idle` fires (the turn is fully finished, not just started —
- * same signal `housekeeper.ts` waits on), or `timeoutMs` elapses. Returns
- * the final reduced state, so assertions read exactly what the widget's
- * own state would look like after the same events. */
+ * `session.idle` fires (the turn is fully finished, not just started), or
+ * `timeoutMs` elapses. Returns the final reduced state, so assertions read
+ * exactly what the widget's own state would look like after the same
+ * events. */
 const runTurnAndCollectState = (baseUrl: string, sessionID: string, send: () => Promise<void>): Promise<SessionState> =>
   new Promise((resolve, reject) => {
     let state = emptySessionState();
@@ -170,33 +173,7 @@ describe("prompt -> loading -> reply (the reported regression)", () => {
 // `plugin.added` events right after the first prompt on a freshly started
 // server — see the SSE trace in AGENTS.md). Sending `smollm:135m` a prompt
 // under the default "build" agent reproduced Ollama's real "does not
-// support tools" 400 (verified live, see housekeeper.ts's doc comment) but
-// not on every run, so it isn't reliable enough to assert on here —
-// opencode.session.e2e.test.ts's "unknown model" case already exercises
-// the same session.error surfacing path deterministically.
-
-describe("housekeeper model (session titling)", () => {
-  // No server/model involved — SHORT_PROMPT_CHARS's early return skips the
-  // network entirely, so this runs regardless of `ready`.
-  test("a short prompt is used verbatim as the title, no model call", async () => {
-    const title = await generateSessionTitle("http://unused", HOUSEKEEPER_MODEL, "  test  ", DIRECTORY);
-    expect(title).toBe("test");
-  });
-
-  test.skipIf(!ready)(
-    "generateSessionTitle produces a short, punctuation-stripped title",
-    async () => {
-      const baseUrl = server?.baseUrl as string;
-      const title = await generateSessionTitle(
-        baseUrl,
-        HOUSEKEEPER_MODEL,
-        "Fix the login button not responding to clicks on Safari",
-        DIRECTORY,
-      );
-      expect(title).toBeTruthy();
-      expect(title?.length).toBeLessThanOrEqual(61); // 60-char ceiling, see generateSessionTitle
-      expect(title).not.toMatch(/["'*_`]/);
-    },
-    TURN_TIMEOUT_MS + 5000,
-  );
-});
+// support tools" 400 (verified live) but not on every run, so it isn't
+// reliable enough to assert on here — opencode.session.e2e.test.ts's
+// "unknown model" case already exercises the same session.error surfacing
+// path deterministically.

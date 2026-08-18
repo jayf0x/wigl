@@ -40,7 +40,8 @@ import {
   springEasing,
 } from "./grid/math";
 import { useGlobalActions, useRegisterGlobalAction, useStorage } from "./hooks";
-import { ThemeSettingsPopover } from "./ThemeSettingsPopover";
+import { SettingsModal } from "./settings/SettingsModal";
+import { ThemeEffect } from "./theme/ThemeEffect";
 import {
   type WidgetGridReport,
   WidgetSlotProvider,
@@ -99,15 +100,21 @@ interface DragState {
   screenCorrection: { x: number; y: number };
 }
 
-// One edge dragged at a time — no corner (two-axis) resize, matching the
-// "all edges resizable" ask rather than the fuller react-grid-layout-style
-// 8-handle set. `startCol`/`startRow`/`startW`/`startH` are the anchor: every
-// move recomputes from these (like DragState.snapshot) so the item never
-// drifts across a long gesture. `w`/`e` hold the opposite edge fixed and grow
-// from the dragged one; `n`/`s` do the same on the row axis.
+// Compass-style handle names, same convention as CSS's nwse-resize/nesw-resize
+// cursors: first letter is the row-axis edge (n/s), second is the col-axis
+// edge (e/w). A plain edge ("n", "e", ...) touches only its own axis; a
+// corner ("ne", "sw", ...) is just both single-axis computations applied in
+// the same move — the two axes never share state, so nothing besides
+// `onResizeMove`'s edge-matching needed to change to support them.
+// `startCol`/`startRow`/`startW`/`startH` are the anchor: every move
+// recomputes from these (like DragState.snapshot) so the item never drifts
+// across a long gesture. `w`/`e` hold the opposite edge fixed and grow from
+// the dragged one; `n`/`s` do the same on the row axis.
+type ResizeEdge = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
 interface ResizeState {
   id: string;
-  edge: "n" | "s" | "e" | "w";
+  edge: ResizeEdge;
   el: HTMLDivElement;
   startX: number;
   startY: number;
@@ -183,7 +190,7 @@ class WidgetErrorBoundary extends Component<
 // position is already applied imperatively (see the `useLayoutEffect` below
 // that writes `transform` directly from `els`), so re-rendering here would
 // just be wasted React work chasing a DOM write that already happened.
-const RESIZE_EDGES = ["n", "s", "e", "w"] as const;
+const RESIZE_EDGES: readonly ResizeEdge[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 
 const WidgetItem = memo(function WidgetItem({
   id,
@@ -208,7 +215,7 @@ const WidgetItem = memo(function WidgetItem({
   els: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
   onPointerDown: (e: React.PointerEvent, id: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  onResizeStart: (e: React.PointerEvent, id: string, edge: "n" | "s" | "e" | "w") => void;
+  onResizeStart: (e: React.PointerEvent, id: string, edge: ResizeEdge) => void;
 }) {
   const setRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -273,13 +280,8 @@ export const Desktop = ({
   const [resizeId, setResizeId] = useState<string | null>(null);
   // Right-click menu of global actions (see actions.ts), page-px position.
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  // Where the "Settings" entry was clicked — the settings popover's virtual
-  // anchor. A ref, not state off `menu`, since `menu` itself is cleared
-  // (closeMenu) by the time the popover would read it.
   const menuPos = useRef({ x: 0, y: 0 });
-  const [settingsAt, setSettingsAt] = useState<{ x: number; y: number } | null>(
-    null,
-  );
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const els = useRef<Record<string, HTMLDivElement | null>>({});
   const ghost = useRef<HTMLDivElement>(null);
@@ -694,15 +696,16 @@ export const Desktop = ({
     [monitorIndex, doReset],
   );
   useRegisterGlobalAction(resetLayoutAction);
-  // The central settings entry (Theming part 2) — opens the theme picker
-  // anchored at this same right-click point. ThemeSettingsPopover owns its
-  // own persisted state and applies it to :root itself, unconditionally
-  // (see that file) — Desktop only needs to hand it a screen point.
+  // The central settings entry — opens the general Settings modal (theme,
+  // and whatever else registers a section via useRegisterSettings). The
+  // modal itself is mounted unconditionally below; ThemeEffect (also
+  // unconditional) is what actually keeps :root's colors in sync regardless
+  // of whether the modal is open.
   const settingsAction = useMemo(
     () => ({
       id: "settings",
       label: "Settings",
-      run: () => setSettingsAt({ ...menuPos.current }),
+      run: () => setSettingsOpen(true),
     }),
     [],
   );
@@ -798,7 +801,7 @@ export const Desktop = ({
   // to a foreign monitor window; there's no meaningful "resize onto another
   // screen" gesture.
   const onResizeStart = useCallback(
-    (e: React.PointerEvent, id: string, edge: "n" | "s" | "e" | "w") => {
+    (e: React.PointerEvent, id: string, edge: ResizeEdge) => {
       const layout = layoutRef.current;
       if (e.button !== 0 || !layout) return;
       const item = layout.find((i) => i.id === id)!;
@@ -833,17 +836,20 @@ export const Desktop = ({
     let row = r.startRow;
     let w = r.startW;
     let h = r.startH;
-    if (r.edge === "e") {
+    // Col axis and row axis are independent — a corner handle (e.g. "se")
+    // just satisfies both conditions below in the same move.
+    if (r.edge.includes("e")) {
       w = Math.max(1, Math.min(cols - r.startCol, r.startW + dCols));
-    } else if (r.edge === "w") {
+    } else if (r.edge.includes("w")) {
       const rightEdge = r.startCol + r.startW;
       col = Math.max(0, Math.min(rightEdge - 1, r.startCol + dCols));
       w = rightEdge - col;
-    } else if (r.edge === "s") {
+    }
+    if (r.edge.includes("s")) {
       h = Math.max(1, r.startH + dRows);
       if (TILING.rows != null)
         h = Math.min(h, Math.max(1, TILING.rows - r.startRow));
-    } else {
+    } else if (r.edge.includes("n")) {
       const bottomEdge = r.startRow + r.startH;
       row = Math.max(0, Math.min(bottomEdge - 1, r.startRow + dRows));
       h = bottomEdge - row;
@@ -1222,10 +1228,8 @@ export const Desktop = ({
           </div>
         </div>
       )}
-      <ThemeSettingsPopover
-        anchor={settingsAt}
-        onClose={() => setSettingsAt(null)}
-      />
+      <ThemeEffect />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 };

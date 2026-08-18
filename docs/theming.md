@@ -11,14 +11,16 @@ ThemeColors (types.ts)
 PRESETS (presets.ts)            generateParametricColors (parametric.ts)
     \                                  /
      \                                /
-        ThemeSettingsPopover.tsx
-        (owns persisted theme id/knobs, applies on every render)
+        ThemeEffect.tsx (reads persisted theme id/knobs, applies on change)
                     ↓
         applyTheme (theme/applyTheme.ts)
                     ↓
         CSS custom properties on :root
                     ↓
         Tailwind utility classes (bg-primary, border-border, ...)
+
+        Appearance settings section (settings/sections/appearance.tsx)
+        (the UI — reads/writes the same persisted theme id/knobs)
 ```
 
 `ThemeColors` (`types.ts`) is the contract: a fixed list of ~18 semantic
@@ -50,16 +52,21 @@ Two ways to produce a `ThemeColors`:
   lightness (not "background if primary's light" — that assumes background
   is the dark one, which inverts on a light theme).
 
-`ThemeSettingsPopover` (`ThemeSettingsPopover.tsx`) is both the only UI and
-the sole owner of theme state: it calls `useStorage` directly for the
-persisted theme id/knobs and applies them via a `useLayoutEffect` that runs
-on every render — Desktop.tsx mounts it unconditionally and only ever varies
-the `anchor` prop (screen point, or `null` when closed), so the applied
-theme stays correct on load and on every change whether or not the popover
-UI itself happens to be open. Picking a preset or `Custom` reads from
-`PRESETS`/`generateParametricColors` respectively; hue dials render over
-their own rainbow gradient track instead of the default fill-style
-indicator (a fill reads as "amount", which a hue isn't).
+Applying and editing the theme are two separate components now, both
+reading/writing the same `useStorage("wigl_theme", …)`/`("wigl_theme_knobs",
+…)` keys so neither owns the state exclusively:
+
+- **`ThemeEffect`** (`theme/ThemeEffect.tsx`) does nothing but apply — a
+  `useLayoutEffect` that runs on every theme id/knobs change. Desktop.tsx
+  mounts it unconditionally (no props to toggle), so the applied theme stays
+  correct on load and on every change whether or not Settings is open.
+- **The Appearance section** (`settings/sections/appearance.tsx`) is the UI —
+  a grid of preset swatch cards plus the `Custom` hue-dial/filter editor,
+  rendered inside the general Settings modal (`settings/SettingsModal.tsx`,
+  opened via right-click → Settings). Picking a preset or `Custom` reads from
+  `PRESETS`/`generateParametricColors` respectively; hue dials render over
+  their own rainbow gradient track instead of the default fill-style
+  indicator (a fill reads as "amount", which a hue isn't).
 
 ## The one hard rule for widgets
 
@@ -93,11 +100,11 @@ format constraint beyond being a valid CSS color.
   back toward one knob per var.
 - **New root knob** (a 4th dial, a different filter, a different color
   model): change `ParametricKnobs` and the formulas in `parametric.ts`;
-  `ThemeSettingsPopover`'s persistence/apply plumbing, `applyTheme`, and
-  every widget are untouched, since they only ever see the resulting
-  `ThemeColors`. `ThemeSettingsPopover` does need a new slider row to expose
-  it, same as the existing `HUE_FIELDS`/`FILTER_FIELDS` entries.
-- **Verifying a change**: switch themes live in the settings popover and
-  drag brightness/contrast across their full range, including past the
-  midpoint into a light theme — a hardcoded color anywhere only becomes
-  visible this way, not from reading the diff.
+  `ThemeEffect`'s apply plumbing, `applyTheme`, and every widget are
+  untouched, since they only ever see the resulting `ThemeColors`. The
+  Appearance section does need a new slider row to expose it, same as the
+  existing `HUE_FIELDS`/`FILTER_FIELDS` entries.
+- **Verifying a change**: switch themes live in the Settings modal (right-
+  click → Settings → Appearance) and drag brightness/contrast across their
+  full range, including past the midpoint into a light theme — a hardcoded
+  color anywhere only becomes visible this way, not from reading the diff.

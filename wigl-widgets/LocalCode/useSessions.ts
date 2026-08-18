@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStorage } from "@/wigl/hooks";
 import * as client from "./client";
-import { HOUSEKEEPER_SESSION_TITLE, STORAGE_KEYS } from "./config";
+import { STORAGE_KEYS } from "./config";
 import type { OpencodeSession } from "./types";
 
 export interface SessionView extends OpencodeSession {
@@ -14,13 +14,13 @@ export interface SessionView extends OpencodeSession {
   pinnedAt: number | null;
 }
 
-// opencode's own native title-generation agent (see housekeeper.ts) isn't
-// cleaned up before it lands in `session.title` — verified live it can come
-// back with a stray leading quote and no matching trailing one (a model
-// starting its answer mid-quote). Trims that and any wrapping whitespace;
-// doesn't touch length, opencode's own title is already prompt-length, not
-// a full paragraph.
-const sanitizeTitle = (title: string) => title.trim().replace(/^["'*_`]+/, "").replace(/["'*_`]+$/, "").trim();
+// ponytail: opencode's own auto-generated `session.title` used to be the
+// display fallback here, but its quality wasn't reliable enough to show
+// as-is (see backlog.md) — a plain creation timestamp is honest about
+// "nobody's named this yet" instead of surfacing whatever the model came up
+// with. Manual rename (below) still overrides this immediately.
+const defaultTitle = (created: number) =>
+  new Date(created).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 // `directory` scopes both the initial fetch and every live SSE event to
 // this widget's own working directory — see client.ts's listSessions doc
@@ -67,12 +67,9 @@ export const useSessions = (baseUrl: string | null, directory: string | null) =>
   const views = useMemo<SessionView[]>(
     () =>
       sessions
-        // Drop the housekeeper's throwaway sessions — they surface over SSE
-        // for a beat before deletion and otherwise read as duplicates (#4).
-        .filter((s) => s.title !== HOUSEKEEPER_SESSION_TITLE)
         .map((s) => ({
           ...s,
-          displayTitle: titles[s.id] || (s.title && sanitizeTitle(s.title)) || "untitled",
+          displayTitle: titles[s.id] || defaultTitle(s.time.created),
           pinned: s.id in pinned,
           pinnedAt: pinned[s.id] ?? null,
         }))

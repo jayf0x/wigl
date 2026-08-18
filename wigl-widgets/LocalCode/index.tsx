@@ -96,17 +96,6 @@ const LocalCodeWidget = () => {
           >
             <RotateCw className={cn("size-3", ollamaStarting && "animate-spin")} />
           </button>
-          {/* The only always-on status: is the agent server reachable. Anything
-            richer belongs in the shared error surface, not a status bar. */}
-          <span
-            title={baseUrl ? "opencode ready" : "starting opencode…"}
-            className={cn(
-              "size-1.5 shrink-0 rounded-full transition-colors duration-500",
-              baseUrl
-                ? "bg-primary/70"
-                : "animate-pulse bg-muted-foreground/40",
-            )}
-          />
         </>
       }
     >
@@ -117,7 +106,19 @@ const LocalCodeWidget = () => {
             title="opencode server isn't running"
             message="It failed to start — check that opencode is installed and reachable, then retry."
             onRetry={restart}
-          />
+          >
+            {ollamaOnline === false && (
+              <button
+                type="button"
+                data-no-drag
+                onClick={startOllamaNow}
+                disabled={ollamaStarting}
+                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-foreground/80 transition-colors duration-150 hover:bg-muted disabled:opacity-50"
+              >
+                {ollamaStarting ? "starting ollama…" : "boot ollama"}
+              </button>
+            )}
+          </ErrorOverlay>
         ) : (
           <>
             <Sidebar

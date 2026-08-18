@@ -78,9 +78,13 @@ const readConfig = async (path: string): Promise<OpencodeConfigShape | null> => 
 
 export interface OllamaModelSync {
   name: string;
-  /** From `ollama.ts`'s `modelSupportsThinking` — decides whether this
-   * model's config entry gets a `variants` block at all (see below). */
+  /** From `ollama.ts`'s `getModelInfo` — decides whether this model's
+   * config entry gets a `variants` block at all (see below). */
   thinking: boolean;
+  /** The model's real trained context window (`ollama.ts`'s
+   * `getModelInfo`), or null when Ollama didn't report one — see
+   * `contextWindowFor` below for what happens in that case. */
+  contextLength: number | null;
 }
 
 // The three effort levels this widget's UI offers (see Composer.tsx) —
@@ -100,15 +104,27 @@ const REASONING_VARIANTS: Record<string, { reasoningEffort: string }> = {
   off: { reasoningEffort: "none" },
 };
 
-// Ollama's own default context window is a few thousand tokens — an
-// agentic tool-call transcript blows through that fast.
-// `num_ctx` on the provider's `options` block applies to every request
-// against this Ollama instance; `limit.context`/`limit.output` on each
-// model entry tell opencode itself the same numbers. ponytail: one flat
-// default for every model rather than a per-model/per-machine setting —
-// add an owner-facing override if a model or machine actually needs a
-// different number.
-const DEFAULT_CONTEXT_WINDOW = { context: 8192, output: 4096 };
+// Last resort only — real numbers come from `ollama.ts`'s `getModelInfo`
+// (the model's actual trained context length, straight from Ollama's own
+// GGUF metadata). This only fires for a model Ollama genuinely reports no
+// `model_info` context field for, which hasn't been observed live across
+// this machine's pulled models (see `getModelInfo`'s doc comment) — kept as
+// a floor rather than left unset so a model that does hit this still gets
+// *some* usable window instead of Ollama's own default (a few thousand
+// tokens — an agentic tool-call transcript blows through that fast) with no
+// `limit` telling opencode about it at all.
+const FALLBACK_CONTEXT_WINDOW = { context: 8192, output: 4096 };
+
+/** `limit.context`/`limit.output` for one model's config entry — real
+ * context length when Ollama reported one, the flat fallback otherwise.
+ * `output` is capped to the context itself: asking a model to *generate*
+ * more tokens than its entire window holds isn't meaningful (matters for a
+ * small-context model like `smollm:135m`'s real 2048, well under the
+ * fallback's 4096 output figure). */
+const contextWindowFor = (contextLength: number | null): { context: number; output: number } => {
+  const context = contextLength ?? FALLBACK_CONTEXT_WINDOW.context;
+  return { context, output: Math.min(FALLBACK_CONTEXT_WINDOW.output, context) };
+};
 
 /** Adds any of `models` that aren't already declared under the ollama
  * provider block, creating that block if it doesn't exist yet, and gives a
@@ -116,11 +132,16 @@ const DEFAULT_CONTEXT_WINDOW = { context: 8192, output: 4096 };
  * yet, or patches in a missing `off` key if it already has one from before
  * `off` was a real variant (covers a brand-new model, one synced by an
  * older version of this function before `variants` existed, and one synced
- * before `off` was added to `REASONING_VARIANTS`). Also backfills
- * `DEFAULT_CONTEXT_WINDOW` onto the provider's `options.num_ctx` and every
- * model's `limit` whenever either is missing or stale, so a config written
- * by an older version of this function still gets the context-window fix.
- * Never removes a model or a
+ * before `off` was added to `REASONING_VARIANTS`). Also backfills each
+ * model's `limit` from its real context length whenever it's missing or
+ * stale, so a config written by an older (flat-default) version of this
+ * function still gets corrected. The provider's shared `options.num_ctx`
+ * (one number, applied to every request against this Ollama instance
+ * regardless of which model) is set to the *smallest* real context length
+ * seen across `models` this pass — the safe direction, since asking Ollama
+ * for more context than the smallest model actually supports is the
+ * failure mode that bites, not asking for less than a bigger model could
+ * technically hold. Never removes a model or a
  * variant once written — one pulled via `ollama rm` just stops being
  * offered from Ollama's own list, and quietly stays declared in opencode's
  * config (harmless: opencode just can't reach it, same as any
@@ -137,16 +158,20 @@ export const syncOllamaModels = async (models: OllamaModelSync[]): Promise<boole
   const config = await readConfig(path);
   if (!config) return false;
 
+  const realContextLengths = models.map((m) => m.contextLength).filter((n): n is number => n !== null);
+  const numCtx = realContextLengths.length > 0 ? Math.min(...realContextLengths) : FALLBACK_CONTEXT_WINDOW.context;
+
   config.provider ??= {};
   const existing = config.provider[OLLAMA_PROVIDER_ID];
   const configuredModels = { ...existing?.models };
-  let changed = !existing || existing.options?.num_ctx !== DEFAULT_CONTEXT_WINDOW.context;
-  for (const { name, thinking } of models) {
+  let changed = !existing || existing.options?.num_ctx !== numCtx;
+  for (const { name, thinking, contextLength } of models) {
+    const limit = contextWindowFor(contextLength);
     const entry = configuredModels[name];
     if (!entry) {
       configuredModels[name] = {
         name,
-        limit: DEFAULT_CONTEXT_WINDOW,
+        limit,
         ...(thinking ? { variants: REASONING_VARIANTS } : {}),
       };
       changed = true;
@@ -159,8 +184,8 @@ export const syncOllamaModels = async (models: OllamaModelSync[]): Promise<boole
         next = { ...next, variants: { ...next.variants, off: REASONING_VARIANTS.off } };
         changed = true;
       }
-      if (!next.limit || next.limit.context !== DEFAULT_CONTEXT_WINDOW.context) {
-        next = { ...next, limit: DEFAULT_CONTEXT_WINDOW };
+      if (!next.limit || next.limit.context !== limit.context) {
+        next = { ...next, limit };
         changed = true;
       }
       if (next !== entry) configuredModels[name] = next;
@@ -171,7 +196,7 @@ export const syncOllamaModels = async (models: OllamaModelSync[]): Promise<boole
   config.provider[OLLAMA_PROVIDER_ID] = {
     npm: existing?.npm ?? "@ai-sdk/openai-compatible",
     name: existing?.name ?? "Ollama (local)",
-    options: { baseURL: existing?.options?.baseURL ?? OLLAMA_BASE_URL, num_ctx: DEFAULT_CONTEXT_WINDOW.context },
+    options: { baseURL: existing?.options?.baseURL ?? OLLAMA_BASE_URL, num_ctx: numCtx },
     models: configuredModels,
   };
 

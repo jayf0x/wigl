@@ -4,7 +4,7 @@
 // choice, and what a multi-monitor / multi-instance setup would need).
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_CHAT_AGENT } from "./config";
-import { isOllamaReachable, listOllamaModels, modelSupportsThinking, startOllama } from "./ollama";
+import { getModelInfo, isOllamaReachable, listOllamaModels, startOllama } from "./ollama";
 import { disableSkillTool, type OllamaModelSync, syncChatAgent, syncOllamaModels } from "./opencodeConfig";
 import { type OpencodeServerHandle, startOpencodeServer } from "./serverProcess";
 
@@ -27,7 +27,7 @@ const prepareOllamaModelSync = async (isCancelled: () => boolean): Promise<Ollam
   // network round trip that already happened) is what stops the throwaway
   // invocation from also firing the `/api/show` fanout for nothing.
   if (isCancelled()) return [];
-  return Promise.all(names.map(async (name) => ({ name, thinking: await modelSupportsThinking(name) })));
+  return Promise.all(names.map(async (name) => ({ name, ...(await getModelInfo(name)) })));
 };
 
 // Sequential, not parallel: both steps read-modify-write the same

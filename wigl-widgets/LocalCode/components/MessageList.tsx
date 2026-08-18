@@ -142,7 +142,11 @@ export const MessageList = ({
                 {mergeParts(m.parts).map((part) => (
                   <PartRenderer key={part.id} part={part} />
                 ))}
-                {m.info.error && <p className="text-[11.5px] text-destructive/90">{m.info.error.message}</p>}
+                {m.info.error && (
+                  <p className="text-[11.5px] text-destructive/90">
+                    {m.info.error.data?.message ?? "the agent hit an error"}
+                  </p>
+                )}
               </div>
             </Turn>
           ),

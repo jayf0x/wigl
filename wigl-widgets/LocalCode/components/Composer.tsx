@@ -32,9 +32,9 @@ import "./composer.css";
 const EFFORT_OFF = "off";
 const EFFORT_LABELS: Record<string, string> = { off: "off", low: "low", high: "high" };
 
-// opencode's own hidden toolless agent (see housekeeper.ts) — the one thing
-// guaranteed not to attach a tool schema, so it's what a tool-incapable
-// model gets forced onto instead of 400ing on the default `build` agent.
+// opencode's own hidden toolless agent — the one thing guaranteed not to
+// attach a tool schema, so it's what a tool-incapable model gets forced
+// onto instead of 400ing on the default `build` agent.
 const TOOLLESS_AGENT = "title";
 
 interface Option {
@@ -192,7 +192,7 @@ export const Composer = ({
   const effortOptions: Option[] = [EFFORT_OFF, ...efforts].map((v) => ({ value: v, label: EFFORT_LABELS[v] ?? v }));
   // `/agent` lists opencode's internal agents alongside real ones — `title`/
   // `summary`/`compaction` come back `hidden: true` (never meant to be
-  // chosen directly, see housekeeper.ts), `explore`/`general` are
+  // chosen directly), `explore`/`general` are
   // `mode: "subagent"` (spawned by a primary agent's task tool, not
   // selectable as the main one), and `DEFAULT_CHAT_AGENT` is what "nothing
   // picked" already sends — showing it as a selectable option too would be
