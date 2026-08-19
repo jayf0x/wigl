@@ -89,6 +89,8 @@ Widgets aren't windows (see `docs/architecture.md`) — they're grid items rende
 
 To verify monitor windows actually exist without a screenshot: `swift scripts/winlist.swift` (uses `CGWindowListCopyWindowInfo` — no Accessibility permission needed for bounds/count, only window *names* are gated). Trust bounds + count; the `onscreen` flag flip-flops with Space/display focus. `bun run verify` runs the whole build → relaunch → winlist → log-grep loop in one command. Note this only confirms the per-monitor `screen-<i>` windows exist — it can't tell you which widgets are rendered inside them.
 
+**A truly asleep display at launch still yields only the hidden `main` bootstrap window, no `screen-<i>` windows.** `setup()` (`src-tauri/src/lib.rs`) retries `app.available_monitors()` up to 10× at 200ms, logging `[wigl] available_monitors() returned empty (attempt N/10), retrying` each time, which recovers a genuinely transient race — but a display that's *actually* asleep for the whole ~2s retry window still returns empty and `setup()` gives up. A normal interactive launch always wakes the display first (mouse/keyboard), so this only bites unattended/scripted launches (CI, an agent driving `verify` on an idle machine): if `winlist` comes back with only the bootstrap window, check `system_profiler SPDisplaysDataType | grep Asleep` (macOS) before assuming a code regression, and wake the display first (e.g. `caffeinate -u -t 1`) rather than re-running `verify` blind.
+
 ## Renaming a `useStorage` shape doesn't migrate rows already on disk
 
 `useStorage` (and anything that persists through it, e.g. `widget_layout`)
