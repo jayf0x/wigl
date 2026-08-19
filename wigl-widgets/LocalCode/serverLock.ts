@@ -31,15 +31,37 @@ const isAlive = async (baseUrl: string): Promise<boolean> => {
   }
 };
 
-/** Null if no other instance has a live server for this `cwd` — caller
- * should spawn its own and call `recordRunningServer`. */
+/** Any `opencode serve` process already running, found by scanning `pgrep`
+ * output and asking `lsof` which port its listening socket bound to — opencode
+ * defaults `--port` to 0 (random) same as this widget does, so there's no
+ * fixed "default port" to guess at; this is the only way to find a server
+ * neither this widget nor `recordRunningServer` knows about (started by hand,
+ * or by an instance whose lock file got cleared). */
+const findExternalServer = async (): Promise<string | null> => {
+  const pgrep = await runCmd("sh", ["-c", "pgrep -f 'opencode serve'"]).catch(() => null);
+  const pids = pgrep?.stdout.trim().split(/\s+/).filter(Boolean) ?? [];
+  for (const pid of pids) {
+    const lsof = await runCmd("sh", ["-c", `lsof -a -p ${pid} -iTCP -sTCP:LISTEN -Pn`]).catch(() => null);
+    const match = lsof?.stdout.match(/:(\d+)\s*\(LISTEN\)/);
+    if (!match) continue;
+    const baseUrl = `http://127.0.0.1:${match[1]}`;
+    if (await isAlive(baseUrl)) return baseUrl;
+  }
+  return null;
+};
+
+/** Null if no other instance (or hand-started process) has a live server for
+ * this `cwd` — caller should spawn its own and call `recordRunningServer`. */
 export const findRunningServer = async (cwd: string): Promise<string | null> => {
   const out = await runCmd("cat", [lockPath(cwd)]).catch(() => null);
-  if (!out || out.code !== 0) return null;
-  const port = out.stdout.trim();
-  if (!/^\d+$/.test(port)) return null;
-  const baseUrl = `http://127.0.0.1:${port}`;
-  return (await isAlive(baseUrl)) ? baseUrl : null;
+  if (out && out.code === 0) {
+    const port = out.stdout.trim();
+    if (/^\d+$/.test(port)) {
+      const baseUrl = `http://127.0.0.1:${port}`;
+      if (await isAlive(baseUrl)) return baseUrl;
+    }
+  }
+  return findExternalServer();
 };
 
 export const recordRunningServer = (cwd: string, baseUrl: string): Promise<void> => {

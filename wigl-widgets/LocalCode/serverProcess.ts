@@ -45,11 +45,19 @@ export const startOpencodeServer = async (cwd: string, timeoutMs = 8000): Promis
 
   return new Promise((resolve, reject) => {
     let settled = false;
-    let stopFn: (() => Promise<void>) | null = null;
+    // Every candidate that actually spawned (a slow-starting one included) —
+    // moving to the next candidate is a timer race, not proof the previous
+    // one failed, so more than one can end up alive at once. Whichever one
+    // doesn't win gets killed once we settle, instead of leaking as an
+    // orphaned `opencode serve` process.
+    const spawned: Array<() => Promise<void>> = [];
+    const killOthers = (winner: (() => Promise<void>) | null) => {
+      for (const stop of spawned) if (stop !== winner) stop().catch(() => {});
+    };
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
-      stopFn?.().catch(() => {});
+      killOthers(null);
       reject(new Error("opencode serve didn't report a listening port in time"));
     }, timeoutMs);
 
@@ -58,6 +66,7 @@ export const startOpencodeServer = async (cwd: string, timeoutMs = 8000): Promis
         if (!settled) {
           settled = true;
           clearTimeout(timer);
+          killOthers(null);
           reject(new Error("opencode binary not found (tried: " + OPENCODE_CANDIDATES.join(", ") + ")"));
         }
         return;
@@ -72,7 +81,7 @@ export const startOpencodeServer = async (cwd: string, timeoutMs = 8000): Promis
             if (match && !settled) {
               settled = true;
               clearTimeout(timer);
-              stopFn = stop;
+              killOthers(stop);
               const baseUrl = `http://127.0.0.1:${match[1]}`;
               recordRunningServer(cwd, baseUrl).catch(() => {});
               resolve({
@@ -83,7 +92,7 @@ export const startOpencodeServer = async (cwd: string, timeoutMs = 8000): Promis
           },
           { cwd },
         );
-        stopFn = stop;
+        spawned.push(stop);
       } catch {
         // this candidate isn't on disk / didn't spawn — try the next one
       }
