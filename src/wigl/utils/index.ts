@@ -70,6 +70,19 @@ export const isMacos = (): Promise<boolean> => {
   return macosPromise;
 };
 
+/** Single-quote for `sh -c`, doubling any embedded single quote. */
+const shQuote = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
+
+/** Reveals a file or folder in the OS's default file manager (Finder on
+ * macOS, whatever's registered as the `xdg-open` handler on Linux) — same
+ * `open -R`/`xdg-open` pattern as `wigl-widgets/repos/commands.ts`'s
+ * `revealInFileManager`, promoted here once a second core (non-widget)
+ * caller needed it too (the Settings modal's Storage/Widgets sections). */
+export const revealPath = async (path: string): Promise<void> => {
+  const cmd = (await isMacos()) ? `open -R ${shQuote(path)}` : `xdg-open ${shQuote(path)}`;
+  await runCmd("sh", ["-c", cmd]);
+};
+
 /** "3m" / "2h" / "5d" / "1w" from an epoch-seconds timestamp — pure formatting,
  * no ticking. For a label that keeps itself current, use `useRelativeTime`
  * from `@/wigl/hooks` instead. */

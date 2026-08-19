@@ -71,6 +71,81 @@ fn secrets_set(app: tauri::AppHandle, name: String, value: String) -> Result<(),
     write_secrets(&path, &secrets)
 }
 
+// Tier-2 settings (see todo-settings-ui.md's "Storage" section): a JSON file
+// of *overrides* only, merged over each module's own compile-time defaults
+// on the TS side (grid/config.ts's TILING, etc.) — this file mirrors
+// secrets.json's atomic tmp-file+rename shape (same precedent, no chmod
+// since nothing here is sensitive) rather than re-deciding that shape for a
+// nearly-identical file. Restart-required by rule: nothing here is read
+// again after startup, so there's no live-mutation path to get wrong.
+const CONFIG_FILE: &str = "wigl-config.json";
+const CONFIG_SCHEMA_FILE: &str = "wigl-config.schema.json";
+// Editor-autocomplete only, same role as wigl-widgets/widget.schema.json —
+// not runtime-validated by any code. Written once, at startup, if missing.
+const CONFIG_SCHEMA: &str = r#"{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "wigl config overrides",
+  "description": "Overrides for wigl's Tier-2 (restart-required) settings. Every field is optional — omit anything you want left at its built-in default. See grid/config.ts's TILING for what each grid field means.",
+  "type": "object",
+  "properties": {
+    "grid": {
+      "type": "object",
+      "properties": {
+        "cell": { "type": "number" },
+        "gap": { "type": "number" },
+        "padding": {
+          "type": "object",
+          "properties": {
+            "top": { "type": "number" },
+            "right": { "type": "number" },
+            "bottom": { "type": "number" },
+            "left": { "type": "number" }
+          }
+        },
+        "cols": { "type": ["number", "null"] },
+        "rows": { "type": ["number", "null"] }
+      }
+    }
+  }
+}
+"#;
+
+fn config_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join(CONFIG_FILE))
+}
+
+fn write_config_schema_if_missing(app: &tauri::AppHandle) {
+    let Ok(dir) = app.path().app_data_dir() else { return };
+    if fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let path = dir.join(CONFIG_SCHEMA_FILE);
+    if !path.exists() {
+        let _ = fs::write(&path, CONFIG_SCHEMA);
+    }
+}
+
+#[tauri::command]
+fn config_get(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let path = config_path(&app)?;
+    match fs::read_to_string(&path) {
+        Ok(s) => serde_json::from_str(&s).map_err(|e| e.to_string()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(serde_json::json!({})),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn config_set(app: tauri::AppHandle, config: serde_json::Value) -> Result<(), String> {
+    let path = config_path(&app)?;
+    let tmp = path.with_extension("json.tmp");
+    let json = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
+    fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
 // Click-through for the fullscreen desktop window: the webview reports the
 // physical-pixel rects of every widget on the tiling grid (the whole screen
 // while a drag is live). A Rust thread polls the global cursor and flips
@@ -324,6 +399,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
         .manage(HitRects::default())
         .manage(DragActive::default())
         .manage(pty::PtyState::default())
@@ -333,6 +409,8 @@ pub fn run() {
             is_windowed_mode,
             secrets_get,
             secrets_set,
+            config_get,
+            config_set,
             pty::pty_spawn,
             pty::pty_write,
             pty::pty_read,
@@ -341,6 +419,7 @@ pub fn run() {
             pty::pty_exitstatus
         ])
         .setup(|app| {
+            write_config_schema_if_missing(app.handle());
             let windowed = windowed_mode();
             eprintln!(
                 "[wigl] mode: {} (WIGL_MODE={:?}, XDG_SESSION_TYPE={:?}, WAYLAND_DISPLAY={:?}, WEBKIT_DISABLE_DMABUF_RENDERER={:?})",

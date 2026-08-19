@@ -1,16 +1,21 @@
-import { X } from "lucide-react";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { RotateCw, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useRestartRequired } from "./restartBanner";
 import { useSettingsSections } from "./registry";
 import { appearanceSection } from "./sections/appearance";
+import { gridSection } from "./sections/grid";
+import { storageSection } from "./sections/storage";
+import { widgetsSection } from "./sections/widgets";
 import type { SettingSection } from "./types";
 
 // Sections that always exist, regardless of which widgets are installed —
 // contrast with useSettingsSections()'s registry, which is widget-
 // contributed and can be empty. Add a new core section (Grid, Storage, ...)
 // here as its own sections/*.tsx export, same shape as appearanceSection.
-const BUILTIN_SECTIONS: SettingSection[] = [appearanceSection];
+const BUILTIN_SECTIONS: SettingSection[] = [appearanceSection, gridSection, storageSection, widgetsSection];
 
 interface SettingsModalProps {
   open: boolean;
@@ -25,6 +30,7 @@ interface SettingsModalProps {
  * alongside this modal so it keeps working whether or not the modal is open.
  */
 export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
+  const restartRequired = useRestartRequired();
   const registered = useSettingsSections();
   const sections = useMemo(() => [...BUILTIN_SECTIONS, ...registered], [registered]);
   const [activeId, setActiveId] = useState(sections[0]?.id ?? "");
@@ -95,6 +101,20 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
             <X className="size-3.5" />
           </DialogClose>
         </div>
+
+        {restartRequired && (
+          <div className="flex items-center justify-between gap-2 border-amber-500/30 border-b bg-amber-500/10 px-3 py-1.5 text-amber-600 text-xs dark:text-amber-400">
+            <span>Restart wigl to apply the changed setting.</span>
+            <button
+              type="button"
+              onClick={() => relaunch()}
+              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium hover:bg-amber-500/15"
+            >
+              <RotateCw className="size-3" />
+              Restart
+            </button>
+          </div>
+        )}
 
         <div className="flex min-h-0 flex-1">
           <nav className="flex w-36 shrink-0 flex-col gap-0.5 overflow-y-auto border-border/60 border-r p-2">

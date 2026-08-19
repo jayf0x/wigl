@@ -409,39 +409,94 @@ const remove = async (id: string) => {
   console.log(`✓ removed ${id}`);
 };
 
-const [cmd, arg] = process.argv.slice(2);
-switch (cmd) {
-  case "build":
-    if (arg) {
-      await build(resolve(arg));
-    } else {
-      for (const dir of await allWidgetDirs()) {
-        if (findEntrySource(dir)) await build(dir);
-        else console.log(`- ${basename(dir)}: no index.tsx/ts, skipped (ships pre-built JS)`);
-      }
-    }
-    break;
-  case "install":
-    if (arg) {
-      await install(resolve(arg));
-    } else {
-      const dirs = await allWidgetDirs();
-      for (const dir of dirs) await install(dir);
-      await pruneStaleInstalls(new Set(dirs.map((d) => basename(d))));
-    }
-    break;
-  case "check":
-    await check(resolve(arg ?? die("usage: widget check <dir>")));
-    break;
-  case "list":
-    await list();
-    break;
-  case "rm":
-    await remove(arg ?? die("usage: widget rm <id>"));
-    break;
-  case "devkit":
-    await devkit(arg ?? die("usage: widget devkit <dest-dir>"));
-    break;
-  default:
-    die("usage: widget <build|check|install|list|rm|devkit> [dir|id]");
+/** One entry per CLI verb — what used to be a hand-written `switch` case,
+ * now a lookup table so the set of commands is introspectable instead of
+ * only living inside the switch's control flow. `label` is for a future
+ * consumer that wants a human name (there isn't one yet — see the note
+ * below); `run` is exactly the old case body, unchanged.
+ *
+ * The Settings modal's Widgets section (`src/wigl/settings/sections/
+ * widgets.tsx`) does NOT import this table: this file uses `node:fs/promises`,
+ * `node:os`, and `Bun.build`, none of which exist in a webview, so it can
+ * never be bundled into the running app — only run under `bun`. That section
+ * re-implements `list`/`rm` itself instead, shelling out against
+ * `pluginsDir()` the same way `src/wigl/plugins/loader.ts` already does
+ * (see that file's own comment for why `sh` over a Tauri fs plugin). This
+ * table's payoff is CLI-side only: one place that enumerates every verb,
+ * instead of a switch statement being the only source of truth for what
+ * commands exist. */
+interface CliCommand {
+  id: string;
+  label: string;
+  usage: string;
+  run: (arg?: string) => Promise<void>;
 }
+
+const COMMANDS: CliCommand[] = [
+  {
+    id: "build",
+    label: "Build",
+    usage: "widget build [dir]",
+    run: async (arg) => {
+      if (arg) {
+        await build(resolve(arg));
+      } else {
+        for (const dir of await allWidgetDirs()) {
+          if (findEntrySource(dir)) await build(dir);
+          else console.log(`- ${basename(dir)}: no index.tsx/ts, skipped (ships pre-built JS)`);
+        }
+      }
+    },
+  },
+  {
+    id: "install",
+    label: "Install",
+    usage: "widget install [dir]",
+    run: async (arg) => {
+      if (arg) {
+        await install(resolve(arg));
+      } else {
+        const dirs = await allWidgetDirs();
+        for (const dir of dirs) await install(dir);
+        await pruneStaleInstalls(new Set(dirs.map((d) => basename(d))));
+      }
+    },
+  },
+  {
+    id: "check",
+    label: "Check",
+    usage: "widget check <dir>",
+    run: async (arg) => {
+      await check(resolve(arg ?? die("usage: widget check <dir>")));
+    },
+  },
+  {
+    id: "list",
+    label: "List installed",
+    usage: "widget list",
+    run: async () => {
+      await list();
+    },
+  },
+  {
+    id: "rm",
+    label: "Remove",
+    usage: "widget rm <id>",
+    run: async (arg) => {
+      await remove(arg ?? die("usage: widget rm <id>"));
+    },
+  },
+  {
+    id: "devkit",
+    label: "Export devkit",
+    usage: "widget devkit <dest-dir>",
+    run: async (arg) => {
+      await devkit(arg ?? die("usage: widget devkit <dest-dir>"));
+    },
+  },
+];
+
+const [cmd, arg] = process.argv.slice(2);
+const command = COMMANDS.find((c) => c.id === cmd);
+if (!command) die(`usage: widget <${COMMANDS.map((c) => c.id).join("|")}> [dir|id]`);
+await command.run(arg);

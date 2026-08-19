@@ -10,6 +10,7 @@
     "core:window:allow-available-monitors",
     "core:window:allow-show",
     "opener:default",
+    "process:allow-restart",
     "shell:default",
     {
       "identifier": "shell:allow-execute",

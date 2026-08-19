@@ -1,6 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { hydrateConfig, mergeConfigInto } from "./wigl/settings/config";
+import { TILING } from "./wigl/grid/config";
 
 // Errors that happen outside React's render/commit cycle (a rejected
 // promise, a throw inside a raw event handler or timer) never reach any
@@ -18,8 +20,16 @@ if (import.meta.env.DEV) {
   import("react-scan").then(({ scan }) => scan({ enabled: true }));
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+// Tier-2 settings (see src/wigl/settings/config.ts) are restart-required by
+// rule: read once here, merged into TILING in place before the very first
+// render, so grid math never sees a mix of stale defaults and a mid-session
+// override. hydrateConfig() resolves to {} on any read failure, so a missing/
+// corrupt wigl-config.json boots with plain defaults instead of blocking.
+hydrateConfig().then(() => {
+  mergeConfigInto(TILING, "grid");
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+});

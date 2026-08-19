@@ -712,6 +712,17 @@ export const Desktop = ({
   useRegisterGlobalAction(settingsAction);
   const globalActions = useGlobalActions();
 
+  // The modal can extend past every widget's hit-rect (it's centered over
+  // whatever's underneath, not anchored to one), so click-through has to be
+  // paused for as long as it's open — same trick openMenu/closeMenu use for
+  // the right-click menu. Without this, a click anywhere on the modal
+  // (including its own close button) falls through to whatever's behind the
+  // window instead of hitting the modal.
+  useEffect(() => {
+    if (windowed) return;
+    invoke("set_drag_active", { active: settingsOpen }).catch(console.error);
+  }, [settingsOpen, windowed]);
+
   // --- incoming cross-monitor previews / drops ---------------------------------
   useEffect(() => {
     const clearForeign = () => {
