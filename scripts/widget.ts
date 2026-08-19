@@ -116,6 +116,24 @@ const readWidgetConfig = async (dir: string) => {
 const findEntrySource = (dir: string) =>
   ["index.tsx", "index.ts"].map((f) => join(dir, f)).find((p) => Bun.file(p).size >= 0);
 
+/** Optional sibling of index.tsx — a widget's contribution to the general
+ * Settings modal (default-exports a `SettingSection`), built and installed
+ * alongside the entry so it can be registered independently of the widget's
+ * own mount lifecycle (see loader.ts's loadOne and settings/registry.ts).
+ * Named distinctly from a plain "settings" — a widget's own internal
+ * settings-panel component (`repos/Settings.tsx`) is a realistic name
+ * collision on a case-insensitive filesystem (verified live: macOS APFS
+ * treats "settings.tsx" and "Settings.tsx" as the same path), and unlike
+ * `findEntrySource` this one must actually distinguish "present" from
+ * "absent" since most widgets have no settings section at all. */
+const findSettingsSource = async (dir: string): Promise<string | undefined> => {
+  for (const f of ["settingsSection.tsx", "settingsSection.ts"]) {
+    const p = join(dir, f);
+    if (await Bun.file(p).exists()) return p;
+  }
+  return undefined;
+};
+
 /** Rewrites every host specifier to a CommonJS shim over `__wigl_host`.
  * CJS rather than ESM because the set of named exports isn't knowable at
  * build time (the host's modules aren't parsed here) — Bun's interop turns
@@ -144,9 +162,10 @@ const build = async (dir: string) => {
 
   const outPath = join(dir, config.entry);
   const outdir = dirname(outPath);
+  const settingsSrc = await findSettingsSource(dir);
   await rm(outdir, { recursive: true, force: true });
   const result = await Bun.build({
-    entrypoints: [entrySrc as string],
+    entrypoints: settingsSrc ? [entrySrc as string, settingsSrc] : [entrySrc as string],
     outdir,
     target: "browser",
     format: "esm",
@@ -177,7 +196,8 @@ const build = async (dir: string) => {
   // mechanism" section.
   const cssPath = cssSibling(outPath);
   const hasCss = await Bun.file(cssPath).exists();
-  console.log(`✓ built ${config.id} → ${config.entry}${hasCss ? " (+ css)" : ""} (${(size / 1024).toFixed(1)}kb)`);
+  const extras = [hasCss && "css", settingsSrc && "settings"].filter(Boolean).join(" + ");
+  console.log(`✓ built ${config.id} → ${config.entry}${extras ? ` (+ ${extras})` : ""} (${(size / 1024).toFixed(1)}kb)`);
   return config;
 };
 
@@ -195,10 +215,10 @@ const install = async (dir: string) => {
   }
 
   const target = join(installRoot(), built.id);
-  // Only package.json, the entry file, and its CSS sibling (if the build
-  // produced one) are installed — the widget's other source, node_modules
-  // and tsconfig are build-time concerns with no business sitting in a
-  // user's app-data dir.
+  // Only package.json, the entry file, its CSS sibling, and its settings.js
+  // sibling (whichever the build produced) are installed — the widget's
+  // other source, node_modules and tsconfig are build-time concerns with no
+  // business sitting in a user's app-data dir.
   await rm(target, { recursive: true, force: true });
   await mkdir(dirname(join(target, built.entry)), { recursive: true });
   if (built.pkgRaw) await Bun.write(join(target, "package.json"), built.pkgRaw);
@@ -206,6 +226,10 @@ const install = async (dir: string) => {
   const cssSrc = cssSibling(entryPath);
   if (await Bun.file(cssSrc).exists()) {
     await Bun.write(join(target, cssSibling(built.entry)), Bun.file(cssSrc));
+  }
+  const settingsJs = join(dirname(entryPath), "settingsSection.js");
+  if (await Bun.file(settingsJs).exists()) {
+    await Bun.write(join(target, dirname(built.entry), "settingsSection.js"), Bun.file(settingsJs));
   }
   console.log(`✓ installed ${built.id} → ${target}`);
   console.log('  right-click the desktop → "Reload widgets" in a running wigl to see it (no restart needed).');

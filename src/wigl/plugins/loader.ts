@@ -1,5 +1,7 @@
 import type { ComponentType } from "react";
 import { appDataDir, join } from "@tauri-apps/api/path";
+import { registerSettingsSection } from "@/wigl/settings/registry";
+import type { SettingSection } from "@/wigl/settings/types";
 import { runCmd } from "@/wigl/utils";
 import type { createPluginRequire } from "./registry";
 import {
@@ -30,6 +32,16 @@ import {
 
 interface PluginModule {
   default: ComponentType;
+}
+
+// A widget's contribution to the general Settings modal — the optional
+// build output of a sibling `settings.tsx`/`settings.ts` (see
+// scripts/widget.ts's findSettingsSource). Loaded and registered alongside
+// the widget's component, not by it, so the section stays registered
+// regardless of whether the widget is currently hidden/closed (see
+// settings/registry.ts's registerSettingsSection).
+interface SettingsModule {
+  default?: SettingSection;
 }
 
 declare global {
@@ -85,6 +97,7 @@ const loadOne = async (dir: string, folder: string): Promise<LoadedPlugin> => {
   const code = await readFile(entryPath);
   const css = await tryReadFile(entryPath.replace(/\.js$/, ".css"));
   if (css) injectStyle(id, css);
+  const settingsCode = await tryReadFile(entryPath.replace(/[^/]+$/, "settingsSection.js"));
 
   // Imported lazily, not at module top level: the registry holds a live
   // reference to every host module it can serve — including the whole of
@@ -101,13 +114,26 @@ const loadOne = async (dir: string, folder: string): Promise<LoadedPlugin> => {
   // another's (more permissive) require.
   const header = `const __wigl_host = { require: globalThis.__wigl_scopes__[${JSON.stringify(id)}] };\n`;
   const url = URL.createObjectURL(new Blob([header, code], { type: "text/javascript" }));
+  let component: ComponentType;
   try {
     const mod = (await import(/* @vite-ignore */ url)) as PluginModule;
     if (!mod.default) throw new Error("entry has no default export — it must default-export its component");
-    return { manifest: { id, permissions }, component: mod.default };
+    component = mod.default;
   } finally {
     URL.revokeObjectURL(url);
   }
+
+  if (settingsCode) {
+    const settingsUrl = URL.createObjectURL(new Blob([header, settingsCode], { type: "text/javascript" }));
+    try {
+      const settingsMod = (await import(/* @vite-ignore */ settingsUrl)) as SettingsModule;
+      if (settingsMod.default) registerSettingsSection(settingsMod.default);
+    } finally {
+      URL.revokeObjectURL(settingsUrl);
+    }
+  }
+
+  return { manifest: { id, permissions }, component };
 };
 
 /** Discovers and mounts every installed plugin. Never throws: a plugin that

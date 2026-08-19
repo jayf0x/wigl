@@ -65,6 +65,8 @@ Omit the dir argument on `build`/`install` to sweep every `wigl-widgets/<name>/`
 
 **A widget can `import "./whatever.css"`** from its own source (not through a host module) — `Bun.build`'s CSS loader bundles it into a sibling `index.css`, `widget:install` copies it alongside `index.js`, and `loadPlugins()` injects it as a `<style>` tag at load time.
 
+**A widget can also ship `settingsSection.tsx`**, a sibling of `index.tsx` — built to `settingsSection.js` and installed alongside `index.js` the same way as the CSS sibling above, but loaded and registered independently of the widget's component (see "Contributing a Settings section" below).
+
 **`widget:build`/`widget:check` require `NODE_ENV=production`** (the `widget:*` package scripts already set it) — Bun resolves React's dev-vs-production build from `NODE_ENV` at process start, and a `jsxDEV` bundle meeting the host's production React crashes with "dispatcher.getOwner is not a function". `widget:check` matters because a webview's console is invisible to `bun run verify` — it loads the built bundle against the host's **real** modules and **renders it** with `renderToString`, which is also how it enforces the `<Widget>` export contract (the rendered markup must include `data-wigl-widget`). This is a headless correctness probe borrowing React's server renderer, not real SSR (wigl has no server) — `useEffect` never fires under it, so a widget's actual data-fetch path is out of scope for `widget:check`; see `docs/debugging.md` for how a widget's live behavior gets verified instead.
 
 **Typechecking** (`bun run typecheck:widgets`) resolves `@/...` against generated `.d.ts` under `wigl-widgets/types/` (`bun run widget:types`), never `../src` directly — a widget that only compiled by accident (deep-importing something the app's root tsconfig happened to resolve) fails here even if the build already passed, since the two check different things (specifier externalization vs. path resolution) — run both.
@@ -87,7 +89,7 @@ The shape, in dependency order (any widget in `wigl-widgets/` with a hook is the
 Everything shared lives behind exactly three barrels — widgets never deep-import past them:
 
 - **`@/wigl`** — visual/layout primitives: `Widget`, `Desktop`, `TILING`.
-- **`@/wigl/hooks`** — stateful/React helpers: `useStorage`, `useQuery`, `useRelativeTime`, `useRegisterGlobalAction`, `useRegisterSettings`.
+- **`@/wigl/hooks`** — stateful/React helpers: `useStorage`, `useQuery`, `useRelativeTime`, `useRegisterGlobalAction`.
 - **`@/wigl/utils`** — plain non-React helpers: `cn`, `runCmd`, `isMacos`, `relativeTime`.
 
 **Read each barrel's `index.ts` for the current list**; each module carries its own doc comment. The two you'll always use from `@/wigl`:
@@ -114,20 +116,30 @@ useRegisterGlobalAction({ id: "<widget>_do-thing", label: "Do thing", run: () =>
 
 Adds an entry to the desktop's right-click menu for as long as the calling component is mounted — no `Desktop.tsx` or `wigl` edit needed. `id` should be prefixed with the widget's folder name, same rule as storage keys, since the registry is a single flat namespace across every widget's menu entries.
 
-## Contributing a Settings section (`useRegisterSettings`)
+## Contributing a Settings section (`settingsSection.tsx`)
+
+An optional sibling of `index.tsx`, default-exporting a `SettingSection`:
 
 ```tsx
-import { useRegisterSettings, useStorage } from "@/wigl/hooks";
+// settingsSection.tsx
+import { type SettingSection, useStorage } from "@/wigl/hooks";
 
-useRegisterSettings({
+const MyWidgetSettings = () => {
+  const [thing, setThing] = useStorage("<widget>:thing", false);
+  // ...your own UI, reading/writing state via useStorage
+};
+
+const settingsSection: SettingSection = {
   id: "<widget>",
   label: "Widget Name",
   fields: [{ id: "<widget>-thing", label: "Thing", keywords: ["optional", "search", "terms"] }],
   render: () => <MyWidgetSettings />,
-});
+};
+
+export default settingsSection;
 ```
 
-Same register-while-mounted/unregister-on-unmount shape as `useRegisterGlobalAction`, but adds a section to the general Settings modal (right-click → Settings) instead of the right-click menu itself — no `SettingsModal.tsx` edit needed. `render` returns your own hand-built UI for the section body (a toggle row, a form, whatever fits — same freedom as the widget's own rendering); `fields` is a separate, lightweight list purely for the modal's search box to match against, not a second description of the UI — one entry per control is enough. Back the section's own state with `useStorage` the same way any other widget state would be (see `wigl-widgets/todo/index.tsx` for a minimal real example: one boolean field that flips the widget's own background live) — a widget's settings are exactly the kind of thing that should apply instantly, no restart. The object passed to `useRegisterSettings` should be a stable reference (module-scoped, or memoized) — a fresh object every render re-fires the register/unregister effect for nothing, same caution as `useRegisterGlobalAction`.
+Built and installed alongside `index.tsx` (`scripts/widget.ts`'s `findSettingsSource`) and registered by the loader when the plugin loads (`src/wigl/plugins/loader.ts`), not by the widget's own component — so the section stays in the general Settings modal (right-click → Settings) even while the widget itself is hidden/closed, unlike `useRegisterGlobalAction`'s while-mounted right-click menu entries. `render` returns your own hand-built UI for the section body (a toggle row, a form, whatever fits — same freedom as the widget's own rendering); `fields` is a separate, lightweight list purely for the modal's search box to match against, not a second description of the UI — one entry per control is enough. Back the section's own state with `useStorage` the same way any other widget state would be (see `wigl-widgets/todo/settingsSection.tsx` for a minimal real example: one boolean field that flips the widget's own background live) — a widget's settings are exactly the kind of thing that should apply instantly, no restart. Must be named exactly `settingsSection.tsx`/`.ts` — not `settings.tsx`, which collides on a case-insensitive filesystem with the generic name a widget's own internal settings-panel component might already use (see `repos/Settings.tsx`).
 
 ## Persistent storage (`useStorage`)
 
