@@ -55,6 +55,10 @@ const App = () => {
   // resolves (with an empty list) rather than hanging.
   const [widgets, setWidgets] = useState<Record<string, ComponentType> | null>(null);
   const [failedWidgets, setFailedWidgets] = useState<FailedPlugin[]>([]);
+  // The reserved "background" plugin folder, if installed and loaded — kept
+  // out of `widgets` entirely (see loader.ts's loadPlugins) so <Desktop>
+  // never tiles it as an ordinary grid item.
+  const [background, setBackground] = useState<ComponentType | undefined>(undefined);
 
   useEffect(() => {
     if (label !== "main") getCurrentWindow().show().catch(console.error);
@@ -67,9 +71,12 @@ const App = () => {
   // rebuilt plugin without a full app relaunch.
   const reload = useCallback(() => {
     loadPlugins()
-      .then(({ loaded, failed }) => {
+      .then(({ loaded, failed, background }) => {
         setWidgets(Object.fromEntries(loaded.map((p) => [p.manifest.id, p.component])));
         setFailedWidgets(failed);
+        // Wrapped in a function form: useState's setter treats a bare
+        // function value as an updater, and a component is a function.
+        setBackground(() => background);
       })
       .catch((e) => {
         console.error("[wigl] widget discovery failed", e);
@@ -130,7 +137,12 @@ const App = () => {
           ))}
         </div>
       )}
-      <Desktop widgets={widgets} monitorIndex={Number(label.split("-")[1]) || 0} windowed={windowed} />
+      <Desktop
+        widgets={widgets}
+        background={background}
+        monitorIndex={Number(label.split("-")[1]) || 0}
+        windowed={windowed}
+      />
     </AppErrorBoundary>
   );
 };

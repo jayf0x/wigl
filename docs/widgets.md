@@ -42,6 +42,15 @@ Grid size/position are plain props on `<Widget>` — `w`/`h` in cells (default 3
 
 No capability or window edit needed either — a new widget adds no window (see above), and `src-tauri/capabilities/default.json`'s `windows` field is a `["*"]` glob regardless. You only touch that file for new *permissions* (see "Running shell commands" below).
 
+### The reserved `background` folder
+
+`wigl-widgets/background/` is a third reserved id alongside `main`/`wigl` — but the opposite kind of reserved: `main`/`wigl` can never be loaded as anything, while `background` is a real, loadable folder that's exempt from part of the contract above rather than blocked by it. It goes through the exact same build/install/load path as any other widget (`widget:build`/`widget:install`, the host-module registry, `wigl.permissions`) — the only differences:
+
+- Its default export is **not** required to render a `<Widget>` root — `widget:check` skips that assertion specifically for this id, since a full-bleed background has no business with widget chrome (rounded panel, drag grip, resize handles). Render whatever fills the space instead (a plain div, a `<canvas>`, a `<video>`).
+- It's never tiled into the widget grid. `loadPlugins()` routes a folder named `background` into `PluginLoadResult.background` instead of the normal `loaded` list, and `Desktop.tsx` mounts it as a fixed, full-bleed layer behind the grid (same layer as the Settings-driven background image — see Appearance-adjacent "Background" settings section — with the plugin taking precedence over that image when both are present). It gets no special props beyond that placement; it fills its container via ordinary CSS, the same as any other full-bleed content would.
+
+Only one `background` folder can be installed at a time (it's a single reserved id, like any other) — there's no multi-background composition.
+
 ## Build, install, and the plugin mechanism
 
 This is the loading/build *mechanism* a widget is built and shipped through — not the widget itself (`docs/principles.md`'s naming rule). It lives in `src/wigl/plugins/` (host side) and `scripts/widget.ts` (build/install CLI).

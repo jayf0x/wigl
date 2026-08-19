@@ -261,10 +261,15 @@ const WidgetItem = memo(function WidgetItem({
 
 export const Desktop = ({
   widgets,
+  background: Background,
   monitorIndex,
   windowed = false,
 }: {
   widgets: Record<string, ComponentType>;
+  // The reserved "background" plugin (F11 half 2), if one's installed and
+  // loaded — App.tsx threads it straight from loadPlugins()'s result.
+  // Renamed on destructure (capitalized) since it's rendered as a component.
+  background?: ComponentType;
   monitorIndex: number;
   // True on Wayland's single-window flow (see lib.rs's windowed_mode): no
   // sibling monitor windows exist to hand a drag off to, and no click-through
@@ -276,6 +281,16 @@ export const Desktop = ({
     "widget_layout",
     {},
   );
+  // F11 half 1 — Settings-driven image+opacity background (src/wigl/settings/
+  // sections/background.tsx writes both keys live, Tier 1, no restart). Only
+  // read/rendered when no `background` plugin (Half 2) is installed — see
+  // the render below. ponytail: a data URL in the kv blob is the whole
+  // image's bytes, base64-inflated, in one SQLite row — fine for a wallpaper-
+  // sized image, a ceiling for anything large (multi-MB blob on every
+  // useStorage poll/write). Upgrade path if that ever bites: write the bytes
+  // to a file under storageRoot() and store just the path here instead.
+  const [backgroundImage] = useStorage<string | null>("wigl_background_image", null);
+  const [backgroundOpacity] = useStorage<number>("wigl_background_opacity", 1);
   const [layout, setLayout] = useState<GridItem[] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [resizeId, setResizeId] = useState<string | null>(null);
@@ -1168,6 +1183,26 @@ export const Desktop = ({
       // native codepath for every widget at once.
       onDragStart={(e) => e.preventDefault()}
     >
+      {/* F11: full-bleed, behind everything else on the desktop — first
+          child keeps it lowest in stacking order among the siblings below,
+          none of which set a lower explicit z-index (see App.css's
+          .wigl-background). A `background` plugin (Half 2) always takes
+          precedence over the Settings-driven image (Half 1) when installed;
+          nothing renders here if neither is configured. Wrapped in the same
+          error boundary a widget gets — an installed plugin's crash here
+          shouldn't blank the whole monitor. */}
+      {Background ? (
+        <WidgetErrorBoundary id="background">
+          <div className="wigl-background">
+            <Background />
+          </div>
+        </WidgetErrorBoundary>
+      ) : backgroundImage ? (
+        <div
+          className="wigl-background"
+          style={{ backgroundImage: `url(${backgroundImage})`, opacity: backgroundOpacity }}
+        />
+      ) : null}
       <svg ref={field} className="wigl-field" aria-hidden="true">
         {/* <defs>
           <radialGradient id="wigl-field-glow">

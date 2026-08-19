@@ -18,6 +18,19 @@ export const DEFAULT_PLUGIN_ENTRY = ".wigl/index.js";
 
 export const RESERVED_PLUGIN_IDS = new Set(["main", "wigl"]);
 
+/** The one *other* reserved folder id, deliberately kept out of
+ * `RESERVED_PLUGIN_IDS` above — "main"/"wigl" can never be loaded as
+ * anything, but "background" is the opposite: a valid, specially-handled
+ * plugin folder (F11 half 2). It goes through the exact same build/install/
+ * load machinery as any ordinary widget (readWidgetConfig, loadOne, the
+ * host-module registry) — it just isn't required to render a `<Widget>`
+ * root (scripts/widget.ts's `check()` special-cases this id) and, once
+ * loaded, is routed to `PluginLoadResult.background` instead of the normal
+ * `loaded` widget list (see loader.ts's `loadPlugins()`) so `Desktop.tsx`
+ * mounts it full-bleed behind the grid rather than as a tiled `<Widget>`
+ * item. */
+export const BACKGROUND_PLUGIN_ID = "background";
+
 /** The bits of `package.json` wigl actually reads. Not a full npm manifest
  * type — a plugin's `package.json` is otherwise ordinary (name/version/
  * dependencies/whatever the author wants), the host just never looks at the
@@ -72,4 +85,8 @@ export interface FailedPlugin {
 export interface PluginLoadResult {
   loaded: LoadedPlugin[];
   failed: FailedPlugin[];
+  /** The installed `background` plugin's component, if that reserved folder
+   * (`BACKGROUND_PLUGIN_ID` above) is present and loaded successfully —
+   * absent otherwise. Never appears in `loaded`/the normal widgets map. */
+  background?: ComponentType;
 }

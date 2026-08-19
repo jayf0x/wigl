@@ -6,6 +6,7 @@ import type { SettingSection } from "@/wigl/settings/types";
 import { runCmd } from "@/wigl/utils";
 import type { createPluginRequire } from "./registry";
 import {
+  BACKGROUND_PLUGIN_ID,
   type FailedPlugin,
   type LoadedPlugin,
   type PluginLoadResult,
@@ -146,6 +147,7 @@ export const loadPlugins = async (): Promise<PluginLoadResult> => {
   const dir = await pluginsDir();
   const loaded: LoadedPlugin[] = [];
   const failed: FailedPlugin[] = [];
+  let background: ComponentType | undefined;
 
   // `-1` one-per-line, and a missing directory is the normal first-run state,
   // not an error worth reporting.
@@ -154,7 +156,16 @@ export const loadPlugins = async (): Promise<PluginLoadResult> => {
 
   for (const folder of folders) {
     try {
-      loaded.push(await loadOne(await join(dir, folder), folder));
+      const plugin = await loadOne(await join(dir, folder), folder);
+      // Same load path as any other folder (build/install/require-scoping
+      // all identical) — only the destination bucket differs, which is what
+      // keeps this out of the normal `widgets` id→component map `<Desktop>`
+      // would otherwise tile as an ordinary grid item.
+      if (folder === BACKGROUND_PLUGIN_ID) {
+        background = plugin.component;
+      } else {
+        loaded.push(plugin);
+      }
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
       console.error(`[wigl] plugin "${folder}" failed to load:`, error);
@@ -165,7 +176,7 @@ export const loadPlugins = async (): Promise<PluginLoadResult> => {
   // unanswerable from outside the app, and on Linux the WebKit console is
   // the only signal `scripts/verify.sh` can capture (see docs/debugging.md).
   console.info(
-    `[wigl] plugins: ${loaded.length} loaded${failed.length ? `, ${failed.length} failed` : ""} from ${dir}`,
+    `[wigl] plugins: ${loaded.length} loaded${failed.length ? `, ${failed.length} failed` : ""} from ${dir}${background ? " (+ background)" : ""}`,
   );
-  return { loaded, failed };
+  return { loaded, failed, background };
 };

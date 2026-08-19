@@ -29,7 +29,7 @@ import { cp, mkdir, mkdtemp, readdir, realpath, rm, stat } from "node:fs/promise
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { HOST_MODULE_IDS } from "../src/wigl/plugins/host-modules";
-import { RESERVED_PLUGIN_IDS, resolvePluginConfig } from "../src/wigl/plugins/types";
+import { BACKGROUND_PLUGIN_ID, RESERVED_PLUGIN_IDS, resolvePluginConfig } from "../src/wigl/plugins/types";
 
 // scripts/widget.ts -> repo root. Every repo-relative path below is resolved
 // against *this*, not `process.cwd()` — a bare relative string like
@@ -357,7 +357,12 @@ const check = async (dir: string) => {
     die(`${config.id}: crashed on render — ${e instanceof Error ? e.message : String(e)}`);
   }
   if (!(html as string).trim()) die(`${config.id}: rendered nothing`);
-  if (!(html as string).includes("data-wigl-widget")) {
+  // The reserved "background" folder (F11 half 2) is exempted from the
+  // <Widget>-root contract — a full-bleed background has no business with
+  // widget chrome (rounded panel, drag grip, resize handles), so it isn't
+  // wrapped in <Widget> and won't carry data-wigl-widget. Every other folder
+  // still must. See src/wigl/plugins/types.ts's BACKGROUND_PLUGIN_ID comment.
+  if (config.id !== BACKGROUND_PLUGIN_ID && !(html as string).includes("data-wigl-widget")) {
     die(`${config.id}: default export doesn't render <Widget> — wrap the root in <Widget> from "@/wigl"`);
   }
 

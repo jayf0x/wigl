@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useRestartRequired } from "./restartBanner";
 import { useSettingsSections } from "./registry";
 import { appearanceSection } from "./sections/appearance";
+import { backgroundSection } from "./sections/background";
 import { gridSection } from "./sections/grid";
 import { storageSection } from "./sections/storage";
 import { widgetsSection } from "./sections/widgets";
@@ -15,7 +16,13 @@ import type { SettingSection } from "./types";
 // contrast with useSettingsSections()'s registry, which is widget-
 // contributed and can be empty. Add a new core section (Grid, Storage, ...)
 // here as its own sections/*.tsx export, same shape as appearanceSection.
-const BUILTIN_SECTIONS: SettingSection[] = [appearanceSection, gridSection, storageSection, widgetsSection];
+const BUILTIN_SECTIONS: SettingSection[] = [
+  appearanceSection,
+  backgroundSection,
+  gridSection,
+  storageSection,
+  widgetsSection,
+];
 
 interface SettingsModalProps {
   open: boolean;

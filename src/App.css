@@ -115,6 +115,27 @@ html.wigl-windowed #root {
   -webkit-user-select: none;
 }
 
+/* F11: full-bleed background layer, behind the grid and its own field/ghost
+   SVG. First child of .wigl-desktop (position:fixed there already
+   establishes the stacking context every following sibling orders within),
+   so it stays lowest without needing a negative z-index. pointer-events:
+   none so it never eats a click meant for the desktop's own drag/click-
+   through hit-testing — a background plugin component needing interactivity
+   is out of scope. */
+.wigl-background {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.wigl-background > * {
+  width: 100%;
+  height: 100%;
+}
+
 .wigl-widget {
   position: absolute;
   top: 0;
