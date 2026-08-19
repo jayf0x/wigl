@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getConfigOverrides, setConfigOverride } from "../config";
 import type { SettingSection } from "../types";
@@ -43,8 +44,20 @@ const GridSection = () => {
     setConfigOverride("grid", next).catch((e) => console.error("[wigl] grid settings write failed", e));
   };
 
+  const reset = () => commit({});
+
   return (
     <div className="flex flex-col gap-4">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={reset}
+        disabled={Object.keys(overrides).length === 0}
+        className="w-fit"
+      >
+        Reset to default
+      </Button>
+
       <div>
         <div className="mb-2 px-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">
           Cells
