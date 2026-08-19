@@ -481,6 +481,19 @@ pub fn run() {
             }
 
             let mut monitors: Vec<_> = app.available_monitors()?;
+            // Seen empty on a clean checkout with displays physically connected
+            // the whole time (backlog-documented) — the display server can lag
+            // reporting monitors this early in Tauri's own startup. Short
+            // bounded retry recovers from that timing race instead of silently
+            // spawning zero screen-<i> windows.
+            for attempt in 1..=10 {
+                if !monitors.is_empty() {
+                    break;
+                }
+                eprintln!("[wigl] available_monitors() returned empty (attempt {attempt}/10), retrying");
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                monitors = app.available_monitors()?;
+            }
             monitors.sort_by_key(|m| (m.position().x, m.position().y));
             for (i, mon) in monitors.iter().enumerate() {
                 spawn_screen_window(app.handle(), i, mon);
