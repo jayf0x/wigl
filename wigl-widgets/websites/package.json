@@ -1,0 +1,6 @@
+{
+  "$schema": "../widget.schema.json",
+  "wigl": {
+    "permissions": ["storage", "command"]
+  }
+}
