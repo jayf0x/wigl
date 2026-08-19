@@ -5,7 +5,7 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Desktop } from "@/wigl";
 import { useRegisterGlobalAction } from "@/wigl/hooks";
-import { type FailedPlugin, loadPlugins } from "@/wigl/plugins";
+import { type FailedPlugin, loadPlugins, type WidgetManifest } from "@/wigl/plugins";
 import "./App.css";
 
 // `WidgetErrorBoundary` (Desktop.tsx) only catches a crash inside one
@@ -54,6 +54,12 @@ const App = () => {
   // of `sh` reads, so the wait is imperceptible — and on failure it still
   // resolves (with an empty list) rather than hanging.
   const [widgets, setWidgets] = useState<Record<string, ComponentType> | null>(null);
+  // F6 — keyed the same as `widgets` (instance id, not folder id): what
+  // Desktop.tsx needs to know per widget instance beyond its component —
+  // which folder it's an instance of and whether that folder allows a
+  // "Duplicate" at all. Kept separate from `widgets` (ComponentType isn't
+  // JSON-comparable the way this metadata is) rather than merging the two.
+  const [manifests, setManifests] = useState<Record<string, WidgetManifest>>({});
   const [failedWidgets, setFailedWidgets] = useState<FailedPlugin[]>([]);
   // The reserved "background" plugin folder, if installed and loaded — kept
   // out of `widgets` entirely (see loader.ts's loadPlugins) so <Desktop>
@@ -73,6 +79,7 @@ const App = () => {
     loadPlugins()
       .then(({ loaded, failed, background }) => {
         setWidgets(Object.fromEntries(loaded.map((p) => [p.manifest.id, p.component])));
+        setManifests(Object.fromEntries(loaded.map((p) => [p.manifest.id, p.manifest])));
         setFailedWidgets(failed);
         // Wrapped in a function form: useState's setter treats a bare
         // function value as an updater, and a component is a function.
@@ -139,6 +146,7 @@ const App = () => {
       )}
       <Desktop
         widgets={widgets}
+        manifests={manifests}
         background={background}
         monitorIndex={Number(label.split("-")[1]) || 0}
         windowed={windowed}

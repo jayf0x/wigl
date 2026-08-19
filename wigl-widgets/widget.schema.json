@@ -29,6 +29,10 @@
           "items": {
             "enum": ["storage", "command", "filesystem", "network", "pty"]
           }
+        },
+        "instantiable": {
+          "type": "boolean",
+          "description": "Whether a second (third, ...) instance of this widget may be created via \"Duplicate\". Default true. Set false if this widget assumes a global singleton it can't safely share across instances (a fixed server port, a lock file not scoped per instance, etc)."
         }
       }
     }

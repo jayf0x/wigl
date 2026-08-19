@@ -38,18 +38,40 @@ export const BACKGROUND_PLUGIN_ID = "background";
  * `eslintConfig`/`browserslist`/`lint-staged` — no separate config file. */
 interface PluginPackageJson {
   main?: string;
-  wigl?: { permissions?: WidgetPermission[] };
+  wigl?: { permissions?: WidgetPermission[]; instantiable?: boolean };
 }
 
-/** A plugin's resolved identity: no manifest.json, no id/apiVersion fields
- * to hand-write. `id` is always the folder name — it's already required to
- * be unique (two plugins can't share a folder), so a second place to spell
- * it out would only be one more thing to keep in sync. `entry`/`permissions`
- * come from an optional `package.json`; no `package.json` at all is a valid,
- * zero-config plugin (entry defaults to `DEFAULT_PLUGIN_ENTRY`, no permissions). */
+/** A plugin's resolved *folder* identity: no manifest.json, no id/apiVersion
+ * fields to hand-write. `id` is always the folder name — it's already
+ * required to be unique (two plugins can't share a folder), so a second
+ * place to spell it out would only be one more thing to keep in sync.
+ * `entry`/`permissions`/`instantiable` come from an optional `package.json`;
+ * no `package.json` at all is a valid, zero-config plugin (entry defaults to
+ * `DEFAULT_PLUGIN_ENTRY`, no permissions, instantiable).
+ *
+ * This is *folder* identity, not *instance* identity (F6) — a folder loads
+ * as one or more running instances (loader.ts's `loadOne` takes a separate
+ * `instanceId`), each with its own storage/layout scope, but they all share
+ * this one resolved `entry`/`permissions`/`instantiable`. See
+ * `WidgetManifest` below for where the two identities meet. */
 export interface WidgetManifest {
+  /** Instance id — scopes storage/layout/require. Equals `folder` for the
+   * always-present base instance; a duplicated instance gets a distinct id
+   * from `instances.ts`'s `generateInstanceId`. This is what `Desktop.tsx`'s
+   * `widgets` map is keyed by, not `folder`. */
   id: string;
+  /** Folder id — disk identity, shared by every instance of this widget.
+   * What `scripts/widget.ts` installs under and what `resolvePluginConfig`
+   * resolves `entry`/`permissions`/`instantiable` from. */
+  folder: string;
   permissions: WidgetPermission[];
+  /** Whether a second (third, ...) instance of this folder may be created
+   * via "Duplicate" — `package.json`'s `wigl.instantiable`, default `true`.
+   * A widget that assumes a global singleton (a fixed server port, a lock
+   * file keyed only by something not scoped per instance) sets this `false`
+   * rather than silently breaking when duplicated — see LocalCode's
+   * package.json for a real example and why. */
+  instantiable: boolean;
 }
 
 /** `raw` is the plugin folder's `package.json` text, or `null` if it has
@@ -60,12 +82,13 @@ export interface WidgetManifest {
 export const resolvePluginConfig = (
   folder: string,
   raw: string | null,
-): { id: string; entry: string; permissions: WidgetPermission[] } => {
+): { id: string; entry: string; permissions: WidgetPermission[]; instantiable: boolean } => {
   const pkg = raw ? (JSON.parse(raw) as PluginPackageJson) : {};
   return {
     id: folder,
     entry: pkg.main ?? DEFAULT_PLUGIN_ENTRY,
     permissions: pkg.wigl?.permissions ?? [],
+    instantiable: pkg.wigl?.instantiable ?? true,
   };
 };
 

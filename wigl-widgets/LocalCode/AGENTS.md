@@ -116,6 +116,18 @@ the primitive to reuse — don't add a second one.
 
 ## Server lifecycle — known rough edges
 
+- **`package.json` sets `wigl.instantiable: false`** (F6, "duplicate widget"
+  — see root `backlog.md`/`AGENTS.md`). `serverLock.ts`'s lock file is keyed
+  only by `cwd`, and `useOpencodeServer.ts` owns exactly one `serve` process
+  per mount with no reference counting — two instances pointed at the same
+  `directory` would race to spawn/reuse the *same* server, and two pointed
+  at different directories would still each think they own "the" server.
+  Either way, duplicating this widget today would silently misbehave rather
+  than give a genuinely independent second session, so it's opted out
+  rather than left to work by accident. Multi-instance support would need a
+  real per-instance server (or at least real reference counting on the lock)
+  — same shape as the "multi-monitor server sharing" backlog item below,
+  just triggered by duplication instead of a second monitor.
 - **A session's `directory` comes from the `serve` process's own cwd, not
   from the request.** Verified live: `POST /session`'s `directory` field is
   silently ignored — the session that comes back always has `directory`

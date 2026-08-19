@@ -40,8 +40,11 @@ import {
   springEasing,
 } from "./grid/math";
 import { useGlobalActions, useRegisterGlobalAction, useStorage } from "./hooks";
+import { generateInstanceId, type WidgetInstances, WIDGET_INSTANCES_KEY } from "./plugins/instances";
+import type { WidgetManifest } from "./plugins/types";
 import { toggleModeLabel, toggleWindowedMode } from "./settings/appMode";
 import { SettingsModal } from "./settings/SettingsModal";
+import { sql, sqlLiteral } from "./storage/client";
 import { ThemeEffect } from "./theme/ThemeEffect";
 import {
   type WidgetGridReport,
@@ -227,6 +230,10 @@ const WidgetItem = memo(function WidgetItem({
   return (
     <div
       ref={setRef}
+      // Host-owned marker (not part of the widget-author contract) so the
+      // desktop's own right-click handler can tell which widget instance a
+      // click landed on — see openMenu/F6's "Duplicate" entry below.
+      data-widget-id={id}
       className={`wigl-widget${lifted ? " lifted" : ""}${resizing ? " resizing" : ""}`}
       style={{ width: spanToPx(w), height: spanToPx(h) }}
       onPointerDown={(e) => onPointerDown(e, id)}
@@ -261,11 +268,18 @@ const WidgetItem = memo(function WidgetItem({
 
 export const Desktop = ({
   widgets,
+  manifests = {},
   background: Background,
   monitorIndex,
   windowed = false,
 }: {
   widgets: Record<string, ComponentType>;
+  // F6 — per-instance metadata (which folder, whether it can be duplicated
+  // again) keyed the same as `widgets`. Defaults to `{}` rather than being
+  // required: any caller that hasn't been updated for F6 (a future test, a
+  // stale import) just sees every widget as non-duplicatable instead of
+  // crashing on a missing prop.
+  manifests?: Record<string, WidgetManifest>;
   // The reserved "background" plugin (F11 half 2), if one's installed and
   // loaded — App.tsx threads it straight from loadPlugins()'s result.
   // Renamed on destructure (capitalized) since it's rendered as a component.
@@ -291,11 +305,20 @@ export const Desktop = ({
   // to a file under storageRoot() and store just the path here instead.
   const [backgroundImage] = useStorage<string | null>("wigl_background_image", null);
   const [backgroundOpacity] = useStorage<number>("wigl_background_opacity", 1);
+  // F6 — the one core record of which folders have extra ("duplicated")
+  // instances beyond their base one (instances.ts owns the shape/key).
+  // Same unprefixed, host-level useStorage call as `widget_layout` above —
+  // this isn't any one plugin's state, so it doesn't go through the
+  // registry's per-plugin key prefix.
+  const [instances, setInstances] = useStorage<WidgetInstances>(WIDGET_INSTANCES_KEY, {});
   const [layout, setLayout] = useState<GridItem[] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [resizeId, setResizeId] = useState<string | null>(null);
   // Right-click menu of global actions (see actions.ts), page-px position.
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  // `targetId` is the widget instance whose header was clicked, if any (see
+  // openMenu) — what F6's "Duplicate" entry below needs to know which
+  // folder to duplicate.
+  const [menu, setMenu] = useState<{ x: number; y: number; targetId: string | null } | null>(null);
   const menuPos = useRef({ x: 0, y: 0 });
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -320,6 +343,7 @@ export const Desktop = ({
   } | null>(null);
   const layoutRef = useRef<GridItem[] | null>(null);
   const savedRef = useRef<SavedPositions>({});
+  const instancesRef = useRef<WidgetInstances>({});
   // Ids with no saved position yet (true first launch, or a widget added
   // since the last save) — their real size/spot isn't known until they
   // report in, so reflow is deferred until every one of them has reported
@@ -333,6 +357,9 @@ export const Desktop = ({
   useEffect(() => {
     savedRef.current = saved;
   }, [saved]);
+  useEffect(() => {
+    instancesRef.current = instances;
+  }, [instances]);
 
   // Bake the configured spring into a CSS easing once (WKWebView supports
   // linear(); the stylesheet carries a cubic-bezier fallback).
@@ -681,14 +708,58 @@ export const Desktop = ({
   const openMenu = useCallback((e: React.MouseEvent) => {
     if (!(e.target as HTMLElement).closest("[data-widget-header]")) return;
     e.preventDefault();
+    // Which widget instance's header was clicked, if any — data-widget-id
+    // lives on WidgetItem's own root (see above), one level up from the
+    // header itself. Only used for F6's "Duplicate" entry below; every
+    // other menu entry ignores it.
+    const targetId =
+      (e.target as HTMLElement).closest<HTMLElement>("[data-widget-id]")?.dataset.widgetId ?? null;
     menuPos.current = { x: e.clientX, y: e.clientY };
-    setMenu({ x: e.clientX, y: e.clientY });
+    setMenu({ x: e.clientX, y: e.clientY, targetId });
     invoke("set_drag_active", { active: true }).catch(console.error);
   }, []);
   const closeMenu = useCallback(() => {
     setMenu(null);
     invoke("set_drag_active", { active: false }).catch(console.error);
   }, []);
+
+  // F6 — "Duplicate widget": records a fresh instance id for `folder` in the
+  // one core instances key, then reloads (same broadcast App.tsx's own
+  // "Reload widgets" action already uses) so loadPlugins() picks the new
+  // instance up on every monitor, not just this one.
+  //
+  // The row has to actually be in sqlite before that reload fires —
+  // loadPlugins() reads this key with a direct, one-shot sql call
+  // (loader.ts's readInstances), not through this component's live
+  // useStorage state, so there's no live-state shortcut it could otherwise
+  // fall back on. `useStorage`'s own set() is fire-and-forget by design
+  // (deliberately kept that way — see its own comment on why a Promise
+  // return broke `act()` for every existing caller that doesn't await it,
+  // same contract as plain useState's setter), so this writes the row
+  // directly first, with the exact same sql/sqlLiteral primitives
+  // useStorage itself is built on, and only calls setInstances() after —
+  // that still gets this window's optimistic state update and the
+  // cross-window `wigl-kv` broadcast, just redundantly re-writing a row
+  // that's already there (harmless, idempotent).
+  const duplicateWidget = useCallback(
+    (folder: string) => {
+      const newId = generateInstanceId(folder, instancesRef.current[folder] ?? []);
+      const next: WidgetInstances = {
+        ...instancesRef.current,
+        [folder]: [...(instancesRef.current[folder] ?? []), newId],
+      };
+      const json = JSON.stringify(next);
+      sql(
+        `INSERT INTO kv (key, value) VALUES (${sqlLiteral(WIDGET_INSTANCES_KEY)}, ${sqlLiteral(json)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+      )
+        .catch((e) => console.error(`[wigl] failed to record widget instance "${newId}"`, e))
+        .then(() => {
+          setInstances(next);
+          emit("wigl-reload-widgets").catch(console.error);
+        });
+    },
+    [setInstances],
+  );
 
   // Reset = wipe all saved positions and rebootstrap every monitor: widgets
   // fall back to monitor 0 + autoPlace + settle, exactly like a first boot.
@@ -1163,6 +1234,13 @@ export const Desktop = ({
   // `m` (monitor) the widget last lived on regardless of which window's menu
   // was used (see the layout-build effect above).
   const closedIds = Object.keys(widgets).filter((id) => saved[id]?.closed);
+  // F6 — only offered when the right-clicked header belongs to a widget
+  // instance whose folder allows it (package.json's wigl.instantiable,
+  // default true — see LocalCode's package.json for a real opt-out and
+  // why). `manifests` defaults to `{}` (see the prop above), so an id with
+  // no entry there — a caller that hasn't been updated for F6 — is treated
+  // as non-duplicatable rather than crashing.
+  const duplicateTarget = menu?.targetId ? manifests[menu.targetId] : undefined;
 
   const onPointerUp = () => {
     if (resize.current) endResize();
@@ -1262,6 +1340,19 @@ export const Desktop = ({
           onContextMenu={(e) => e.preventDefault()}
         >
           <div className="wigl-menu" style={{ left: menu.x, top: menu.y }}>
+            {duplicateTarget?.instantiable && (
+              <>
+                <button
+                  onClick={() => {
+                    closeMenu();
+                    duplicateWidget(duplicateTarget.folder);
+                  }}
+                >
+                  Duplicate
+                </button>
+                <div className="wigl-menu-separator" />
+              </>
+            )}
             {globalActions.map((a) => (
               <button
                 key={a.id}

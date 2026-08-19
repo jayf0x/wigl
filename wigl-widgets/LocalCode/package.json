@@ -1,7 +1,8 @@
 {
   "$schema": "../widget.schema.json",
   "wigl": {
-    "permissions": ["storage", "command", "filesystem"]
+    "permissions": ["storage", "command", "filesystem"],
+    "instantiable": false
   },
   "dependencies": {
     "@milkdown/crepe": "^7.22.0",
