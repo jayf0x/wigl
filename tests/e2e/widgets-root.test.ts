@@ -14,6 +14,7 @@
 import {
   cleanupTemp,
   exportDevkit,
+  makeGitFixtureRepo,
   makeScenarioRoot,
   makeTempDir,
   readInstalled,
@@ -75,6 +76,37 @@ describe("a well-formed widget in an external root", () => {
     const rm = await runWidgetCli(["rm", "good-widget"], { env: { WIGL_APP_DATA_DIR: appData } });
     expect(rm.code).toBe(0);
     expect(await exists(join(appData, "plugins", "good-widget"))).toBe(false);
+  }, 30_000);
+});
+
+describe("widget:add", () => {
+  test("clones a git URL, builds, and installs under the requested id", async () => {
+    const repo = await makeGitFixtureRepo("good-widget");
+    const appData = await makeTempDir("wigl-e2e-appdata-add-");
+
+    const add = await runWidgetCli(["add", repo, "cloned-widget"], { env: { WIGL_APP_DATA_DIR: appData } });
+    expect(add.code, add.stdout + add.stderr).toBe(0);
+    const installed = await readInstalled(appData, "cloned-widget", join(".wigl", "index.js"));
+    expect(installed.length).toBeGreaterThan(0);
+  }, 30_000);
+
+  test("derives the id from the URL when none is given", async () => {
+    const repo = await makeGitFixtureRepo("good-widget");
+    const appData = await makeTempDir("wigl-e2e-appdata-add-noid-");
+    const idFromUrl = repo.split("/").pop() as string;
+
+    const add = await runWidgetCli(["add", repo], { env: { WIGL_APP_DATA_DIR: appData } });
+    expect(add.code, add.stdout + add.stderr).toBe(0);
+    expect(await exists(join(appData, "plugins", idFromUrl))).toBe(true);
+  }, 30_000);
+
+  test("fails loudly on a bad URL instead of installing nothing silently", async () => {
+    const appData = await makeTempDir("wigl-e2e-appdata-add-bad-");
+    const add = await runWidgetCli(["add", join(appData, "nonexistent-repo")], {
+      env: { WIGL_APP_DATA_DIR: appData },
+    });
+    expect(add.code).not.toBe(0);
+    expect(add.stdout + add.stderr).toMatch(/git clone failed/);
   }, 30_000);
 });
 

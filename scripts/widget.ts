@@ -25,7 +25,7 @@
  * keeps exactly one React in the process, and it's what makes permissions
  * enforceable rather than decorative.
  */
-import { cp, mkdir, readdir, realpath, rm, stat } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, realpath, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { HOST_MODULE_IDS } from "../src/wigl/plugins/host-modules";
@@ -443,6 +443,32 @@ const remove = async (id: string) => {
   console.log(`✓ removed ${id}`);
 };
 
+/** Installs a widget straight from a git URL — clone into a temp dir named
+ * after the target id (so `install()`'s own `basename(dir)` id derivation
+ * needs no separate override path), build it if it ships TS source, install
+ * it, then throw the clone away. Never touches `wigl-widgets/` — this is
+ * "get it running," not "vendor the source into this repo." Only runs under
+ * `bun`, same as every other command here (see COMMANDS' own comment on why
+ * the Settings modal's Widgets section can't call into this instead). */
+const add = async (url: string, idArg?: string) => {
+  const id = idArg || basename(url).replace(/\.git$/, "");
+  if (!id) die(`could not derive a widget id from "${url}" — pass one explicitly: widget add <url> <id>`);
+  if (RESERVED_PLUGIN_IDS.has(id)) die(`"${id}" is a reserved id`);
+
+  const tmpRoot = await mkdtemp(join(tmpdir(), "wigl-widget-add-"));
+  const cloneDir = join(tmpRoot, id);
+  try {
+    console.log(`cloning ${url}...`);
+    const clone = Bun.spawn(["git", "clone", "--depth", "1", url, cloneDir], {
+      stdio: ["ignore", "inherit", "inherit"],
+    });
+    if ((await clone.exited) !== 0) die(`git clone failed for "${url}"`);
+    await install(cloneDir);
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+};
+
 /** One entry per CLI verb — what used to be a hand-written `switch` case,
  * now a lookup table so the set of commands is introspectable instead of
  * only living inside the switch's control flow. `label` is for a future
@@ -463,7 +489,7 @@ interface CliCommand {
   id: string;
   label: string;
   usage: string;
-  run: (arg?: string) => Promise<void>;
+  run: (arg?: string, extra?: string) => Promise<void>;
 }
 
 const COMMANDS: CliCommand[] = [
@@ -528,9 +554,18 @@ const COMMANDS: CliCommand[] = [
       await devkit(arg ?? die("usage: widget devkit <dest-dir>"));
     },
   },
+  {
+    id: "add",
+    label: "Add from git URL",
+    usage: "widget add <git-url> [id]",
+    run: async (arg, extra) => {
+      requireProductionEnv("add");
+      await add(arg ?? die("usage: widget add <git-url> [id]"), extra);
+    },
+  },
 ];
 
-const [cmd, arg] = process.argv.slice(2);
+const [cmd, arg, extra] = process.argv.slice(2);
 const command = COMMANDS.find((c) => c.id === cmd);
 if (!command) die(`usage: widget <${COMMANDS.map((c) => c.id).join("|")}> [dir|id]`);
-await command.run(arg);
+await command.run(arg, extra);

@@ -14,8 +14,11 @@ import type { SettingSection } from "../types";
 // startup — it does NOT import scripts/widget.ts's `list`/`remove`. That
 // script only runs under `bun` (node:fs/promises, Bun.build) and can't be
 // bundled into a webview; the CLI's own command table (see that file) is
-// for CLI introspection, not a runtime dependency of this UI. "Install from
-// a GitHub URL" stays out of scope — see backlog.md.
+// for CLI introspection, not a runtime dependency of this UI. `widget:add
+// <git-url>` covers "install from a URL" CLI-side (clone + build + install,
+// no wigl-widgets/ checkout needed); doing the same from this modal stays
+// out of scope, since a webview has no TypeScript bundler for the clone
+// step — see backlog.md.
 const shq = (s: string) => `'${s.split("'").join(`'\\''`)}'`;
 
 interface InstalledWidget {

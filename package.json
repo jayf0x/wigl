@@ -32,7 +32,8 @@
     "widget:rm": "bun scripts/widget.ts rm",
     "widget:devkit": "bun scripts/widget.ts devkit",
     "widget:types": "tsc -p tsconfig.types.json",
-    "widget:check": "NODE_ENV=production bun scripts/widget.ts check"
+    "widget:check": "NODE_ENV=production bun scripts/widget.ts check",
+    "widget:add": "NODE_ENV=production bun scripts/widget.ts add"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

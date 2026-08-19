@@ -50,11 +50,14 @@ This is the loading/build *mechanism* a widget is built and shipped through — 
 bun run widget:build   wigl-widgets/calendar   # source → .wigl/index.js
 bun run widget:check   wigl-widgets/calendar   # load it headlessly, report host modules used
 bun run widget:install wigl-widgets/calendar   # build (if there's source), then copy into app data
+bun run widget:add     <git-url> [id]          # clone, build, install — no wigl-widgets/ checkout needed
 bun run widget:list
 bun run widget:rm      calendar
 ```
 
 Omit the dir argument on `build`/`install` to sweep every `wigl-widgets/<name>/` folder at once (a folder starting with `_`, e.g. `_qa-color`, is skipped by the no-arg sweep but still buildable/installable by name). `bun run qa`/`bun run verify` already call `widget:install` with no argument before launching. **Renaming or deleting a folder does not remove its old installed copy** — run `bun run widget:rm <old-id>` yourself as part of any rename.
+
+`widget:add` clones the URL into a throwaway temp dir (named after the target id, so no separate override path is needed — `id` defaults to the URL's last path segment, minus a trailing `.git`), then runs the normal build+install path on it — the clone itself is discarded once installed, nothing is vendored into this repo. This only runs under `bun` (real `git`, `node:fs`, `Bun.build`), so it's a CLI-only capability — the Settings modal's Widgets section can't call into it (see that file's own comment for why), which is why "install from a URL, from the Settings modal" stays a separate, harder, still-open gap in `backlog.md`: a webview has no TypeScript bundler, so an in-app version could only ever support a widget that already ships pre-built JS, not one with `index.tsx` source to compile.
 
 `package.json` is optional and does triple duty:
 - **`dependencies`** — ordinary npm deps, bundled into *that widget's own* `.wigl/index.js` (each widget gets its own bundle, not one shared one, so one widget's third-party libraries never bloat another's).

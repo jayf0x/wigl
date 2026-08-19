@@ -154,3 +154,28 @@ export const makeScenarioRoot = async (devkitDir: string, fixtureNames: string[]
 
 export const readInstalled = async (appDataDir: string, id: string, relPath: string) =>
   readFile(join(appDataDir, "plugins", id, relPath), "utf8");
+
+/** A real, local, throwaway git repo seeded with one fixture — a stand-in
+ * for "a widget's GitHub URL" (`widget:add`'s own target), since `git
+ * clone` treats a local path exactly the same as a remote one. Committer
+ * identity is set inline (`-c`) rather than relying on any global git
+ * config being present in the environment this suite runs in. */
+export const makeGitFixtureRepo = async (fixtureName: string): Promise<string> => {
+  const dir = await makeTempDir("wigl-e2e-gitrepo-");
+  await fsCp(join(fixturesDir, fixtureName), dir, { recursive: true });
+  // CLAUDECODE stripped: this repo's own machines can run a global pre-commit
+  // hook gating any `git commit` made under an AI agent session (see
+  // ~/.claude/skills/git-meow) — this commit is synthetic test fixture setup,
+  // identical on every machine this suite runs on, not agent-authored repo
+  // history, so it shouldn't be subject to that gate.
+  const env = { ...process.env };
+  delete env.CLAUDECODE;
+  const run = async (args: string[]) => {
+    const proc = Bun.spawn(["git", ...args], { cwd: dir, env, stdout: "pipe", stderr: "pipe" });
+    if ((await proc.exited) !== 0) throw new Error(`git ${args.join(" ")} failed in ${dir}`);
+  };
+  await run(["init", "-q"]);
+  await run(["add", "-A"]);
+  await run(["-c", "user.email=e2e@wigl.test", "-c", "user.name=wigl-e2e", "commit", "-q", "-m", "fixture"]);
+  return dir;
+};
