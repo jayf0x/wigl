@@ -2,7 +2,9 @@
 // a rename doesn't require hunting through every hook for a string literal.
 export const STORAGE_KEYS = {
   pinned: "localcode_pinned", // Record<sessionID, epochMs> — bump-to-top, separate from date sort
-  titles: "localcode_titles", // Record<sessionID, string> — user-edited display name overlay
+  titles: "localcode_titles", // Record<sessionID, string> — user-edited display name overlay, also holds auto-generated titles (see useSessions.ts's autoRenameSession)
+  sessionCounter: "localcode_session_counter", // number — global auto-increment, next value to hand out
+  sessionNumbers: "localcode_session_numbers", // Record<sessionID, number> — the number each session was given (assigned once, at creation); drives both the "Empty #N" placeholder and the "#N ..." auto-title, per owner's ask for one shared counter
   lastModel: "localcode_last_model", // ModelSelection | null — sticky across sessions
   lastAgent: "localcode_last_agent", // string | null
   lastVariant: "localcode_last_variant", // string | null

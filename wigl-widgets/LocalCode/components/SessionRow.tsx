@@ -63,7 +63,10 @@ export const SessionRow = ({
   return (
     <div
       className={cn(
-        "group flex items-center gap-1.5 rounded-md border-l-2 px-2 py-1.5 text-[11px] transition-colors duration-150",
+        // rounded-r-md, not rounded-md: this is a flat left accent bar, not a
+        // pill — rounding the left corners too made the bar itself look
+        // chunky/bulged instead of a clean straight edge (owner QA feedback).
+        "group flex items-center gap-1.5 rounded-r-md border-l-2 px-2 py-1.5 text-[11px] transition-colors duration-150",
         confirming || deleting
           ? "border-destructive/60 bg-destructive/5 text-foreground"
           : active

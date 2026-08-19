@@ -93,7 +93,13 @@ export const CrepeField = ({
 
       const crepe = new CrepeBuilder({ root: containerRef.current, defaultValue: initialValueRef.current })
         .addFeature(listItem)
-        .addFeature(placeholderFeature, { text: placeholderRef.current, mode: "block" });
+        // "doc" (not the default "block"): the composer is one paragraph at
+        // a time, not a multi-block document — "block" mode re-shows the
+        // placeholder on every empty line (e.g. after Shift-Enter), which
+        // reads as "my text disappeared" while there's still real content
+        // above the cursor. "doc" only shows it when the whole field is
+        // actually empty.
+        .addFeature(placeholderFeature, { text: placeholderRef.current, mode: "doc" });
       crepe.on((api: { markdownUpdated: (fn: (ctx: unknown, md: string) => void) => void }) => {
         api.markdownUpdated((_ctx, markdown) => {
           lastEmittedRef.current = markdown;

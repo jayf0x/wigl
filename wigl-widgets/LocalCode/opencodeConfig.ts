@@ -51,7 +51,7 @@ interface OpencodeConfigShape {
     {
       npm?: string;
       name?: string;
-      options?: { baseURL?: string; num_ctx?: number };
+      options?: { baseURL?: string; num_ctx?: number; seed?: number };
       models?: Record<string, OpencodeModelConfig>;
     }
   >;
@@ -115,6 +115,16 @@ const REASONING_VARIANTS: Record<string, { reasoningEffort: string }> = {
 // `limit` telling opencode about it at all.
 const FALLBACK_CONTEXT_WINDOW = { context: 8192, output: 4096 };
 
+// Deterministic output over reproducing whatever Ollama's own random default
+// seed picks each run — same reasoning as pinning any other test/debug
+// input. Forwarded the same way `num_ctx` already is (a raw Ollama-native
+// `options` key nested under the provider's `options` block, not an
+// OpenAI-standard request field), since that's the one channel already
+// live-verified to actually reach Ollama through opencode's
+// `@ai-sdk/openai-compatible` provider — see `num_ctx`'s comment above.
+// Owner's choice of constant (42), not derived from anything.
+const FIXED_SEED = 42;
+
 /** `limit.context`/`limit.output` for one model's config entry — real
  * context length when Ollama reported one, the flat fallback otherwise.
  * `output` is capped to the context itself: asking a model to *generate*
@@ -164,7 +174,7 @@ export const syncOllamaModels = async (models: OllamaModelSync[]): Promise<boole
   config.provider ??= {};
   const existing = config.provider[OLLAMA_PROVIDER_ID];
   const configuredModels = { ...existing?.models };
-  let changed = !existing || existing.options?.num_ctx !== numCtx;
+  let changed = !existing || existing.options?.num_ctx !== numCtx || existing.options?.seed !== FIXED_SEED;
   for (const { name, thinking, contextLength } of models) {
     const limit = contextWindowFor(contextLength);
     const entry = configuredModels[name];
@@ -196,7 +206,7 @@ export const syncOllamaModels = async (models: OllamaModelSync[]): Promise<boole
   config.provider[OLLAMA_PROVIDER_ID] = {
     npm: existing?.npm ?? "@ai-sdk/openai-compatible",
     name: existing?.name ?? "Ollama (local)",
-    options: { baseURL: existing?.options?.baseURL ?? OLLAMA_BASE_URL, num_ctx: numCtx },
+    options: { baseURL: existing?.options?.baseURL ?? OLLAMA_BASE_URL, num_ctx: numCtx, seed: FIXED_SEED },
     models: configuredModels,
   };
 

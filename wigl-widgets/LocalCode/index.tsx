@@ -23,7 +23,7 @@ const LocalCodeWidget = () => {
   const { status, baseUrl, ollamaOnline, ollamaStarting, restart, reloadModels, startOllamaNow } = useOpencodeServer(
     defaultDir || null,
   );
-  const { sessions, loading, createSession, renameSession, togglePin, deleteSession } =
+  const { sessions, loading, createSession, renameSession, autoRenameSession, togglePin, deleteSession } =
     useSessions(baseUrl, defaultDir || null);
   const catalog = useModelCatalog(baseUrl);
 
@@ -140,6 +140,7 @@ const LocalCodeWidget = () => {
               sessionsLoading={loading}
               onSelect={setActiveID}
               onCreate={handleCreate}
+              onFirstMessage={autoRenameSession}
             />
           </>
         )}

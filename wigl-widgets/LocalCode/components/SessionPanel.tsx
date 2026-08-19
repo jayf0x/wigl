@@ -79,6 +79,7 @@ export const SessionPanel = ({
   sessionsLoading,
   onSelect,
   onCreate,
+  onFirstMessage,
 }: {
   baseUrl: string | null;
   sessionID: string | null;
@@ -87,6 +88,7 @@ export const SessionPanel = ({
   sessionsLoading: boolean;
   onSelect: (id: string) => void;
   onCreate: () => void;
+  onFirstMessage: (sessionID: string, text: string) => void;
 }) => {
   const session = useActiveSession(baseUrl, sessionID);
 
@@ -128,7 +130,20 @@ export const SessionPanel = ({
         onModelChange={session.setLastModel}
         onAgentChange={session.setLastAgent}
         onVariantChange={(v) => session.setLastVariant(v ?? null)}
-        onSend={(text) => session.send(text)}
+        onSend={(text) => {
+          // Captured before `send` (which only takes effect once the
+          // server round-trips), not after — `session.messages` reflects
+          // *this* turn's history right up until send() resolves. Not
+          // gated on `!session.loading`: a brand-new session's initial
+          // history fetch (useActiveSession.ts) can still be in flight
+          // when the user types fast, and this only ever fires once per
+          // session anyway (onFirstMessage's own `sessionID in titles`
+          // guard) — gating on `loading` risked missing that one shot
+          // permanently, leaving the session titled "Empty #N" forever.
+          const isFirstMessage = session.messages.length === 0;
+          session.send(text);
+          if (isFirstMessage) onFirstMessage(sessionID, text);
+        }}
         onAbort={session.abort}
         busy={session.busy}
       />

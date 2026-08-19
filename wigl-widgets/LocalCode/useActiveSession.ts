@@ -104,12 +104,28 @@ export const useActiveSession = (baseUrl: string | null, sessionID: string | nul
   // per-token idle timer: it starts when `busy` flips true and is cleared
   // when the turn actually finishes, so normal streaming (which keeps
   // `state.messages` changing but not `state.busy`) doesn't reset it.
-  const HANG_TIMEOUT_MS = 90_000;
+  //
+  // 90s (the original value) turned out to false-positive on genuinely
+  // still-working generation — live QA against qwen3.5:0.8b at "high"
+  // reasoning effort produced a long-but-real reasoning trace that this
+  // guard cut off mid-thought (owner report: "the model was thinking
+  // somewhat long, but would have come out of it"). Bumped to 4 minutes —
+  // still finite (B4's actual hang is infinite, so any real ceiling catches
+  // it), just generous enough that "high"-effort reasoning on a small local
+  // model isn't the common case that trips it. How long is actually
+  // reasonable depends on the model and its effort level, which this single
+  // constant can't account for — see backlog.md if that gap is worth a
+  // per-model/per-effort timeout later.
+  const HANG_TIMEOUT_MS = 240_000;
   useEffect(() => {
     if (!state.busy) return;
     const timer = setTimeout(() => {
       abort();
-      setState((prev) => ({ ...prev, busy: false, error: "no response — opencode/Ollama didn't reply in time" }));
+      setState((prev) => ({
+        ...prev,
+        busy: false,
+        error: `no response after ${HANG_TIMEOUT_MS / 1000}s — opencode/Ollama didn't reply in time`,
+      }));
     }, HANG_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [state.busy, abort]);
