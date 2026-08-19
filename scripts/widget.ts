@@ -67,7 +67,17 @@ const appDataDir = () => {
   if (process.platform === "win32") return join(process.env.APPDATA || join(homedir(), "AppData", "Roaming"), identifier);
   return join(process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"), identifier);
 };
-const installRoot = () => join(appDataDir(), "plugins");
+
+// `wigl-config.json` never moves (see lib.rs's config_path) — it's what
+// tells every other path where to look, same ordering rule the running app
+// itself follows (settings/config.ts's storageRoot). Read once, here,
+// rather than per install-root call: this is a one-shot CLI process, not a
+// long-lived app that could see the override change mid-run.
+const storageRootOverride = await Bun.file(join(appDataDir(), "wigl-config.json"))
+  .json()
+  .then((c) => (typeof c?.storage?.root === "string" && c.storage.root ? (c.storage.root as string) : null))
+  .catch(() => null);
+const installRoot = () => join(storageRootOverride ?? appDataDir(), "plugins");
 
 const die = (msg: string): never => {
   console.error(`✗ ${msg}`);

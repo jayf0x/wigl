@@ -1,18 +1,20 @@
 // Shared SQLite plumbing for useStorage and useQuery — one kv table of JSON
-// blobs in wigl.db under the OS's app-data dir (macOS: ~/Library/Application
-// Support/<id>, Linux: ~/.local/share/<id> — Tauri's appDataDir() resolves
-// this per platform), accessed by shelling out to the system's `sqlite3` CLI
-// (per docs/architecture.md: real CLI over Rust commands). sqlite3 isn't
+// blobs in wigl.db under storageRoot() (the OS's app-data dir — macOS:
+// ~/Library/Application Support/<id>, Linux: ~/.local/share/<id> — unless a
+// storage.root Tier-2 override relocates it, see settings/config.ts),
+// accessed by shelling out to the system's `sqlite3` CLI (per
+// docs/architecture.md: real CLI over Rust commands). sqlite3 isn't
 // bundled, so it's an optional dependency: widgets that don't use storage
 // work with none installed; ones that do log a read/write error until it is
 // (see docs/debugging.md).
-import { appDataDir, join } from "@tauri-apps/api/path";
+import { join } from "@tauri-apps/api/path";
+import { storageRoot } from "../settings/config";
 import { runCmd } from "../utils";
 
 let dbPathPromise: Promise<string> | null = null;
 const dbPath = (): Promise<string> => {
   dbPathPromise ??= (async () => {
-    const path = await join(await appDataDir(), "wigl.db");
+    const path = await join(await storageRoot(), "wigl.db");
     // sqlite3 won't create the parent directory; the table is created here
     // too so every later call is a plain read/write.
     await runCmd("sh", [

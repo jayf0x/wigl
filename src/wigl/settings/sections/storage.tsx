@@ -2,25 +2,29 @@ import { appDataDir, join } from "@tauri-apps/api/path";
 import { FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { sql } from "../../storage/client";
 import { revealPath } from "../../utils";
+import { getConfigOverrides, setConfigOverride } from "../config";
 import type { SettingSection } from "../types";
 
-// Fixed by Tauri's app_data_dir() convention, not stored anywhere as a
-// settable value — see backlog.md for the (bigger, deferred) idea of making
-// the data folder itself relocatable via a Tier-2 override + folder picker.
 interface Paths {
-  root: string;
+  defaultRoot: string;
   plugins: string;
   config: string;
 }
 
-const loadPaths = async (): Promise<Paths> => {
-  const root = await appDataDir();
+// plugins/config always shown relative to whatever root is *currently
+// pending* (an override already saved this session, else the OS default) —
+// wigl-config.json itself is the one exception, always at defaultRoot, since
+// it's what a relocated app would have to find *before* it knows to look
+// anywhere else (see settings/config.ts's storageRoot).
+const loadPaths = async (rootOverride: string): Promise<Paths> => {
+  const defaultRoot = await appDataDir();
   return {
-    root,
-    plugins: await join(root, "plugins"),
-    config: await join(root, "wigl-config.json"),
+    defaultRoot,
+    plugins: await join(rootOverride || defaultRoot, "plugins"),
+    config: await join(defaultRoot, "wigl-config.json"),
   };
 };
 
@@ -46,13 +50,27 @@ const PathRow = ({ label, path }: { label: string; path: string }) => (
 );
 
 const StorageSection = () => {
+  // Tier 2 (restart-required, see settings/config.ts) — same pattern as
+  // grid.tsx: local pending state seeded once, one write per change/blur,
+  // the field always shows the *pending* value, not what's live on screen.
+  const [overrides, setOverrides] = useState(() => getConfigOverrides("storage"));
+  const rootOverride = typeof overrides.root === "string" ? overrides.root : "";
+
   const [paths, setPaths] = useState<Paths | null>(null);
   const [clearing, setClearing] = useState(false);
   const [cleared, setCleared] = useState(false);
 
   useEffect(() => {
-    loadPaths().then(setPaths).catch(console.error);
-  }, []);
+    loadPaths(rootOverride).then(setPaths).catch(console.error);
+  }, [rootOverride]);
+
+  const commitRoot = (value: string) => {
+    const next = { ...overrides };
+    if (value) next.root = value;
+    else delete next.root;
+    setOverrides(next);
+    setConfigOverride("storage", next).catch((e) => console.error("[wigl] storage settings write failed", e));
+  };
 
   const clearCache = async () => {
     setClearing(true);
@@ -75,11 +93,33 @@ const StorageSection = () => {
     <div className="flex flex-col gap-4">
       <div>
         <div className="mb-2 px-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">
+          Data folder
+        </div>
+        <div className="flex items-center gap-2 px-1">
+          <Input
+            type="text"
+            placeholder={paths?.defaultRoot ?? "default"}
+            value={rootOverride}
+            onChange={(e) => commitRoot(e.target.value)}
+            className="h-7 flex-1 font-mono text-[11px]"
+          />
+          <Button variant="outline" size="sm" onClick={() => commitRoot("")} disabled={!rootOverride}>
+            Reset to default
+          </Button>
+        </div>
+        <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">
+          Where the database and installed widgets live — <code>wigl-config.json</code> itself always stays at the
+          default location so it can be found on the next launch. A path here must already exist and be writable;
+          takes effect on restart.
+        </p>
+      </div>
+
+      <div className="border-border/60 border-t pt-3">
+        <div className="mb-2 px-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">
           Paths
         </div>
         {paths ? (
           <div className="flex flex-col gap-2.5">
-            <PathRow label="Storage" path={paths.root} />
             <PathRow label="Installed widgets" path={paths.plugins} />
             <PathRow label="Settings file" path={paths.config} />
           </div>
@@ -108,6 +148,7 @@ export const storageSection: SettingSection = {
   id: "storage",
   label: "Storage",
   fields: [
+    { id: "storage-root", label: "Data folder", keywords: ["folder", "move", "relocate", "path"] },
     { id: "storage-paths", label: "Data paths", keywords: ["folder", "database", "path", "settings file"] },
     { id: "storage-clear-cache", label: "Clear cached data", keywords: ["cache", "reset"] },
   ],

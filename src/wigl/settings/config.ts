@@ -8,6 +8,7 @@
 // takes effect on the next launch; there's no live-mutation path to keep
 // correct.
 import { invoke } from "@tauri-apps/api/core";
+import { appDataDir as tauriAppDataDir } from "@tauri-apps/api/path";
 import { markRestartRequired } from "./restartBanner";
 
 export type ConfigOverrides = Record<string, unknown>;
@@ -69,4 +70,16 @@ export const setConfigOverride = async (namespace: string, next: Record<string, 
   cached = { ...cached, [namespace]: next };
   await writeConfigOverrides(cached);
   markRestartRequired();
+};
+
+/** Where the db, plugins, etc. actually live — the OS's `app_data_dir()`
+ * unless a `storage.root` override is set (see settings/sections/storage.tsx).
+ * `wigl-config.json` itself never moves (see config_path in lib.rs) — this
+ * is the only file that has to live at a fixed, guessable location, since
+ * it's what tells every other path where to look. Callers must await
+ * hydrateConfig() first (main.tsx already does, before the first render),
+ * same requirement mergeConfigInto/getConfigOverrides have. */
+export const storageRoot = async (): Promise<string> => {
+  const root = getConfigOverrides("storage").root;
+  return typeof root === "string" && root ? root : tauriAppDataDir();
 };

@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
-import { appDataDir, join } from "@tauri-apps/api/path";
+import { join } from "@tauri-apps/api/path";
+import { storageRoot } from "@/wigl/settings/config";
 import { registerSettingsSection } from "@/wigl/settings/registry";
 import type { SettingSection } from "@/wigl/settings/types";
 import { runCmd } from "@/wigl/utils";
@@ -66,9 +67,10 @@ const tryReadFile = async (path: string): Promise<string | null> => {
   return out.code === 0 ? out.stdout : null;
 };
 
-/** Where installed plugins live. Sibling of `wigl.db` in the same per-OS
- * app-data dir, so "everything wigl owns on disk" stays one folder. */
-export const pluginsDir = async () => join(await appDataDir(), "plugins");
+/** Where installed plugins live. Sibling of `wigl.db` under storageRoot()
+ * (the OS's app-data dir unless a storage.root override relocates it, see
+ * settings/config.ts), so "everything wigl owns on disk" stays one folder. */
+export const pluginsDir = async () => join(await storageRoot(), "plugins");
 
 /** A plugin's own `import "./x.css"` builds to a sibling `index.css` next to
  * `index.js` (`scripts/widget.ts`'s `cssSibling`) — installed alongside it,
