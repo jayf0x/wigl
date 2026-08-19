@@ -40,6 +40,7 @@ import {
   springEasing,
 } from "./grid/math";
 import { useGlobalActions, useRegisterGlobalAction, useStorage } from "./hooks";
+import { toggleModeLabel, toggleWindowedMode } from "./settings/appMode";
 import { SettingsModal } from "./settings/SettingsModal";
 import { ThemeEffect } from "./theme/ThemeEffect";
 import {
@@ -710,6 +711,23 @@ export const Desktop = ({
     [],
   );
   useRegisterGlobalAction(settingsAction);
+  // Toggles the overlay/windowed flow via a Tier-2 "app.mode" override
+  // (lib.rs's windowed_mode()) and an immediate relaunch — see
+  // settings/appMode.ts. Reads `windowed` straight from this component's own
+  // prop (App.tsx's single is_windowed_mode round-trip, already threaded
+  // down) rather than re-invoking the command, same single-source-of-truth
+  // rule the rest of Desktop.tsx follows for it.
+  const toggleModeAction = useMemo(
+    () => ({
+      id: "toggle-mode",
+      label: toggleModeLabel(windowed),
+      run: () => {
+        toggleWindowedMode(windowed).catch(console.error);
+      },
+    }),
+    [windowed],
+  );
+  useRegisterGlobalAction(toggleModeAction);
   const globalActions = useGlobalActions();
 
   // The modal can extend past every widget's hit-rect (it's centered over

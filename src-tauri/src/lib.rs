@@ -105,6 +105,16 @@ const CONFIG_SCHEMA: &str = r#"{
         "cols": { "type": ["number", "null"] },
         "rows": { "type": ["number", "null"] }
       }
+    },
+    "app": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "\"windowed\" or \"overlay\" — see windowed_mode() in lib.rs. Beaten by the WIGL_MODE env var when that's set; otherwise this is checked before the Linux/Wayland auto-detect fallback.",
+          "enum": ["windowed", "overlay"]
+        }
+      }
     }
   }
 }
@@ -193,21 +203,77 @@ fn set_drag_active(state: tauri::State<DragActive>, active: bool) {
 // widgets, same grid/drag engine, just not glued to the desktop.
 // `WIGL_MODE=windowed`/`overlay` overrides the auto-detection for anyone who
 // wants the windowed flow on macOS or X11 too.
+// `app: tauri::AppHandle` (rather than no args) lets this command's answer
+// reflect a Tier-2 `app.mode` override the same way windowed_mode()'s other
+// caller (setup(), which has an `&App` handy already) does — see F10 in
+// backlog.md's history. AppHandle implements Manager same as App, so
+// app_data_dir() resolves the same way in both places.
 #[tauri::command]
-fn is_windowed_mode() -> bool {
-    windowed_mode()
+fn is_windowed_mode(app: tauri::AppHandle) -> bool {
+    windowed_mode(app.path().app_data_dir().ok().as_deref())
 }
 
-fn windowed_mode() -> bool {
+// `app_data_dir` is optional purely so callers that can't resolve one (there
+// aren't any today, but a future headless/CLI-ish caller might) still get
+// the env-var/Wayland precedence instead of being forced to fabricate a
+// path. Both real call sites (is_windowed_mode above, setup() below) pass
+// Some(..).
+fn windowed_mode(app_data_dir: Option<&std::path::Path>) -> bool {
     match std::env::var("WIGL_MODE").as_deref() {
         Ok("windowed") => return true,
         Ok("overlay") => return false,
         _ => {}
     }
+    if let Some(mode) = app_data_dir.and_then(config_mode_override) {
+        return mode;
+    }
     if !cfg!(target_os = "linux") {
         return false;
     }
     wayland_session()
+}
+
+// Reads wigl-config.json straight off disk with plain `fs` (same file
+// config_get/config_set touch), not through the async config_get command:
+// this runs inside setup(), before any webview/IPC exists to answer it. Any
+// read/parse failure (missing file, corrupt JSON, no "app.mode" key) falls
+// through to None so the caller moves on to its next precedence step rather
+// than treating "no override" as an error.
+fn config_mode_override(dir: &std::path::Path) -> Option<bool> {
+    let s = fs::read_to_string(dir.join(CONFIG_FILE)).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&s).ok()?;
+    parse_mode_override(&json)
+}
+
+// Split out from config_mode_override so the precedence logic itself (the
+// part actually worth locking down) is a pure function with no fs/AppHandle
+// dependency — see the #[test] below.
+fn parse_mode_override(config: &serde_json::Value) -> Option<bool> {
+    match config.get("app")?.get("mode")?.as_str()? {
+        "windowed" => Some(true),
+        "overlay" => Some(false),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod mode_override_tests {
+    use super::parse_mode_override;
+    use serde_json::json;
+
+    #[test]
+    fn reads_windowed_and_overlay() {
+        assert_eq!(parse_mode_override(&json!({"app": {"mode": "windowed"}})), Some(true));
+        assert_eq!(parse_mode_override(&json!({"app": {"mode": "overlay"}})), Some(false));
+    }
+
+    #[test]
+    fn none_when_absent_or_unrecognized() {
+        assert_eq!(parse_mode_override(&json!({})), None);
+        assert_eq!(parse_mode_override(&json!({"app": {}})), None);
+        assert_eq!(parse_mode_override(&json!({"app": {"mode": "sideways"}})), None);
+        assert_eq!(parse_mode_override(&json!({"grid": {"cell": 40}})), None);
+    }
 }
 
 // Is this process talking to a Wayland compositor? Separate from
@@ -420,7 +486,7 @@ pub fn run() {
         ])
         .setup(|app| {
             write_config_schema_if_missing(app.handle());
-            let windowed = windowed_mode();
+            let windowed = windowed_mode(app.path().app_data_dir().ok().as_deref());
             eprintln!(
                 "[wigl] mode: {} (WIGL_MODE={:?}, XDG_SESSION_TYPE={:?}, WAYLAND_DISPLAY={:?}, WEBKIT_DISABLE_DMABUF_RENDERER={:?})",
                 if windowed { "windowed" } else { "overlay" },
