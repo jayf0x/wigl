@@ -15,19 +15,28 @@ const WebsitesWidget = () => {
   // navigate the iframe on every keystroke — only on Enter.
   const [draft, setDraft] = useState(url);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  // Sites sending X-Frame-Options/frame-ancestors refuse the frame outright
+  // — WebKit fires the iframe's error event for this (confirmed against a
+  // real X-Frame-Options: SAMEORIGIN site), so show something instead of a
+  // silent blank pane. Reset on every navigation attempt.
+  const [blocked, setBlocked] = useState(false);
 
   // Keep the address bar in sync with the committed URL — covers the
   // initial storage read (arrives async, after first render) and external
   // changes (another window, the address-bar sync below).
   useEffect(() => setDraft(url), [url]);
 
-  const navigate = () => setUrl(normalizeUrl(draft));
+  const navigate = () => {
+    setBlocked(false);
+    setUrl(normalizeUrl(draft));
+  };
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") navigate();
   };
   const onClear = () => {
     setUrl("");
     setDraft("");
+    setBlocked(false);
   };
 
   // ponytail: cross-origin frames throw/are inaccessible on read — that's a
@@ -80,14 +89,22 @@ const WebsitesWidget = () => {
         </>
       }
     >
-      {url ? (
+      {url && !blocked ? (
         <iframe
           ref={iframeRef}
           src={url}
           onLoad={onLoad}
+          onError={() => setBlocked(true)}
           className="w-full h-full border-0"
           title="website"
         />
+      ) : url && blocked ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-3 text-center text-muted-foreground">
+          <Globe className="size-6 opacity-40" />
+          <span className="text-[11px] opacity-60">
+            this site refuses to embed (X-Frame-Options) — use the ↗ button above to open it in your browser
+          </span>
+        </div>
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
           <Globe className="size-6 opacity-40" />

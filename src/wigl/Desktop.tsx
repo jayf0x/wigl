@@ -413,6 +413,35 @@ export const Desktop = ({
     };
   }, [windowed, refreshMonitors]);
 
+  // Places one widget id into `items` (mutating it via push, same as the
+  // build effect below always did) — factored out so a widget id that
+  // appears *after* the initial layout already exists (F6's "duplicate
+  // widget": a reload lands a new instance id in `widgets` post-mount) can
+  // be placed the same way instead of silently never getting a layout entry.
+  const placeItem = (id: string, items: GridItem[], cols: number): void => {
+    const s = saved[id];
+    // Never trust storage blindly: a stale schema or unplugged monitor
+    // must degrade to "no saved position", not NaN positions or an
+    // orphaned widget (see docs/debugging.md's storage-shape-drift section).
+    const validPos = s != null && Number.isFinite(s.col) && Number.isFinite(s.row);
+    const mon =
+      s != null && Number.isFinite(s.m) && s.m! < (monitors.current?.length ?? Infinity) ? s.m! : 0;
+    if (mon !== monitorIndex) return;
+    const validSize = s != null && Number.isFinite(s.w) && Number.isFinite(s.h);
+    const w = validSize ? s!.w! : TILING.defaultSize.w;
+    const h = validSize ? s!.h! : TILING.defaultSize.h;
+    const pos = validPos ? s : autoPlace(items, w, h, cols);
+    items.push({
+      id,
+      w,
+      h,
+      col: Math.max(0, Math.min(pos.col, cols - w)),
+      row: Math.max(0, pos.row),
+      hidden: !!s?.closed,
+    });
+    if (!validPos) pendingReports.current.add(id);
+  };
+
   // Build the layout once storage has answered: this monitor's widgets only
   // (unassigned widgets land on monitor 0). A widget's real size/first-launch
   // position isn't known until its own <Widget w h col row> mounts and
@@ -423,38 +452,35 @@ export const Desktop = ({
     const cols = colsForWidth(window.innerWidth);
     const items: GridItem[] = [];
     pendingReports.current = new Set();
-    for (const id of Object.keys(widgets)) {
-      const s = saved[id];
-      // Never trust storage blindly: a stale schema or unplugged monitor
-      // must degrade to "no saved position", not NaN positions or an
-      // orphaned widget (see docs/debugging.md's storage-shape-drift section).
-      const validPos =
-        s != null && Number.isFinite(s.col) && Number.isFinite(s.row);
-      const mon =
-        s != null &&
-        Number.isFinite(s.m) &&
-        s.m! < (monitors.current?.length ?? Infinity)
-          ? s.m!
-          : 0;
-      if (mon !== monitorIndex) continue;
-      const validSize = s != null && Number.isFinite(s.w) && Number.isFinite(s.h);
-      const w = validSize ? s!.w! : TILING.defaultSize.w;
-      const h = validSize ? s!.h! : TILING.defaultSize.h;
-      const pos = validPos ? s : autoPlace(items, w, h, cols);
-      items.push({
-        id,
-        w,
-        h,
-        col: Math.max(0, Math.min(pos.col, cols - w)),
-        row: Math.max(0, pos.row),
-        hidden: !!s?.closed,
-      });
-      if (!validPos) pendingReports.current.add(id);
-    }
+    for (const id of Object.keys(widgets)) placeItem(id, items, cols);
     // Saved/default positions can conflict after code changes — settle them.
     settle(items, cols);
     setLayout(items);
   }, [loading, layout, saved, widgets, monitorIndex]);
+
+  // Reconciles new widget ids that show up *after* the layout above already
+  // built — a plain "Reload widgets" or F6's "Duplicate" both land a new id
+  // in `widgets` without ever clearing `layout`, so the effect above (gated
+  // on `!layout`) never runs again to pick it up. Appends only the missing
+  // ids in place, without touching anyone else's position — unlike a full
+  // rebuild (setLayout(null)), which would also needlessly re-settle every
+  // already-placed widget.
+  useEffect(() => {
+    if (loading || !layout) return;
+    const known = new Set(layout.map((i) => i.id));
+    const missing = Object.keys(widgets).filter((id) => !known.has(id));
+    if (missing.length === 0) return;
+    const cols = colsForWidth(window.innerWidth);
+    setLayout((prev) => {
+      if (!prev) return prev;
+      const items = [...prev];
+      for (const id of missing) {
+        if (items.some((i) => i.id === id)) continue;
+        placeItem(id, items, cols);
+      }
+      return items;
+    });
+  }, [loading, layout, widgets, monitorIndex]);
 
   // A widget's <Widget w h col row> reports its real size (and, the first
   // time it's ever seen with no saved position, its requested first-launch
