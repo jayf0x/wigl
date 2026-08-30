@@ -16,10 +16,56 @@ Don't resurrect either piecemeal by building toward them feature-by-feature.
 
 ## Explicitly out of scope
 
-- **Widget distribution beyond a local folder.** Cloud sync, a
-  hosted marketplace/registry, or installing a widget from a URL — installs
-  are local-folder only (`docs/widgets.md`). No trigger to revisit; this is
-  a standing scope boundary, not a deferred feature.
+- **A hosted marketplace/registry for discovering widgets.** Deferred, not
+  rejected — sharing widgets has to work somehow eventually, but building
+  hosting/discovery/moderation upfront is energy spent before there's
+  proof anyone but the owner wants to share one. Today's actual mechanism
+  is already more than "local-folder only": `widget:add <git-url>`
+  (`docs/widgets.md`) clones+builds+installs from any git repo, and the
+  Settings modal has an "install from a URL" field for prebuilt widgets —
+  that's the interim answer to "how do we share a widget," git hosting
+  standing in for a registry. What's still missing before a marketplace
+  makes sense: no review/diff step before an install from an arbitrary URL
+  overwrites or runs new code, no discovery surface (you have to already
+  know the URL). No cloud sync of a user's own layout/state either way.
+  Trigger to revisit:
+  sharing widgets by URL becomes a real recurring need — start with the
+  install-time review/diff gap above before building discovery/hosting.
+
+## Rejected idea's
+
+- **A web/PWA variant of wigl.** Explored across three shapes, all
+  rejected:
+  (A) run real wigl widgets in-browser via WebContainers — needs
+  cross-origin isolation (`SharedArrayBuffer`); Safari's team has no plan
+  to implement the credentialless mode this requires, so no iOS Safari,
+  ever. And even where it runs, the sandbox is fake: WebContainers moves
+  the sandbox, it doesn't grant a browser tab access to the *user's actual
+  machine* — `terminal`/`repos`/`LocalCode` (all real shell-out per
+  `docs/architecture.md`'s "data comes from shell commands" rule) still
+  couldn't run.
+  (B) a genuinely separate lightweight project (`./pwa`): no Tauri/Rust,
+  only `storage`/`network`-style widgets (clock/todo/calendar-shaped,
+  pure-data or API-fetch), sharing wigl's theme tokens by copy, not by
+  importing `@/wigl`. Cross-tab drag (native HTML5 Drag and Drop, no
+  `BroadcastChannel` needed for the core mechanic) was the one
+  differentiator worth prototyping. A drag-only spike (`todo-PWA.md`) was
+  drafted and then removed before being built — the real open question
+  ("is pure-data-widgets-only actually useful enough to justify a second
+  project") was never answered, because nothing beyond the drag mechanic
+  was ever attempted.
+  (C) desktop-as-local-bridge: wigl-desktop runs a local WebSocket/HTTP
+  server so an open wigl-web tab, when a desktop instance is present on
+  the same machine, gets real shell-out through it as a backend; falls
+  back to (B)'s pure-data widgets otherwise. Rejected before any code —
+  turns wigl from a local-only trusted app into one exposing a
+  network-facing control plane on localhost, a real attack surface
+  (unauthenticated local port reachable by any page in any tab) needing an
+  origin allowlist + auth token at minimum. A security-review-sized cost
+  unrelated to what any of this was trying to prove.
+  No trigger to revisit any of the three — if a want for wigl on a
+  phone/other device resurfaces, start over from a concrete want, not by
+  resuming this exploration.
 - **Repos widget, from the original build spec**: backlog-item counts per
   project or any parsing of project-internal files beyond git state; the
   npm:deploy-gated three-state badge from the original Übersicht widget —
