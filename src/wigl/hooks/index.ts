@@ -4,5 +4,5 @@ export { type GlobalAction, useGlobalActions, useRegisterGlobalAction } from "./
 export { hours, type UseQueryOptions, useQuery } from "./useQuery";
 export { type PtyExit, type PtyOptions, type UsePtyResult, usePty } from "./usePty";
 export { useRelativeTime } from "./useRelativeTime";
-export { type SettingField, type SettingSection } from "../settings/types";
+export type { SettingField, SettingSection } from "../settings/types";
 export { useStorage } from "./useStorage";
