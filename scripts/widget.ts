@@ -512,6 +512,7 @@ interface CliCommand {
   label: string;
   usage: string;
   run: (arg?: string, extra?: string) => Promise<void>;
+}
 
 const COMMANDS: CliCommand[] = [
   {
