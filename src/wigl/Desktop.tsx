@@ -25,7 +25,8 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { availableMonitors } from "@tauri-apps/api/window";
-import { TILING } from "./grid/config";
+import { ErrorOverlay } from "./ErrorOverlay";
+import { applyGridOverrides, type GridOverrides, TILING } from "./grid/config";
 import {
   autoPlace,
   colsForWidth,
@@ -172,16 +173,17 @@ class WidgetErrorBoundary extends Component<
   }
   render() {
     if (this.state.error) {
+      // Render the crash through the shared ErrorOverlay inside a widget-
+      // shaped card, so an uncaught throw (a missing permission, a first-
+      // render bug) reads as "this one widget is broken" contained in its
+      // own tile — not raw red text floating on the desktop.
       return (
-        <div
-          style={{
-            padding: 12,
-            fontSize: 11,
-            color: "#fca5a5",
-            overflow: "auto",
-          }}
-        >
-          widget "{this.props.id}" crashed: {this.state.error.message}
+        <div className="dark flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-card/95 font-mono text-card-foreground">
+          <ErrorOverlay
+            kind="unknown"
+            title={`"${this.props.id}" crashed`}
+            message={this.state.error.message}
+          />
         </div>
       );
     }
@@ -311,6 +313,9 @@ export const Desktop = ({
   // this isn't any one plugin's state, so it doesn't go through the
   // registry's per-plugin key prefix.
   const [instances, setInstances] = useStorage<WidgetInstances>(WIDGET_INSTANCES_KEY, {});
+  // Settings > Grid writes this key; applied live onto TILING below (no
+  // restart — grid math is JS-only, so there's nothing native to re-read).
+  const [gridOverrides] = useStorage<GridOverrides>("wigl_grid", {});
   const [layout, setLayout] = useState<GridItem[] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [resizeId, setResizeId] = useState<string | null>(null);
@@ -651,6 +656,25 @@ export const Desktop = ({
     window.addEventListener("resize", buildAnchors);
     return () => window.removeEventListener("resize", buildAnchors);
   }, [buildAnchors]);
+
+  // Retune the grid live when Settings > Grid changes it (this window's edit
+  // or another monitor's, via useStorage's cross-window broadcast): mutate
+  // the shared TILING object, rebuild the anchor field, and drop `layout` so
+  // the build effect re-runs from the new cell/gap/padding — same path
+  // "Reset layout" already uses. The first run (mount, before storage has
+  // answered) only applies the value onto TILING and lets the build effect
+  // do the initial layout — no `setLayout(null)`, so a fresh launch with no
+  // custom grid never pays for a redundant rebuild.
+  const gridSettled = useRef(false);
+  useEffect(() => {
+    applyGridOverrides(gridOverrides);
+    if (!gridSettled.current) {
+      gridSettled.current = true;
+      return;
+    }
+    buildAnchors();
+    setLayout(null);
+  }, [gridOverrides, buildAnchors]);
 
   // Moves the proximity glow to the cursor — replaces the old per-frame
   // cursor.current used only by canvas math.

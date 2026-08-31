@@ -24,6 +24,16 @@ Rules for keeping this file real (same spirit as `backlog.md`):
 
 ## Queue
 
+- **`applyGridOverrides` in `src/wigl/grid/config.ts`.** New: Settings > Grid
+  went from Tier-2/restart to live — it writes a `useStorage("wigl_grid")`
+  row that `Desktop.tsx` feeds to `applyGridOverrides`, which mutates the
+  shared `TILING` object in place and falls each field back to a module-load
+  snapshot (`GRID_DEFAULTS`) when absent. Worth one test: pass `{cell: 100,
+  padding: {top: 5}}` then `{}` and assert `TILING` ends back at the exact
+  defaults both for the scalars and the `padding` object (the `{}` = full
+  reset contract is the easy thing to regress — a naive `Object.assign`
+  merge would leave `cell` at 100). Pure function, no DOM.
+
 - **Corner resize (two-axis) in `Desktop.tsx`'s `onResizeMove`.** Edge resize
   (`tests/desktop-resize.test.ts`) only exercises single-axis handles ("e",
   "w"). Corner handles ("ne"/"nw"/"se"/"sw") now exist and rely on the same

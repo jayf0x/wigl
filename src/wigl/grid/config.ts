@@ -19,3 +19,37 @@ export const TILING = {
     influence: 150, // px radius around the cursor where anchors react
   },
 };
+
+// The subset the Settings > Grid section can tune, snapshotted at module
+// load (before main.tsx merges any Tier-2 override in) so "reset to default"
+// has a real baseline to fall back to. Only these five fields — the rest of
+// TILING (spring, liftScale, field) has no UI.
+const GRID_DEFAULTS = {
+  cell: TILING.cell,
+  gap: TILING.gap,
+  cols: TILING.cols,
+  rows: TILING.rows,
+  padding: { ...TILING.padding },
+};
+
+export type GridOverrides = {
+  cell?: number;
+  gap?: number;
+  cols?: number | null;
+  rows?: number | null;
+  padding?: Partial<typeof GRID_DEFAULTS.padding>;
+};
+
+// Applies a Grid-settings override object onto the live TILING object in
+// place — grid math reads TILING per call (grid/math.ts), so mutating it and
+// rebuilding the layout is all it takes to retune the grid without a
+// restart. Every field falls back to its default when absent, so passing
+// `{}` is a genuine reset. Desktop.tsx calls this on the `wigl-grid`
+// broadcast the Grid section emits.
+export const applyGridOverrides = (o: GridOverrides): void => {
+  TILING.cell = typeof o.cell === "number" && o.cell > 0 ? o.cell : GRID_DEFAULTS.cell;
+  TILING.gap = typeof o.gap === "number" && o.gap >= 0 ? o.gap : GRID_DEFAULTS.gap;
+  TILING.cols = typeof o.cols === "number" && o.cols > 0 ? o.cols : GRID_DEFAULTS.cols;
+  TILING.rows = typeof o.rows === "number" && o.rows > 0 ? o.rows : GRID_DEFAULTS.rows;
+  TILING.padding = { ...GRID_DEFAULTS.padding, ...o.padding };
+};

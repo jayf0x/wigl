@@ -1,21 +1,21 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getConfigOverrides, setConfigOverride } from "../config";
-import type { SettingSection } from "../types";
+import { useStorage } from "../../hooks/useStorage";
+import type { GridOverrides } from "../../grid/config";
 import { TILING } from "../../grid/config";
+import type { SettingSection } from "../types";
 
-// Tier 2 (restart-required, see settings/config.ts): editing here never
-// mutates the running TILING object — only the on-disk override, applied
-// fresh the next time main.tsx hydrates. The field always shows the
-// *pending* value (an override already saved this session, else whatever
-// TILING actually booted with), not a value that's live on screen right now.
+// Live (Tier 1): the override object is a plain `useStorage` row ("wigl_grid").
+// Desktop.tsx reads the same key, applies it onto the running TILING and
+// rebuilds the layout — no restart. Grid math is entirely JS-side (Rust
+// never sees TILING), so there was never anything a restart was actually
+// needed to re-read; the old Tier-2 path just predated wiring the re-apply.
 //
 // liftScale/spring/field are left out — TILING's more cosmetic/animation
 // knobs, nobody's asked to tune them yet. Add a row here the same way if
 // that changes. ponytail: scope kept to the fields someone would plausibly
 // resize their grid with.
-const NUMBER_FIELDS: Array<{ key: keyof typeof TILING & string; label: string }> = [
+const NUMBER_FIELDS: Array<{ key: "cell" | "gap"; label: string }> = [
   { key: "cell", label: "Cell size (px)" },
   { key: "gap", label: "Gap (px)" },
 ];
@@ -33,16 +33,14 @@ const NULLABLE_FIELDS: Array<{ key: "cols" | "rows"; label: string; hint: string
 ];
 
 const GridSection = () => {
-  // Local pending state, seeded once from whatever's already saved — a plain
-  // useState (not useStorage: this is Tier 2, one write on blur/change, no
-  // cross-window live sync to do).
-  const [overrides, setOverrides] = useState(() => getConfigOverrides("grid"));
-  const current = { ...TILING, ...overrides, padding: { ...TILING.padding, ...(overrides.padding as object) } };
-
-  const commit = (next: Record<string, unknown>) => {
-    setOverrides(next);
-    setConfigOverride("grid", next).catch((e) => console.error("[wigl] grid settings write failed", e));
+  const [overrides, setOverrides] = useStorage<GridOverrides>("wigl_grid", {});
+  const current = {
+    ...TILING,
+    ...overrides,
+    padding: { ...TILING.padding, ...overrides.padding },
   };
+
+  const commit = (next: GridOverrides) => setOverrides(next);
 
   const reset = () => commit({});
 
@@ -93,7 +91,7 @@ const GridSection = () => {
                 onChange={(e) =>
                   commit({
                     ...overrides,
-                    padding: { ...(overrides.padding as object), [key]: Number(e.target.value) || 0 },
+                    padding: { ...overrides.padding, [key]: Number(e.target.value) || 0 },
                   })
                 }
                 className="h-7 w-20"

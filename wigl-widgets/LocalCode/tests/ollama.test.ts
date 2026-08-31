@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 test("startOllama resolves immediately, without spawning, when already reachable", async () => {
-  globalThis.fetch = (async () => new Response(null, { status: 200 })) as typeof fetch;
+  globalThis.fetch = (async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
 
   const handle = await startOllama();
   // No-op stop: startOllama never spawned anything to own killing.
@@ -23,7 +23,7 @@ test("startOllama resolves immediately, without spawning, when already reachable
 test("startOllama rejects if ollama never becomes reachable within the timeout", async () => {
   globalThis.fetch = (async () => {
     throw new Error("connection refused");
-  }) as typeof fetch;
+  }) as unknown as typeof fetch;
 
   await expect(startOllama(50)).rejects.toThrow("ollama serve didn't become reachable in time");
 });

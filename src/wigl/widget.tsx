@@ -87,18 +87,23 @@ export const Widget = ({
     <div
       data-wigl-widget
       className={cn(
-        "dark flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-card/95 font-mono text-card-foreground",
+        "dark relative flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-card/95 font-mono text-card-foreground",
         className,
       )}
     >
-      {minimized ? (
-        <MinimizedWidget slot={slot} background={minimizedBackground} />
-      ) : (
-        <>
-          <WidgetHeader slot={slot}>{headerContent}</WidgetHeader>
-          {children}
-        </>
-      )}
+      {minimized && <MinimizedWidget slot={slot} background={minimizedBackground} />}
+      {/* Header + body stay mounted while minimized (just hidden under the
+          1x1 overlay above) — a widget holding a live resource (the
+          terminal's xterm/PTY, a running timer, scroll position) shouldn't
+          be torn down and rebuilt on every minimize/restore. Header stays a
+          direct child of the root so App.css's `[data-wigl-widget] >
+          :not([data-widget-header])` selection rules still land right. */}
+      <WidgetHeader slot={slot} className={cn(minimized && "hidden")}>
+        {headerContent}
+      </WidgetHeader>
+      <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", minimized && "hidden")}>
+        {children}
+      </div>
     </div>
   );
 };

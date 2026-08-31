@@ -272,6 +272,13 @@ const allWidgetDirs = async (): Promise<string[]> => {
  * for the no-arg "install everything" form — a single-widget install has no
  * full picture of what should currently exist, so it can't safely prune. */
 const pruneStaleInstalls = async (currentIds: Set<string>) => {
+  // Never prune against an empty source set: a transient readdir failure in
+  // allWidgetDirs() (it only warns, still returns []) would otherwise delete
+  // every installed widget as "stale".
+  if (currentIds.size === 0) {
+    console.warn("⚠ skipping stale-install prune — no current widgets to compare against");
+    return;
+  }
   const root = installRoot();
   const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
   for (const e of entries) {

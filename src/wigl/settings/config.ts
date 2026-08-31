@@ -1,12 +1,13 @@
 // Tier-2 settings: one JSON file of *overrides* (app_data_dir()/wigl-config.json,
 // written natively by the config_get/config_set Rust commands — same atomic
-// tmp+rename precedent as secrets.json, see src-tauri/src/lib.rs), merged
-// over each module's own compile-time defaults once at startup (main.tsx
-// awaits hydrateConfig() before the first render). Restart-required by rule
-// (see todo-settings-ui.md's "Storage" section) — nothing here is re-read
-// after hydrate() resolves, so a field changed via the Settings modal only
-// takes effect on the next launch; there's no live-mutation path to keep
-// correct.
+// tmp+rename precedent as secrets.json, see src-tauri/src/lib.rs), read once
+// at startup (main.tsx awaits hydrateConfig() before the first render).
+// Restart-required by rule: nothing here is re-read after hydrate() resolves,
+// so a field changed via the Settings modal only takes effect on the next
+// launch. This tier is now only `storage.root` (where the db/plugins live —
+// can't move mid-session) and `app.mode` (windowed/overlay — restarts
+// itself). Anything that *can* apply live belongs in `useStorage` instead,
+// like Settings > Grid does (see settings/sections/grid.tsx).
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir as tauriAppDataDir } from "@tauri-apps/api/path";
 import { markRestartRequired } from "./restartBanner";
@@ -35,26 +36,7 @@ export const hydrateConfig = (): Promise<ConfigOverrides> => {
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
-/**
- * One level of recursive merge over `target` — enough for TILING's shape
- * (padding/spring/field are flat objects, never nested further). Mutates
- * `target` in place so an already-imported reference (grid/config.ts's
- * TILING) picks the override up; call once, at startup, after hydrateConfig()
- * resolves — see main.tsx.
- */
-export const mergeConfigInto = <T extends Record<string, unknown>>(target: T, namespace: string): T => {
-  const overrides = cached[namespace];
-  if (!isPlainObject(overrides)) return target;
-  const t = target as Record<string, unknown>;
-  for (const [key, value] of Object.entries(overrides)) {
-    const current = t[key];
-    if (isPlainObject(current) && isPlainObject(value)) Object.assign(current, value);
-    else t[key] = value;
-  }
-  return target;
-};
-
-/** The currently-saved override object for one namespace (`"grid"`, ...) —
+/** The currently-saved override object for one namespace (`"storage"`, ...) —
  * what a settings section reads to show its fields' current values.
  * Distinct from mergeConfigInto: a section edits this raw override object,
  * not the already-merged live defaults. */
