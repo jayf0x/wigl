@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStorage } from "@/wigl/hooks";
+import { runCmd } from "@/wigl/utils";
 import { MaClient, type MaEndpoint } from "./maClient";
 import {
   DEFAULT_PASSWORD,
@@ -42,6 +43,9 @@ export interface MusicApi {
   results: SearchResults | null;
   searching: boolean;
   volume: number;
+  /** Enabled MA music-provider instance ids (e.g. "radiobrowser", "ytmusic"). */
+  providers: string[];
+  serverUrl: string;
   retry: () => void;
   search: (query: string) => void;
   clearResults: () => void;
@@ -54,6 +58,8 @@ export interface MusicApi {
   setVolume: (v: number) => void;
   /** Prime the browser audio output — call from a user gesture (first play). */
   unlock: () => void;
+  /** Open the Music Assistant web UI (to add a provider like YouTube Music). */
+  openServer: () => void;
   imageUrl: (img?: MediaImage | null) => string | null;
 }
 
@@ -72,6 +78,7 @@ export const useMusic = (): MusicApi => {
   const [results, setResults] = useState<SearchResults | null>(null);
   const [searching, setSearching] = useState(false);
   const [volume, setVolumeState] = useState(100);
+  const [providers, setProviders] = useState<string[]>([]);
   const [attempt, setAttempt] = useState(0);
 
   const clientRef = useRef<MaClient | null>(null);
@@ -208,6 +215,19 @@ export const useMusic = (): MusicApi => {
         backoff = RECONNECT_MIN_MS;
         setState("ready");
         void refreshQueue();
+
+        client
+          .command<{ domain: string; instance_id: string; type: string; enabled: boolean }[]>(
+            "config/providers",
+          )
+          .then((all) =>
+            setProviders(
+              (all ?? [])
+                .filter((p) => p.type === "music" && p.enabled)
+                .map((p) => p.instance_id),
+            ),
+          )
+          .catch(() => {});
       } catch (e) {
         if (cancelled) return;
         teardown();
@@ -287,6 +307,12 @@ export const useMusic = (): MusicApi => {
     sendspinRef.current?.setVolume(v);
   }, []);
 
+  const openServer = useCallback(() => {
+    runCmd("sh", ["-c", `open ${httpBase} || xdg-open ${httpBase}`]).catch((e) =>
+      console.warn("[music] openServer", e),
+    );
+  }, [httpBase]);
+
   return {
     state,
     error,
@@ -295,6 +321,8 @@ export const useMusic = (): MusicApi => {
     results,
     searching,
     volume,
+    providers,
+    serverUrl: httpBase,
     retry: () => setAttempt((n) => n + 1),
     search,
     clearResults: () => setResults(null),
@@ -306,6 +334,7 @@ export const useMusic = (): MusicApi => {
     clearQueue: () => cmd("player_queues/clear"),
     setVolume,
     unlock: () => void sendspinRef.current?.unlock().catch(() => {}),
+    openServer,
     imageUrl,
   };
 };

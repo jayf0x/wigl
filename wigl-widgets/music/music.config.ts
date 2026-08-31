@@ -10,9 +10,10 @@ export const MA_PORT = 8095;
 
 /** First-run onboarding creates this admin user; the widget then logs in as
  * it on every reconnect. Localhost-only dev credentials — overridable in
- * Settings. */
-export const DEFAULT_USERNAME = "wigl";
-export const DEFAULT_PASSWORD = "wigl-local-dev";
+ * Settings, and the same login works at http://127.0.0.1:8095 for adding
+ * providers (YouTube Music etc). MA requires an 8-char minimum password. */
+export const DEFAULT_USERNAME = "test";
+export const DEFAULT_PASSWORD = "testtest";
 
 /** Storage keys (auto-prefixed with `music:` by the plugin registry). */
 export const KEYS = {
@@ -36,11 +37,12 @@ export const SEARCH_MEDIA_TYPES = ["radio", "artist", "album", "track", "playlis
 
 export const SEARCH_LIMIT = 8;
 
-/** Sendspin codec preference. Opus/FLAC get filtered out by the SDK on
- * engines that can't do them (WKWebView drops both — no WebCodecs in a
- * non-secure context, no FLAC in Safari), leaving raw PCM, which is fine
- * over localhost. */
-export const SENDSPIN_CODECS = ["opus", "flac", "pcm"] as const;
+/** Sendspin codec: raw PCM only. Opus needs a WebCodecs `AudioDecoder` (absent
+ * in WKWebView) or the WASM `opus-encdec` fallback (flaky to load in the Tauri
+ * webview); Safari has no FLAC. PCM needs no decoder at all — ~1.4 Mbit/s for
+ * 44.1k/16/stereo, irrelevant over localhost — so it's the one format certain
+ * to produce sound here. */
+export const SENDSPIN_CODECS = ["pcm"] as const;
 
 /** Docker container name used by Phase 4 adopt/start. Matches the `docker
  * run --name` in todo-musicplayer.md. */

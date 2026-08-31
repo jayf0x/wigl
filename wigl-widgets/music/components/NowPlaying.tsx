@@ -1,10 +1,8 @@
-import { useState } from "react";
-import { Disc3, Pause, Play, Radio, SkipBack, SkipForward, Volume2 } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useEffect, useRef, useState } from "react";
+import { Disc3, Pause, Play, Radio, SkipBack, SkipForward, Volume1, Volume2, VolumeX } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/wigl/utils";
 import type { MusicApi } from "../useMusic";
-import { Equalizer } from "./Equalizer";
 
 const fmt = (s: number) => {
   if (!s || s < 0 || !Number.isFinite(s)) return "0:00";
@@ -25,7 +23,7 @@ const Artwork = ({ url, radio }: { url: string | null; radio: boolean }) => {
           draggable={false}
         />
       ) : (
-        <div className="flex size-full items-center justify-center text-muted-foreground/40">
+        <div className="flex size-full items-center justify-center text-muted-foreground/30">
           {radio ? <Radio className="size-1/3" /> : <Disc3 className="size-1/3" />}
         </div>
       )}
@@ -33,7 +31,7 @@ const Artwork = ({ url, radio }: { url: string | null; radio: boolean }) => {
   );
 };
 
-const TransportButton = ({
+const IconBtn = ({
   onClick,
   label,
   primary,
@@ -52,13 +50,65 @@ const TransportButton = ({
     className={cn(
       "flex items-center justify-center rounded-full transition-colors duration-150",
       primary
-        ? "size-9 bg-primary text-primary-foreground hover:bg-primary/85"
+        ? "size-9 bg-foreground text-background hover:bg-foreground/85"
         : "size-7 text-muted-foreground hover:text-foreground",
     )}
   >
     {children}
   </button>
 );
+
+const VolumeControl = ({ api }: { api: MusicApi }) => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Collapse when focus/pointer leaves the control — no popover, no portal,
+  // so nothing can escape the widget bounds (which was letting clicks fall
+  // through to the desktop).
+  useEffect(() => {
+    if (!open) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const close = (e: Event) => {
+      if (!el.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", close, true);
+    return () => document.removeEventListener("pointerdown", close, true);
+  }, [open]);
+
+  const Icon = api.volume === 0 ? VolumeX : api.volume < 50 ? Volume1 : Volume2;
+
+  return (
+    <div ref={wrapRef} className="flex items-center gap-2" data-no-drag>
+      {open && (
+        <>
+          <Slider
+            className="w-20"
+            value={[api.volume]}
+            min={0}
+            max={100}
+            onValueChange={(v) => api.setVolume(Array.isArray(v) ? v[0] : v)}
+          />
+          <span className="w-5 text-right text-[10px] text-muted-foreground tabular-nums">
+            {Math.round(api.volume)}
+          </span>
+        </>
+      )}
+      <button
+        type="button"
+        data-no-drag
+        aria-label={open ? "Hide volume" : "Volume"}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "rounded-md p-1 transition-colors",
+          open ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <Icon className="size-3.5" />
+      </button>
+    </div>
+  );
+};
 
 export const NowPlaying = ({ api }: { api: MusicApi }) => {
   const { now } = api;
@@ -67,51 +117,36 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
   return (
     <div className="flex flex-col gap-3 border-border border-b p-3">
       <div className="flex gap-3">
-        <div className="w-24">
+        <div className="w-20">
           <Artwork url={now?.artworkUrl ?? null} radio={!!now?.isRadio} />
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              {now?.isRadio ? (
-                <>
-                  <Equalizer bars={4} active={!!now?.playing} className="h-2.5 text-primary" />
-                  <span className="music-tag">On air</span>
-                </>
-              ) : (
-                <span className="music-tag">{now ? "Now playing" : "Idle"}</span>
-              )}
-            </div>
-            <p className="music-serif mt-1 line-clamp-2 text-[19px] leading-[1.15] text-foreground">
-              {now?.title ?? "Nothing queued"}
-            </p>
-            <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
-              {now?.subtitle || (now ? "" : "Search below to start")}
-            </p>
-          </div>
-
-          <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground tabular-nums">
-            <span>{now?.isRadio ? "LIVE" : fmt(now?.elapsed ?? 0)}</span>
-            <span className="relative h-px flex-1 bg-border">
-              {!now?.isRadio && (
-                <span
-                  className="absolute inset-y-0 left-0 bg-primary"
-                  style={{ width: `${pct}%` }}
-                />
-              )}
-            </span>
-            <span>{now?.isRadio ? "" : fmt(now?.duration ?? 0)}</span>
-          </div>
+        <div className="flex min-w-0 flex-1 flex-col justify-center">
+          <p className="music-serif line-clamp-2 text-[18px] leading-[1.15] text-foreground">
+            {now?.title ?? "Nothing playing"}
+          </p>
+          <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
+            {now?.isRadio ? "Live radio" : now?.subtitle || (now ? "" : "Search to start")}
+          </p>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2 text-[10px] text-muted-foreground tabular-nums">
+        <span className="w-8">{now?.isRadio ? "live" : fmt(now?.elapsed ?? 0)}</span>
+        <span className="relative h-px flex-1 bg-border">
+          {!now?.isRadio && now && (
+            <span className="absolute inset-y-0 left-0 bg-foreground" style={{ width: `${pct}%` }} />
+          )}
+        </span>
+        <span className="w-8 text-right">{now && !now.isRadio ? fmt(now.duration) : ""}</span>
       </div>
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
-          <TransportButton label="Previous track" onClick={api.previous}>
+          <IconBtn label="Previous track" onClick={api.previous}>
             <SkipBack className="size-4" fill="currentColor" />
-          </TransportButton>
-          <TransportButton
+          </IconBtn>
+          <IconBtn
             label={now?.playing ? "Pause" : "Play"}
             primary
             onClick={() => {
@@ -124,32 +159,13 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
             ) : (
               <Play className="size-4 translate-x-px" fill="currentColor" />
             )}
-          </TransportButton>
-          <TransportButton label="Next track" onClick={api.next}>
+          </IconBtn>
+          <IconBtn label="Next track" onClick={api.next}>
             <SkipForward className="size-4" fill="currentColor" />
-          </TransportButton>
+          </IconBtn>
         </div>
 
-        <Popover>
-          <PopoverTrigger
-            data-no-drag
-            className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground text-xs tabular-nums transition-colors hover:text-foreground"
-          >
-            <Volume2 className="size-3.5" />
-            {Math.round(api.volume)}
-          </PopoverTrigger>
-          <PopoverContent className="w-40" side="top" data-no-drag>
-            <div className="flex items-center gap-2">
-              <Volume2 className="size-3.5 shrink-0 text-muted-foreground" />
-              <Slider
-                value={[api.volume]}
-                min={0}
-                max={100}
-                onValueChange={(v) => api.setVolume(Array.isArray(v) ? v[0] : v)}
-              />
-            </div>
-          </PopoverContent>
-        </Popover>
+        <VolumeControl api={api} />
       </div>
     </div>
   );

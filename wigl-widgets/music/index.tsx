@@ -11,7 +11,7 @@ import { useMusic } from "./useMusic";
 const StatusDot = ({ state }: { state: ReturnType<typeof useMusic>["state"] }) => {
   const color =
     state === "ready"
-      ? "bg-primary"
+      ? "bg-foreground"
       : state === "offline"
         ? "bg-destructive"
         : "bg-muted-foreground animate-pulse";
@@ -62,7 +62,7 @@ const MusicWidget = () => {
       className="music-widget"
       minimizedBackground={
         api.now?.playing ? (
-          <Equalizer bars={5} className="h-4 text-primary" />
+          <Equalizer bars={5} className="h-4 text-foreground" />
         ) : (
           <AudioLines className="size-4 text-muted-foreground" />
         )
@@ -81,10 +81,10 @@ const MusicWidget = () => {
         {api.state === "offline" ? (
           <ErrorOverlay
             kind="known"
-            title="Music Assistant isn’t reachable"
+            title="Music Assistant isn’t running"
             message={
               api.error ??
-              "Start the Music Assistant server (see todo-musicplayer.md), then retry."
+              `Start it with:  docker start wigl-ma  — or turn on "Auto-start server" in this widget's settings.`
             }
             onRetry={api.retry}
           />
