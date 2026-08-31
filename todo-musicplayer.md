@@ -3,7 +3,7 @@
 The `music` widget plays and controls a **local Music Assistant (MA) server**.
 Core playback (radio + free YouTube Music), search, queue, now-playing, and the
 Settings section are **built and working** (`wigl-widgets/music/`). This file is
-now the feature backlog for turning it from "plays music" into a full modern
+the feature backlog for turning it from "plays music" into a full modern
 player — same shape and rules as the repo `backlog.md`:
 
 - Every entry is a problem someone can pick up and finish in one sitting.
@@ -14,9 +14,11 @@ player — same shape and rules as the repo `backlog.md`:
 - Entries are grouped by area and numbered per group (`R1`, `P1`, …); numbers
   aren't stable — reference an entry by its title if you point at it elsewhere.
 
-Work **M0 first** — it produces the prioritised list everything else is
-measured against. Then take entries in roughly the order they're written;
-several are independent and can go in any order (noted per entry).
+**M0 (compare with real players) is done** — see `wigl-widgets/music/COMPARISON.md`
+for the capability table and the five reference players (cloned into
+`.idea/refplayers/`). This backlog was rewritten from it. Take entries roughly
+top to bottom; the **infra section (X) comes first** because most feature
+entries hang off it — build the shared piece before its second consumer.
 
 ---
 
@@ -30,7 +32,9 @@ same at `http://127.0.0.1:8095`.
 
 **Live source of truth for every command shape:**
 `http://127.0.0.1:8095/api-docs/commands.json` (and `/api-docs/openapi.json`
-for REST). Don't guess API shapes — read them there against the running server.
+for REST + model schemas). Don't guess API shapes — read them there against the
+running server. The REST `POST /api` envelope returns a bare JSON value (a list
+or object), **not** `{result: …}` — the `/ws` envelope is `{message_id, result}`.
 
 **Widget ↔ MA, two WebSockets on port 8095:**
 
@@ -60,19 +64,21 @@ not an `AnalyserNode`.
 | Need | Command |
 |------|---------|
 | Search | `music/search {search_query, media_types[], limit, providers[]?}` → `SearchResults` |
-| Browse a provider | `music/browse {path}` (e.g. `radiobrowser://popularity`) |
-| Recommendation rows | `music/recommendations` (library-based; empty on a fresh install) |
-| Queue snapshot | `player_queues/get {queue_id}`, `player_queues/items {queue_id, limit, offset}` |
-| Enqueue / play | `player_queues/play_media {queue_id, media:<uri or item>, option:"replace"|"next"|"add"|"replace_next", radio_mode?}` |
+| Browse a provider | `music/browse {path}` — root returns provider folders; each → `Artists/Albums/Tracks/Playlists` folders. `music/recommendations` is empty until the library has content — don't build discovery on it. |
+| Recently played | `music/recently_played_items {limit, media_types[]?}` → `ItemMapping[]` (server-side history, real items) |
+| Queue snapshot | `player_queues/get {queue_id}` (→ `PlayerQueue`, has `flow_mode`, `repeat_mode`, `shuffle_enabled`, `current_index`), `player_queues/items {queue_id, limit, offset}` (→ `QueueItem[]`, each has `streamdetails`, `queue_item_id`) |
+| Enqueue / play | `player_queues/play_media {queue_id, media:<uri or item>, option:"replace"|"next"|"add"|"replace_next", radio_mode?}`. `QueueOption` enum = `play/replace/next/replace_next/add`. `radio_mode` is deprecated → prefer a `radio_playlist://` dynamic playlist, but still works. |
 | Transport | `player_queues/{play,pause,next,previous,stop,clear}` `{queue_id}` |
-| Queue edit | `player_queues/{move_item,move_item_end,delete_item,play_index}` `{queue_id, …}` |
-| Repeat / shuffle | `player_queues/{repeat,shuffle}` `{queue_id, …}` |
-| Seek | `player_queues/seek {queue_id, position}` — **see S1, may not work for a Sendspin player** |
-| Volume | `players/cmd/volume_set {player_id, volume_level}` (0-100) |
+| Queue edit | `player_queues/move_item {queue_id, queue_item_id, pos_shift}` (`pos_shift:0` = make next), `move_item_end {queue_id, queue_item_id}`, `delete_item {queue_id, item_id_or_index}`, `play_index {queue_id, index, seek_position?}` |
+| Repeat / shuffle | `player_queues/repeat {queue_id, repeat_mode:"off"|"one"|"all"}`, `player_queues/shuffle {queue_id, shuffle_enabled:bool}` |
+| Seek | `player_queues/seek {queue_id, position}` (seconds) — **works** (tested, both directions, even in flow mode — see S1) |
+| Volume | Sendspin-local via `player.setVolume` (this is the widget's own player). Server-side would be `players/cmd/volume_set {player_id, volume_level}` (0-100). |
 | Image | `http://…:8095/imageproxy/<proxy_id>` (proxy_id is on `metadata.images[]`) |
-| Playlists | `music/playlists/*` — `create_playlist`, `add_playlist_tracks`, `remove_playlist_tracks`, `playlist_tracks` (read `/api-docs`) |
-| Library | `music/library/*` — add/remove favourites, list |
-| Events to subscribe | `queue_updated`, `queue_time_updated` (bare number), `queue_items_updated`, `player_updated`, `media_item_played` (scrobble/history signal — verify) |
+| Playlists | `music/playlists/library_items` (list), `music/playlists/playlist_tracks {item_id, provider_instance_id_or_domain:"library"}` (read), `music/playlists/create_playlist {name}` (→ editable `library://playlist/N`), `music/playlists/add_playlist_tracks {db_playlist_id, uris[]}` (async BackgroundTask), `music/playlists/remove_playlist_tracks {db_playlist_id, positions_to_remove[]}`, `music/playlists/update {item_id, update}` (rename), `music/library/remove_item {media_type:"playlist", library_item_id}` (delete — `music/playlists/remove` 500'd in testing) |
+| Favourites | `music/favorites/add_item {item:<uri or item>}`, `music/favorites/remove_item {media_type, library_item_id}`. `Track.favorite` is on the object. |
+| Artist / album | `music/artists/get`, `music/artists/top_tracks`, `music/artists/artist_albums`, `music/artists/similar_artists {item_id, provider_instance_id_or_domain}`, `music/albums/album_tracks {item_id, provider_instance_id_or_domain}` |
+| Lyrics | `metadata/get_track_lyrics {track}` — **500s on a non-library track** (needs a fully hydrated Track). Fragile — see S3. |
+| Events to subscribe | `queue_updated`, `queue_time_updated` (bare number), `queue_items_updated`, `player_updated`. History is a poll of `recently_played_items`, not an event. |
 
 **Locked decisions — do not relitigate:**
 
@@ -80,17 +86,21 @@ not an `AnalyserNode`.
   yt-dlp stack. (The old "fallback stack" idea is dead — see git log for why.)
 - Free YouTube via the `sproft/ytmusic-free-provider` image, not MA's paid
   built-in provider.
-- Theme tokens only, no hardcoded colours (`docs/theming.md`). The widget is
-  currently monochrome (ink-on-paper) — a deliberate minimalist choice, but
-  **M0 may revisit** whether an accent colour earns its place.
+- Theme tokens only, no hardcoded colours (`docs/theming.md`). **M0 verdict:
+  stay monochrome (ink-on-paper).** The one optional exception is the
+  now-playing progress fill once it's a live scrubber — an accent there is fine
+  if it reads well, not required.
 - `IBM Plex Mono` + `Instrument Serif` (the serif is track titles only).
+- No global media-key / OS now-playing integration (Rust + entitlements —
+  separate, big). No visualiser/EQ-DSP/scrobble/offline/multi-room in the
+  widget (see COMPARISON.md "cut" rows).
 
 **Current file layout** (`wigl-widgets/music/`): `index.tsx` (root),
 `useMusic.ts` (the one hook — connect, state, all actions), `maClient.ts`
-(`/ws`), `sendspin.ts` (`/sendspin` + SDK), `serverProcess.ts` (Phase 4
-`docker start`), `music.config.ts`, `types.ts`, `music.css`,
-`settingsSection.tsx`, `components/` (`NowPlaying`, `Browser`, `Equalizer`),
-`tests/` (`music.e2e.test.ts`, `audio-check.md`).
+(`/ws`), `sendspin.ts` (`/sendspin` + SDK), `serverProcess.ts` (`docker
+start`), `music.config.ts`, `types.ts`, `music.css`, `settingsSection.tsx`,
+`components/` (`NowPlaying`, `Browser`, `Equalizer`), `tests/`
+(`music.e2e.test.ts`, `audio-check.md`), `COMPARISON.md` (M0 output).
 
 **What's already done:** connect + reconnect (control + audio), search
 (provider-agnostic, live/debounced), now-playing with art, up-next list,
@@ -100,250 +110,212 @@ inline volume, offline/empty/error states, `/` + space keys, the
 
 ---
 
-## M0 — Compare with real players, then write the roadmap
+## X — Infra (build these before their second consumer)
 
-**Do this before any feature entry below.** The point is to not hand-write a
-feature spec — pull real modern players, see what they do, decide what this
-widget needs, and rewrite the rest of this backlog against that.
+### X1 — In-widget navigation (view stack)
 
-1. **Clone into `.idea/refplayers/`** (gitignored — `.idea/` is the owner's
-   reference folder, see AGENTS.md "Working tips") and read each for
-   interaction patterns, queue/playlist model, now-playing layout, search UX,
-   and context-menu actions:
-   - `music-assistant/frontend` (Vue) — the direct reference: what MA itself
-     surfaces of its own API. The widget is a compact re-take of this.
-   - `nukeop/nuclear` (Electron/React) — closest in spirit: no-account
-     multi-source streaming, queue, playlists, lyrics, a visualiser.
-   - `jeffvli/feishin` (Electron/React) — best-in-class queue / playlist /
-     right-click-menu UX in the FOSS ecosystem; React patterns transfer.
-   - `qier222/YesPlayMusic` (Vue) — celebrated clean now-playing + lyrics
-     screen; the "beautiful minimal" reference.
-   - One wildcard the researcher picks (candidates: `th-ch/youtube-music` for
-     the plugin/power-feature list, `Supersonic` for keyboard-driven minimal,
-     `Amberol`/`Harmonoid` for restraint, `Cider` for polish).
-2. **Write `wigl-widgets/music/COMPARISON.md`**: a table of every standard
-   player capability (transport, seek, queue ops, playlists, history, search
-   filters/sort, lyrics, info panels, keyboard, drag, context menus, radio,
-   library/favourites, discovery, visualiser, …) × {have / partial / missing /
-   deliberately-cut-for-a-widget}, each row one line on *why* and, if kept, a
-   sketch of the smallest version that fits a grid tile.
-3. **Rewrite everything below M0** in this file from that table — merge,
-   split, re-scope, cut, add. Keep it backlog-styled. The owner's original
-   list (clickable artist links, watch/search history, seek, foldable info,
-   search filter/sort pills, playlists + track CRUD, non-destructive queue +
-   clear button, drag-reorder, "left-click actions") is the *starting* set,
-   not the final one.
+Artist/album/playlist/history/discovery views all need one shared piece: a
+`view` state (`"browse" | "artist" | "album" | "playlist" | "history"` + the
+target id/uri), a back affordance, and a header that reflects where you are.
+Views **replace** the browser pane, they don't stack on top of now-playing —
+so the tile stays usable. Plain reducer in `useMusic.ts` (or a tiny `useNav`),
+no router lib. One next step: add the reducer + a `<BrowserHeader>` with a back
+chevron + breadcrumb, wired so `browse` is the default and the existing search
+UI lives under it. Land it with I1 (the first consumer).
 
-**Deliverable:** `COMPARISON.md` committed + this backlog rewritten. Then
-proceed to the (rewritten) entries.
+### X2 — `useQuery` for expensive reads
+
+Artist pages, album track lists, playlist contents, browse rows — cache them
+with `@/wigl/hooks`' `useQuery` (`useSql: true` for the persist-worth ones)
+keyed by the entity uri, rather than refetching on every navigation. Not a
+separate task — adopt it as I1 / P1 / D1 get built, and note here which keys
+ended up persisted.
+
+### I2 — Row-action model (the `⋯` menu)
+
+One consistent model for result/queue/playlist rows, from COMPARISON.md's read
+of feishin + nuclear:
+
+- **left-click** = play now (non-destructive, see Q1)
+- **one `⋯` button** opens a compact menu: Play next · Add to queue · Add to
+  playlist (needs P1) · Go to artist / album (needs I1) · Favourite · Start
+  radio · Remove from queue (queue rows only) · Move to top / bottom (queue
+  rows only, needs Q2's commands)
+- right-click on the widget body stays the OS menu (`docs/widgets.md`) — the
+  trigger is the in-content `⋯` button, never a context-menu handler
+
+One next step: build a `<RowMenu>` component (a `@coss/dropdown-menu` or a
+plain popover-free fold — check what's already in `src/components/ui/`), take
+`actions: {label, icon, run, hidden?}[]`, and swap the current hover-icons in
+`Browser.tsx`'s `Row` for it. Wire only the actions whose commands exist today
+(play next, add to queue, favourite, start radio, remove); the rest light up
+as their entries land. Add its e2e assertion for `favorites/add_item`.
 
 ---
 
-## S — Seek & now-playing
+## P — Playback controls
 
-### S1 — In-track seek (click / drag the timeline to jump)
+### P1 — Repeat & shuffle toggles
 
-The now-playing progress bar is display-only today because MA's Sendspin web
-player was assumed to be flow-mode (no per-track seek). **Resolve whether seek
-is actually possible before designing the UI:** test `player_queues/seek
-{queue_id, position}` against the running Sendspin player and watch whether
-playback jumps (check `queue_time_updated` + listen). Also check
-`player_queues/play_index {queue_id, index, seek_position}` and whether a
-non-flow / per-item stream mode is selectable per player or per queue
-(`/api-docs`, and the `flow_mode` field on `PlayerQueue`). One clear next
-step: run that test, write the answer here, then either (a) build a
-click-and-drag scrubber on the existing progress bar, or (b) if seek genuinely
-can't work, cut the scrubber and note it — don't fake it.
+Missing entirely today. Two toggle icons by the transport row.
+`player_queues/repeat {queue_id, repeat_mode:"off"|"one"|"all"}` (cycle on
+click, icon reflects state), `player_queues/shuffle {queue_id, shuffle_enabled}`.
+`PlayerQueue` already returns `repeat_mode` + `shuffle_enabled` — read them into
+`now`/a new bit of state in `refreshQueue`. e2e: assert both commands' shapes.
+Independent, small — good warm-up entry.
 
-### S2 — Expandable "more info" panel
+### P2 — In-track seek (click / drag the timeline)
 
-An info icon on the now-playing bar that expands a foldable panel with
-whatever MA has for the current item: full artist/album, year, genre, bitrate
-/ codec / sample rate (from `streamdetails`), the source provider, a
-description/bio if present, external links. Collapsed by default; state
-persisted via `useStorage`. Independent of S1.
+**Resolved:** `player_queues/seek {queue_id, position}` (position in seconds)
+**works** against the live Sendspin player — tested both directions
+(43s→90s and 10s→12s), and it works **even though the queue is `flow_mode:true`**
+(MA re-encodes the flow stream from the seek point; ~1s rebuffer gap on the
+jump, no track change). `player_queues/play_index {queue_id, index,
+seek_position}` also exists for jump-to-track-at-offset.
 
-### S3 — Lyrics (if M0 says it's worth it)
+One next step: make `NowPlaying.tsx`'s progress bar an interactive scrubber —
+pointer-down + drag sets a local "seeking to" position (freeze the
+`queue_time_updated` follow while dragging), pointer-up calls
+`api.seek(seconds)`. Hide it for radio (`now.isRadio`). Add `seek` to
+`useMusic.ts` and the `←`/`→` keys (I3). e2e: assert `player_queues/seek`
+accepts `{queue_id, position}` and the elapsed time moves.
 
-MA exposes `music/get_track_lyrics` (LRCLIB + others). If M0's comparison
-keeps this: a lyrics view in the expanded panel (S2), time-synced to
-`queue_time_updated` when LRC timestamps are available, plain scroll
-otherwise. Gate on M0.
+### P3 — Expandable "more info" panel
+
+An info icon on the now-playing bar that folds down a compact panel, collapsed
+by default, `useStorage`-persisted. Content, smallest useful set:
+`QueueItem.streamdetails` (codec, sample rate, bit rate, loudness — live on the
+current item), `Track.metadata` (genre, description, external links),
+`Album.year`, the source provider. One next step: add a `music/tracks/get` (or
+reuse the queue item's `streamdetails`) read behind `useQuery`, render a
+key/value list. Independent of P2.
+
+### S3 — Lyrics (parked)
+
+`metadata/get_track_lyrics {track}` returned HTTP 500 on a track built from a
+search hit — it needs a fully hydrated library Track, and a text scroll is a
+weak use of a small tile. **Do not build this** unless P3 lands with room to
+spare and the owner asks. If revisited: fetch the full track via
+`music/tracks/get` first, show lyrics inside the P3 panel, time-sync to
+`queue_time_updated` only when LRC timestamps are present.
 
 ---
 
 ## Q — Queue & playlists
 
-### Q1 — Non-destructive "play" + explicit clear
+### Q1 — Non-destructive play + explicit clear
 
-Today clicking a search result does `play_media {option:"replace"}` — it wipes
-the queue. Change the default left-click to **play-now-without-clearing**
-(`option:"replace_next"` or play + keep tail — verify which MA option does
-"play this now, keep everything after the current item"), and make queue
-clearing an explicit button in the up-next header (a Clear already exists
-there — make sure it's the *only* thing that empties the queue). One next
-step: nail down the MA `QueueOption` semantics against `/api-docs`, then
-rewire `play()` in `useMusic.ts` + the row click in `Browser.tsx`.
+Left-click a search result currently does `play_media {option:"replace"}` —
+wipes the queue. Change the default to `option:"replace_next"` (play now, keep
+the tail), and make the existing "Clear" button in the up-next header the only
+thing that empties the queue. One next step: verify `replace_next` semantics
+against `/api-docs` (does it keep items *after* current, or replace the current
++ tail?), then rewire `play()` in `useMusic.ts` and the row click in
+`Browser.tsx`. e2e: assert the `QueueOption` value is accepted and the queue
+length grows rather than resets.
 
-### Q2 — Drag-to-reorder the queue
+### Q2 — Queue row actions: remove, move, drag-reorder
 
-Up-next rows draggable to reorder → `player_queues/move_item {queue_id,
-queue_item_id, pos_shift}` (or `move_item_end`). Use a pointer-based reorder
-(no new dep — small list, see `wigl-widgets/repos` / `Desktop.tsx` for
-pointer-drag patterns already in the repo). Optimistic local reorder,
-reconcile on the next `queue_items_updated`.
+Each up-next row gets: remove (`player_queues/delete_item {queue_id,
+item_id_or_index}`), and drag-to-reorder → `player_queues/move_item {queue_id,
+queue_item_id, pos_shift}` / `move_item_end`. Pointer-based drag (no dnd lib —
+small list; `Desktop.tsx` has the pointer-drag pattern). Optimistic local
+reorder, reconcile on the next `queue_items_updated`. "Move to top / bottom"
+comes free once the commands are wired — expose them in the I2 `⋯` menu.
+e2e: assert `move_item` + `delete_item` shapes.
 
-### Q3 — Per-row queue actions
+### P4 — Playlists: read path (list + view)
 
-Each queue row (and each search-result row) gets a small action affordance —
-remove from queue (`player_queues/delete_item`), play next, add to a playlist
-(needs P1), go to artist/album (needs I1). Decide left-click-opens-menu vs
-hover-icons vs both from M0's comparison. Keep it one compact control, not a
-row of five icons.
+Read-only first. `music/playlists/library_items` → the user's playlists (skip
+or visually separate the non-editable `is_editable:false` smart playlists like
+"All favorited tracks"). Selecting one → a `playlist` view (X1) showing
+`music/playlists/playlist_tracks {item_id, provider_instance_id_or_domain:
+"library"}`, each track a normal row (left-click plays, `⋯` menu). A "Play all"
+/ "Add all to queue" header button = `play_media` with the playlist uri.
+`useQuery` the track list. e2e: assert `library_items` + `playlist_tracks`
+shapes.
 
-### P1 — Playlists: create + CRUD
+### P5 — Playlists: write path (create / add / remove / rename / delete)
 
-Full playlist support against MA's `music/playlists/*`:
-
-- list the user's playlists (`music/library/playlists` or `music/browse`)
-- create (`music/playlists/create_playlist`)
-- add a track — from a search result, a queue row, or now-playing
-  (`music/playlists/add_playlist_tracks`)
-- remove / reorder tracks (`remove_playlist_tracks`, and check for a reorder
-  command)
-- rename / delete the playlist
-- play a playlist (`play_media` with the playlist uri) and "add playlist to
-  queue"
-
-This is the biggest single entry — it may want its own `Playlists.tsx`
-sub-view in the widget (a third pane alongside now-playing / browser, or a
-tab). M0 should sketch where it lives. One next step: read all of
-`music/playlists/*` and `music/library/*` in `/api-docs`, write the exact
-command list here, then build the read path (list + view) before the writes.
-
-### Q4 — "Add queued/playing item to a playlist"
-
-Falls out of P1 + Q3 — the "add to playlist" action wired from queue rows and
-the now-playing bar. Keep as a reminder that it's a required surface, not just
-a playlist-view feature.
+Builds on P4. `create_playlist {name}` (→ editable `library://playlist/N`,
+verified), `add_playlist_tracks {db_playlist_id, uris[]}` (async — show a brief
+"added" toast, reconcile on refetch), `remove_playlist_tracks {db_playlist_id,
+positions_to_remove[]}` (positions are the provider playlist positions from
+`playlist_tracks`), `update {item_id, update:{name}}` for rename,
+`music/library/remove_item {media_type:"playlist", library_item_id}` for
+delete. The "Add to playlist" action in the I2 `⋯` menu (wired from search
+rows, queue rows, and now-playing) is part of *this* entry, not a separate one.
+e2e: create → add → read-back → delete round-trip (clean up after itself).
 
 ---
 
-## H — History
+## H — History & discovery
 
-### H1 — Play history ("watch history")
+### H1 — Recently played view
 
-A scrollable list of recently-played tracks/stations, newest first, each
-re-playable in one click. Source: MA fires an event when an item finishes
-(`media_item_played` / a queue event — confirm which in `/api-docs` +
-by watching the live event stream). Persist locally via `useStorage` (cap ~200
-entries, dedup consecutive repeats). If MA already keeps a server-side history
-(`music/recently_played` or similar — check), prefer reading that and only
-fall back to the local log. Independent of everything else.
+A "Recent" view (X1) listing `music/recently_played_items {limit:50}` — real
+server-side items, newest first, each one-click re-playable via its uri. No
+local log needed. Optionally filter to `media_types:["track","radio"]`. One
+next step: add the command to `useMusic.ts`, a view + a nav entry to reach it.
+e2e: assert the command returns `ItemMapping[]` with `uri` + `media_type`.
 
 ### H2 — Search history
 
-Recent search queries, shown as tappable chips under the search field when it's
+Local. Recent search queries as tappable chips under the search field when it's
 focused and empty. `useStorage`, cap ~20, most-recent-first, dedup. Small,
-independent.
+fully independent — good filler entry.
 
----
+### D1 — Search filters + discovery browse
 
-## D — Search & discovery
+Two things, same area:
 
-### D1 — Search filters & sort
+- **Filter pills** above results: which `media_types` to include
+  (radio/tracks/artists/albums/playlists) and which `providers`. Both are
+  already `music/search` params — this is UI + threading them through +
+  persisting the last-used set. No server sort param; sort client-side if it's
+  worth it (probably skip).
+- **Browse home**: when the search box is empty, show a `music/browse` folder
+  navigator (root → provider → Artists/Albums/Tracks/Playlists) instead of only
+  up-next. Uses X1 for the folder drill-down. `music/recommendations` is empty
+  on a fresh library — do **not** use it.
 
-Filter pills above the results for which media types to include
-(radio / tracks / artists / albums / playlists) and which providers, plus a
-sort control (relevance / name / … — whatever `music/search` supports, else
-sort client-side). The widget already asks for all media types; this is
-mostly UI + passing `media_types` / `providers` through. Genre filtering:
-check whether `music/search` takes a genre facet or whether it's a
-`music/browse` path thing — note the answer here. Persist the last-used
-filter set.
-
-### D2 — Discovery / browse view
-
-When the search box is empty, instead of just "up next", show browsable rows:
-`music/recommendations` (once the library has content), `music/browse` into
-`radiobrowser://popularity` and `ytmusic_free://` (charts / moods / genres).
-This is the "home screen". Depends on M0 for layout; independent of the Q/P
-entries.
+One next step: build the filter pills first (small, self-contained), then the
+browse navigator as a second pass. e2e: assert `music/browse` root + one
+provider path.
 
 ---
 
 ## I — Interaction
 
-### I1 — Clickable entities (artist / album / playlist)
+### I1 — Clickable artist / album
 
 Artist and album names in results, the queue, and now-playing become links.
-Clicking an artist opens an artist view (top tracks, albums, "start artist
-radio" via `play_media {radio_mode:true}`); clicking an album opens its track
-list. Needs a lightweight in-widget navigation stack (a `view` state:
-`browse | artist | album | playlist`, with a back affordance) — M0 should
-decide how heavy this gets. `music/artists/*` and `music/albums/*` in
-`/api-docs` for the data. This unblocks the "go to artist" row action in Q3.
-
-### I2 — Row interaction model ("left-click actions")
-
-Decide and implement one consistent model for what a left-click, a
-right-click, and a hover do on a result/queue/playlist row, from M0's
-comparison of how the reference players do it. Likely: left-click plays,
-a `⋯` button (or left-click on a dedicated spot) opens a compact action menu
-(play next, add to queue, add to playlist, go to artist/album, favourite,
-remove). Right-click on a widget body already falls through to the OS menu
-(`docs/widgets.md`) — don't fight that; use an in-content trigger. This entry
-is the umbrella that Q3 / I1 / P1 all plug into — do it alongside M0's output,
-not in isolation.
+Artist link → an `artist` view (X1): `music/artists/get` + `top_tracks` +
+`artist_albums` + a "Start artist radio" button + `similar_artists`. Album link
+→ an `album` view: `music/albums/album_tracks`. This is the **first X1
+consumer** — land the nav stack here. Unblocks the "Go to artist/album" action
+in the I2 menu. `useQuery` every fetch. e2e: assert `artists/get` +
+`artist_albums` + `album_tracks` shapes.
 
 ### I3 — Keyboard
 
-Extend the existing `/` + space. From M0: likely ← / → seek (needs S1),
-n / p next/prev, arrow-navigate the focused list, enter to play,
-`a` add-to-queue. Scope from the comparison; keep it to what fits a widget
-(no global media-key capture — that's an OS-integration rabbit hole, note it
-as out of scope unless M0 strongly disagrees).
+Extend `/` + space with: `←`/`→` seek ±5s (needs P2), `n`/`p` next/prev,
+`↑`/`↓` move focus in the visible list, `enter` play the focused row, `a` add
+it to the queue. Scope to what fits — no global capture. One next step: extend
+the `onKey` handler in `index.tsx`, add a `focusedIndex` to the browser list.
+Do this last, after the list views exist to navigate.
 
 ---
 
-## X — Cross-cutting / infra these may need
+## Out of scope (revisit only if the owner makes the case)
 
-### X1 — In-widget navigation
-
-I1 (artist/album views), P1 (playlists view), D2 (discovery) and H1 (history)
-all imply the widget grows from two panes (now-playing + browser) to a small
-navigable app. Before building the second of those, add the shared piece: a
-`view` state + a back button + a header that reflects where you are. Keep it a
-plain reducer in `useMusic.ts` or a tiny `useView` — not a router lib. M0's
-layout sketch drives this.
-
-### X2 — `useQuery` for expensive reads
-
-Artist pages, album track lists, playlist contents, discovery rows — cache
-them with `@/wigl/hooks`' `useQuery` (`useSql: true` for the ones worth
-persisting) rather than re-fetching on every navigation. Adopt as I1/P1/D2 get
-built, not upfront.
-
-### X3 — Grow the e2e test with each feature
-
-`tests/music.e2e.test.ts` currently covers login / search shapes / audio-proxy
-/ YouTube. Every entry that leans on a new MA command (seek, playlists,
-history, move_item, …) adds one `test.skipIf(!reachable)` asserting that
-command's real shape — the drift regression is the whole value (see AGENTS.md
-"Testing"). Not a separate task; part of "done" for each entry.
-
----
-
-## Out of scope (revisit only if M0 makes the case)
-
-- **Visualiser** — the seam is kept (`DecodedAudioChunk`), but it's polish, not
-  a core-player gap. After the list above.
-- **Downloading / offline** — the widget is a streaming control surface;
-  offline caching is a different product.
-- **Local library** (Navidrome/Jellyfin via MA's Subsonic provider) — config,
-  not widget code. Works today if the owner adds the provider.
-- **Scrobbling to Last.fm / ListenBrainz** — MA-side provider config.
-- **OS media-key / Now-Playing-widget integration** — needs Rust + entitlements
-  (`docs/architecture.md`'s "one native poller" altitude). Big, separate.
-- **Multi-room / multiple players** — MA supports it; the widget deliberately
-  drives one player (its own). Not a gap.
+- **Lyrics** — parked (S3), endpoint fragile.
+- **Visualiser** — seam kept (`DecodedAudioChunk`); polish, not a gap.
+- **EQ / DSP, crossfade, gapless** — MA-side config, not widget UI.
+- **Downloading / offline** — different product.
+- **Local library** (Navidrome/Jellyfin via MA's Subsonic provider) — provider
+  config; works today if the owner adds it.
+- **Scrobbling** (Last.fm / ListenBrainz) — MA-side provider config.
+- **OS media-key / now-playing-widget integration** — Rust + entitlements.
+- **Multi-room / multiple players** — the widget drives its own one player.
+- **Sleep timer** — `players/sleep_timer/set` exists; low priority.
