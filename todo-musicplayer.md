@@ -73,17 +73,17 @@ Decisions already made — do not relitigate:
 
 ## Phase 0 — DONE (2026-08-31, agent). Backend proven. Widget built.
 
-Ran MA 2.10.1 in Docker (`ghcr.io/music-assistant/server:latest`, ~3 GB),
-onboarded, added the **RadioBrowser** provider (zero credentials — YouTube
-Music is a later owner step, see "YouTube Music" below). Everything the
-widget needs is verified live. The findings:
+Ran MA 2.10.1 in Docker, onboarded, added **RadioBrowser** + **YouTube Music
+(Free)** (`ytmusic_free`) — both zero-credential. Search and playback verified
+live for both, including a full YouTube track playing through the widget's
+Sendspin player. The findings:
 
 ### How MA runs here
 
-```
-docker run -d --name wigl-ma -p 8095:8095 -p 8097:8097 \
-  -v <repo>/.idea/ma-data:/data ghcr.io/music-assistant/server:latest
-```
+**Setup + day-to-day + revert live in `wigl-widgets/music/SETUP.md` now** —
+the short version: a `wigl-ma` Docker container on the
+`ghcr.io/sproft/ytmusic-free-provider` image (stock MA + a free-YouTube-Music
+provider baked in), ports `8095`/`8097`, data in `.idea/ma-data/`.
 
 - Data/config persists in `.idea/ma-data/` (gitignored). Onboarded admin user
   is **`test` / `testtest`** (localhost-only dev creds — MA enforces an 8-char
@@ -177,12 +177,19 @@ What the widget does instead (verified API shapes, built):
   `player_queues/play_media` with `"radio_mode":true` for "start radio from
   this", `players/cmd/volume_set {"player_id","volume_level"}`.
 
-### YouTube Music (later, owner step — no widget change)
+### YouTube Music — done, free, no account
 
-MA → Settings → Providers → add **YouTube Music**, sign in with a Google
-account there. Then in the widget's Settings, either clear the provider
-filter (search everything) or set it to `ytmusic`. The widget is
-provider-agnostic; nothing in its code needs to change.
+MA's *built-in* YouTube Music provider requires a **paid** YouTube Music
+subscription + a browser cookie + a PO-token server (it's an explicit MA
+policy check, `_user_has_ytm_premium()`, not a Google API wall). Rejected.
+
+Instead the `wigl-ma` container runs `ghcr.io/sproft/ytmusic-free-provider`
+(stock MA + the community `ytmusic_free` provider: `ytmusicapi` for search,
+`yt-dlp` for streams, anonymous). Added the same way as any provider,
+no credentials. `SETUP.md` has the how and the tradeoffs. The widget is
+provider-agnostic — search picks it up with zero code change; the
+"＋ add youtube music" footer only shows if no `ytmusic*` provider is
+configured.
 
 ### The `/api-docs` reference
 

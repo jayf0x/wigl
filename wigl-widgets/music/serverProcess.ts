@@ -1,9 +1,9 @@
 // Phase 4 (optional): if Music Assistant isn't answering and the owner has
-// opted in, try to `docker start` the container that todo-musicplayer.md's
-// `docker run` created. Deliberately minimal — it never creates the
-// container (that needs the image pull + a volume path decision the owner
-// makes once), only restarts a stopped one. Until the owner enables this,
-// they start MA themselves.
+// opted in, try to `docker start` the container SETUP.md's `docker run`
+// created. Deliberately minimal — it never creates the container (that's a
+// one-time step in SETUP.md), only restarts a stopped one. The container is
+// created with `--restart unless-stopped`, so this only matters when Docker
+// itself was down or the container was stopped by hand.
 
 import { runCmd } from "@/wigl/utils";
 

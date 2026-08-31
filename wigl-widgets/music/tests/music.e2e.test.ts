@@ -108,4 +108,33 @@ describe("music widget ↔ Music Assistant (live)", () => {
       client.close();
     }
   });
+
+  // The `ytmusic_free` provider (see SETUP.md) is anonymous but optional — if
+  // it isn't configured this test no-ops rather than fails.
+  test.skipIf(!reachable)("YouTube Music (Free), when configured, returns real tracks", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const providers = await client.command<{ instance_id: string; type: string; enabled: boolean }[]>(
+        "config/providers",
+      );
+      const hasYt = (providers ?? []).some(
+        (p) => p.type === "music" && p.enabled && p.instance_id.startsWith("ytmusic"),
+      );
+      if (!hasYt) return;
+
+      const results = await client.command<SearchResults>("music/search", {
+        search_query: "daft punk get lucky",
+        media_types: ["track"],
+        limit: 5,
+        providers: ["ytmusic_free"],
+      });
+      expect(results.tracks.length).toBeGreaterThan(0);
+      const track = results.tracks[0];
+      expect(track.uri).toMatch(/^ytmusic_free/);
+      expect((track.artists ?? []).length).toBeGreaterThan(0);
+    } finally {
+      client.close();
+    }
+  });
 });

@@ -57,9 +57,16 @@ export const SENDSPIN_CODECS = ["pcm"] as const;
  * (see tests/audio-check.md). */
 export const SENDSPIN_OUTPUT: "direct" | "media-element" = "direct";
 
-/** Docker container name used by Phase 4 adopt/start. Matches the `docker
- * run --name` in todo-musicplayer.md. */
+/** Docker container name used by Phase 4 adopt/start. Created (with
+ * `--restart unless-stopped`) per `wigl-widgets/music/SETUP.md`. */
 export const MA_CONTAINER = "wigl-ma";
+
+/** The container image. `sproft/ytmusic-free-provider` is the stock Music
+ * Assistant server image plus the community `ytmusic_free` provider baked in
+ * (free, no-account YouTube Music) — a rolling build that tracks upstream MA.
+ * Not used by the widget at runtime; here so SETUP.md and the code agree on
+ * one string. */
+export const MA_IMAGE = "ghcr.io/sproft/ytmusic-free-provider:latest";
 
 export const RECONNECT_MIN_MS = 1_000;
 export const RECONNECT_MAX_MS = 15_000;

@@ -63,7 +63,7 @@ const MusicSettings = () => {
       </Field>
       <Field
         label="Search provider"
-        hint="Blank = all providers. e.g. radiobrowser, ytmusic"
+        hint="Blank = all. e.g. radiobrowser, ytmusic_free"
       >
         <Input
           className="h-7 w-40 text-xs"

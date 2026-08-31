@@ -99,7 +99,9 @@ export const Browser = ({
   };
 
   const total = results ? GROUPS.reduce((n, g) => n + results[g.key].length, 0) : 0;
-  const ytReady = api.providers.includes("ytmusic");
+  // MA gives an added provider an instance id like "ytmusic_free--iB4KsJ6x";
+  // match on the domain prefix (covers "ytmusic_free" and the paid "ytmusic").
+  const ytReady = api.providers.some((p) => p.startsWith("ytmusic"));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -162,7 +164,7 @@ export const Browser = ({
           type="button"
           data-no-drag
           onClick={api.openServer}
-          title="Opens Music Assistant — add the YouTube Music provider and sign in"
+          title="Opens Music Assistant → Settings → Music sources → add “YouTube Music (Free)” (no account needed)"
           className="flex shrink-0 items-center justify-center gap-1.5 border-border border-t px-3 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <span className="music-tag">＋ add youtube music</span>
