@@ -1,0 +1,53 @@
+// Ship defaults for the music widget. Per-machine values (a non-default MA
+// host, the login, a provider filter) live in the widget's Settings section,
+// persisted via useStorage — not here. See todo-musicplayer.md "Phase 0" for
+// where these shapes come from.
+
+/** Music Assistant control API — REST + both WebSockets (`/ws`, `/sendspin`)
+ * all live on this one port. */
+export const MA_HOST = "127.0.0.1";
+export const MA_PORT = 8095;
+
+/** First-run onboarding creates this admin user; the widget then logs in as
+ * it on every reconnect. Localhost-only dev credentials — overridable in
+ * Settings. */
+export const DEFAULT_USERNAME = "wigl";
+export const DEFAULT_PASSWORD = "wigl-local-dev";
+
+/** Storage keys (auto-prefixed with `music:` by the plugin registry). */
+export const KEYS = {
+  host: "host",
+  port: "port",
+  username: "username",
+  password: "password",
+  /** "" = search every enabled provider; else a MA provider instance id
+   * ("radiobrowser", "ytmusic", …) to scope search to. */
+  providerFilter: "provider_filter",
+  /** Stable Sendspin client id == the MA player_id for this widget. Minted
+   * once, reused so MA re-adopts the same player/queue across restarts. */
+  clientId: "client_id",
+  /** Phase 4: whether the widget may `docker start` the MA container when it
+   * finds it stopped. Off by default — the owner starts MA. */
+  manageServer: "manage_server",
+} as const;
+
+/** Media types the search box asks MA for, in display order. */
+export const SEARCH_MEDIA_TYPES = ["radio", "artist", "album", "track", "playlist"] as const;
+
+export const SEARCH_LIMIT = 8;
+
+/** Sendspin codec preference. Opus/FLAC get filtered out by the SDK on
+ * engines that can't do them (WKWebView drops both — no WebCodecs in a
+ * non-secure context, no FLAC in Safari), leaving raw PCM, which is fine
+ * over localhost. */
+export const SENDSPIN_CODECS = ["opus", "flac", "pcm"] as const;
+
+/** Docker container name used by Phase 4 adopt/start. Matches the `docker
+ * run --name` in todo-musicplayer.md. */
+export const MA_CONTAINER = "wigl-ma";
+
+export const RECONNECT_MIN_MS = 1_000;
+export const RECONNECT_MAX_MS = 15_000;
+
+/** How often to re-poll the queue snapshot as a backstop for missed events. */
+export const QUEUE_POLL_MS = 10_000;

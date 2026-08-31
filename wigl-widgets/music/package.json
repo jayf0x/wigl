@@ -1,0 +1,10 @@
+{
+  "$schema": "../widget.schema.json",
+  "dependencies": {
+    "@sendspin/sendspin-js": "5.0.0"
+  },
+  "wigl": {
+    "permissions": ["storage", "command"],
+    "instantiable": false
+  }
+}

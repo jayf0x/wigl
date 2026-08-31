@@ -10,6 +10,16 @@ before reaching for `bun add`.
 One line per dep: what it is, how it got installed, what depends on it.
 Delete the line when nothing here depends on it anymore.
 
+- **Music Assistant server** — runs as a Docker container, not installed on
+  the host. Image `ghcr.io/music-assistant/server:latest` (2.10.1, ~3 GB),
+  container `wigl-ma`, ports `8095`/`8097` published to localhost, data in
+  `.idea/ma-data/` (gitignored). Depended on by `wigl-widgets/music` (control
+  WS + Sendspin audio proxy — see `todo-musicplayer.md` "Phase 0"). Started
+  once with the `docker run` in that file; the widget can `docker start` it
+  when it's stopped if "Auto-start server" is enabled in its Settings.
+  Requires Docker Desktop (`/usr/local/bin/docker` here). To remove entirely:
+  `docker rm -f wigl-ma && docker rmi ghcr.io/music-assistant/server` and
+  delete `.idea/ma-data/`.
 - **opencode** — installed globally via `bun` (binary resolves to
   `~/.bun/bin/opencode` on the machine this was set up on — see
   `wigl-widgets/LocalCode/serverProcess.ts`'s `OPENCODE_CANDIDATES` for the
