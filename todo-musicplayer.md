@@ -1,283 +1,349 @@
-# TODO — Music player widget
+# Music widget — backlog
 
-Build plan for the next agent. Direction is decided; this is the brief.
-Read `AGENTS.md` and `docs/widgets.md` first.
+The `music` widget plays and controls a **local Music Assistant (MA) server**.
+Core playback (radio + free YouTube Music), search, queue, now-playing, and the
+Settings section are **built and working** (`wigl-widgets/music/`). This file is
+now the feature backlog for turning it from "plays music" into a full modern
+player — same shape and rules as the repo `backlog.md`:
 
-## Goal
+- Every entry is a problem someone can pick up and finish in one sitting.
+- **One clear next step per entry**, not a menu of options.
+- When it's done, **delete the entry** (git history is the changelog). Check
+  the box only while it's mid-flight.
+- No dates, no "as of this session". Describe the target state, not the history.
+- Entries are grouped by area and numbered per group (`R1`, `P1`, …); numbers
+  aren't stable — reference an entry by its title if you point at it elsewhere.
 
-A `music` wigl widget that **plays music from a streaming source, inside the
-widget** — no ads, no tracking, macOS, audio only. Search + radio discovery is
-part of core. **One source to start: YouTube Music.** More sources, downloading,
-and a visualizer are later — leave seams, don't build them.
+Work **M0 first** — it produces the prioritised list everything else is
+measured against. Then take entries in roughly the order they're written;
+several are independent and can go in any order (noted per entry).
 
-## Architecture
+---
 
-```
-wigl `music` widget (webview)
-   │  WebSocket  ws://127.0.0.1:8095/ws   ← control: search, queue, play, now-playing
-   │  HTTP audio http://127.0.0.1:8097/…  ← <audio> element plays the flow stream
-   ▼
-Music Assistant server  (local, `mass` or Docker)
-   └─ provider: YouTube Music
-```
+## Reference — the knowledge not to re-derive
 
-The widget is a **player + control surface for a local Music Assistant server**.
-MA owns search, the queue/playlist state machine, scrobbling, gapless flow
-streaming, YouTube extraction. The widget owns the UI and (Phase 4) the server
-process lifetime.
+**Backend setup / day-to-day / revert:** `wigl-widgets/music/SETUP.md`. The
+`wigl-ma` Docker container runs `ghcr.io/sproft/ytmusic-free-provider` (stock
+MA 2.10.1 + a free no-account YouTube Music provider). Providers configured:
+`builtin`, `radiobrowser`, `ytmusic_free`. Admin login `test` / `testtest`,
+same at `http://127.0.0.1:8095`.
 
-Decisions already made — do not relitigate:
+**Live source of truth for every command shape:**
+`http://127.0.0.1:8095/api-docs/commands.json` (and `/api-docs/openapi.json`
+for REST). Don't guess API shapes — read them there against the running server.
 
-- **Music Assistant**, not a from-scratch player, not Mopidy (plays audio in its
-  own process → no path to a visualizer; `mopidy-youtube` lags yt-dlp fixes),
-  not Jellyfin/Navidrome (own-library only, no streaming discovery — those are
-  the future *local library* option and plug into MA via its Subsonic provider).
-- `.idea/ytsms` was a YouTube subscription tracker with zero playback code —
-  deleted.
+**Widget ↔ MA, two WebSockets on port 8095:**
 
-## Music Assistant — verified on this machine (2026-08-31, Python 3.14.4)
+- **Control** `ws://…/ws` — server sends a ServerInfo frame first, client then
+  sends `{message_id, command:"auth", args:{token}}` and waits for
+  `{message_id, result:{authenticated:true}}`. Commands:
+  `{message_id, command, args}` → `{message_id, result}` or
+  `{message_id, error_code, details}`. Events (no `message_id`):
+  `{event, object_id, data}`. Token from `POST /auth/login`
+  `{provider_id:"builtin", credentials:{username,password}}` (short-lived,
+  re-login on every reconnect). `POST /setup` does first-run onboarding.
+- **Sendspin audio proxy** `ws://…/sendspin` — first client frame
+  `{type:"auth", token, client_id}` → `{type:"auth_ok"}`, then the Sendspin
+  protocol is proxied bidirectionally. The widget hands this socket to
+  `@sendspin/sendspin-js`'s `SendspinPlayer` (`webSocket` option), no
+  `window.WebSocket` patching. `player.clientId` **is** the MA `player_id`,
+  and MA auto-creates a queue with the same id.
 
-- **Requires Python 3.14** (`requires-python = ">=3.14"`). This machine has
-  3.14.4. Good — no pyenv juggling.
-- **Not on PyPI.** Install options:
-  - **Docker (recommended for first run):** `ghcr.io/music-assistant/server:latest`.
-    Bundles everything. Docker Desktop on macOS has no host networking — fine
-    here, just publish ports `8095` and `8097`. Set the Streams publish IP to
-    `127.0.0.1` (see below).
-  - **venv:** `python3.14 -m venv .venv && .venv/bin/pip install
-    "music_assistant @ git+https://github.com/music-assistant/server@2.10.1"`
-    — then **also `pip install hass-client`** (the 2.10.1 standalone install is
-    missing this dep; without it `mass` crashes with
-    `ModuleNotFoundError: No module named 'hass_client'`). Venv is **~1.2 GB**
-    (torch/torchaudio/librosa — see next point). `ffmpeg` already on machine.
-- **torch + torchaudio + librosa are hard dependencies, not optional extras** —
-  they power built-in audio analysis / smart crossfades. You cannot install MA
-  without them and there is no "add later". `mass --safe-mode` runs core-only
-  (no providers) so it is not a way to skip them. Owner's call: stick with
-  defaults, accept the footprint. (If the 1.2 GB / torch dependency ever
-  becomes unacceptable, the alternative is the fallback stack at the bottom.)
-- Entry point `mass -c <data-dir> --log-level info`. Boots in ~2s.
-- **Two ports:** `:8095` = web + WebSocket API + Vue frontend; `:8097` =
-  **streamserver** (serves audio to players). The streamserver advertises an IP
-  to players — on this machine it auto-picked the LAN IP. **Set it to
-  `127.0.0.1`** in Settings → System → Streams (publish IP) so the widget plays
-  from localhost.
-- **First run needs onboarding:** `/` 302-redirects to `/setup`. `/info`
-  returns server JSON with no auth. Onboarding creates the admin user.
-- **Auth exists** (auto-generated JWT secret, one builtin username/password
-  provider). The widget must obtain and hold a token for `/ws`. Figure out the
-  exact flow in Phase 0 (localhost bypass? long-lived token? mint via `/auth`?).
-- mDNS on `:5353` errors on this machine (`No route to host`) — noisy log, not
-  fatal; only affects LAN player discovery, which the web player doesn't use.
-  Disable zeroconf/discovery if MA has a flag for it.
+**Audio is Sendspin, not an `<audio>` flow stream.** `codecs:["pcm"]` (WKWeb
+View has no usable opus/flac decoder). Output mode is the `SENDSPIN_OUTPUT`
+toggle in `music.config.ts` (`"direct"` default / `"media-element"`). The
+visualiser seam is `DecodedAudioChunk` (Float32 PCM per channel) off the SDK,
+not an `AnalyserNode`.
 
-## Phase 0 — DONE (2026-08-31, agent). Backend proven. Widget built.
+**API cheatsheet** (verify each against `/api-docs` before use):
 
-Ran MA 2.10.1 in Docker, onboarded, added **RadioBrowser** + **YouTube Music
-(Free)** (`ytmusic_free`) — both zero-credential. Search and playback verified
-live for both, including a full YouTube track playing through the widget's
-Sendspin player. The findings:
+| Need | Command |
+|------|---------|
+| Search | `music/search {search_query, media_types[], limit, providers[]?}` → `SearchResults` |
+| Browse a provider | `music/browse {path}` (e.g. `radiobrowser://popularity`) |
+| Recommendation rows | `music/recommendations` (library-based; empty on a fresh install) |
+| Queue snapshot | `player_queues/get {queue_id}`, `player_queues/items {queue_id, limit, offset}` |
+| Enqueue / play | `player_queues/play_media {queue_id, media:<uri or item>, option:"replace"|"next"|"add"|"replace_next", radio_mode?}` |
+| Transport | `player_queues/{play,pause,next,previous,stop,clear}` `{queue_id}` |
+| Queue edit | `player_queues/{move_item,move_item_end,delete_item,play_index}` `{queue_id, …}` |
+| Repeat / shuffle | `player_queues/{repeat,shuffle}` `{queue_id, …}` |
+| Seek | `player_queues/seek {queue_id, position}` — **see S1, may not work for a Sendspin player** |
+| Volume | `players/cmd/volume_set {player_id, volume_level}` (0-100) |
+| Image | `http://…:8095/imageproxy/<proxy_id>` (proxy_id is on `metadata.images[]`) |
+| Playlists | `music/playlists/*` — `create_playlist`, `add_playlist_tracks`, `remove_playlist_tracks`, `playlist_tracks` (read `/api-docs`) |
+| Library | `music/library/*` — add/remove favourites, list |
+| Events to subscribe | `queue_updated`, `queue_time_updated` (bare number), `queue_items_updated`, `player_updated`, `media_item_played` (scrobble/history signal — verify) |
 
-### How MA runs here
+**Locked decisions — do not relitigate:**
 
-**Setup + day-to-day + revert live in `wigl-widgets/music/SETUP.md` now** —
-the short version: a `wigl-ma` Docker container on the
-`ghcr.io/sproft/ytmusic-free-provider` image (stock MA + a free-YouTube-Music
-provider baked in), ports `8095`/`8097`, data in `.idea/ma-data/`.
+- Music Assistant, not a from-scratch player, not Mopidy, not a widget-side
+  yt-dlp stack. (The old "fallback stack" idea is dead — see git log for why.)
+- Free YouTube via the `sproft/ytmusic-free-provider` image, not MA's paid
+  built-in provider.
+- Theme tokens only, no hardcoded colours (`docs/theming.md`). The widget is
+  currently monochrome (ink-on-paper) — a deliberate minimalist choice, but
+  **M0 may revisit** whether an accent colour earns its place.
+- `IBM Plex Mono` + `Instrument Serif` (the serif is track titles only).
 
-- Data/config persists in `.idea/ma-data/` (gitignored). Onboarded admin user
-  is **`test` / `testtest`** (localhost-only dev creds — MA enforces an 8-char
-  minimum, so plain `test`/`test` is rejected; change both in the widget's
-  Settings section if you like). Same login works at `http://127.0.0.1:8095`.
-- Boots in ~15 s on first run (downloads a torch beat-detection checkpoint
-  once). `GET /info` → 200 with `onboard_done` once set up.
-- **Docker Desktop wedged once during setup** — container start/rm hung for
-  minutes, then recovered on its own. If `docker` CLI calls hang, the daemon
-  still answers read calls on the unix socket; a Docker Desktop restart clears
-  it. Noted in `global-deps.md`.
-- mDNS/zeroconf errors in the log (`:5353 No route to host`) — harmless, only
-  LAN player discovery, which this setup doesn't use.
+**Current file layout** (`wigl-widgets/music/`): `index.tsx` (root),
+`useMusic.ts` (the one hook — connect, state, all actions), `maClient.ts`
+(`/ws`), `sendspin.ts` (`/sendspin` + SDK), `serverProcess.ts` (Phase 4
+`docker start`), `music.config.ts`, `types.ts`, `music.css`,
+`settingsSection.tsx`, `components/` (`NowPlaying`, `Browser`, `Equalizer`),
+`tests/` (`music.e2e.test.ts`, `audio-check.md`).
 
-### Auth (`/ws` **and** `/sendspin`)
+**What's already done:** connect + reconnect (control + audio), search
+(provider-agnostic, live/debounced), now-playing with art, up-next list,
+play/pause/next/prev/clear, play-now vs add-to-queue, "start radio from this",
+inline volume, offline/empty/error states, `/` + space keys, the
+"＋ add youtube music" footer, the Settings section, `docker start` auto-recover.
 
-- `POST /auth/login` `{"provider_id":"builtin","credentials":{"username","password"}}`
-  → `{"success":true,"token":"<jwt>"}`. Short-lived (30-day sliding). The
-  widget logs in on every (re)connect and uses the fresh token — nothing
-  sensitive persisted except the username/password in Settings.
-- `POST /setup` `{"username","password","display_name"}` does first-run
-  onboarding and also returns a token. `GET /info` tells you if it's needed
-  (`onboard_done`).
-- **WS control** — `ws://127.0.0.1:8095/ws`. Server sends a ServerInfo frame
-  first; client then sends `{"message_id","command":"auth","args":{"token"}}`
-  and waits for `{"message_id","result":{"authenticated":true}}`. After that,
-  every command is `{"message_id","command":"<cmd>","args":{…}}` →
-  `{"message_id","result":…}` or `{"message_id","error_code":N,"details":"…"}`.
-  Events (no message_id): `{"event":"<type>","object_id":"…","data":{…}}`.
-- **Sendspin audio proxy** — `ws://127.0.0.1:8095/sendspin`. First frame from
-  the client: `{"type":"auth","token":"<jwt>","client_id":"<stable id>"}` →
-  server replies `{"type":"auth_ok"}`, then proxies the Sendspin protocol
-  bidirectionally to MA's internal sendspin server.
+---
 
-### Audio: it's Sendspin now, not an `<audio>` flow stream
+## M0 — Compare with real players, then write the roadmap
 
-**The brief's `<audio src="http://…:8097/…">` assumption is stale.** MA's
-built-in web player is **Sendspin** (`@sendspin/sendspin-js`, a push-PCM /
-Web-Audio protocol — time-synced, gapless). `:8097` still exists (HTTP flow
-stream for Chromecast/DLNA/etc.) but there is no supported "give me a browser
-`<audio>` URL for a queue" path any more.
+**Do this before any feature entry below.** The point is to not hand-write a
+feature spec — pull real modern players, see what they do, decide what this
+widget needs, and rewrite the rest of this backlog against that.
 
-What the widget does instead (verified API shapes, built):
+1. **Clone into `.idea/refplayers/`** (gitignored — `.idea/` is the owner's
+   reference folder, see AGENTS.md "Working tips") and read each for
+   interaction patterns, queue/playlist model, now-playing layout, search UX,
+   and context-menu actions:
+   - `music-assistant/frontend` (Vue) — the direct reference: what MA itself
+     surfaces of its own API. The widget is a compact re-take of this.
+   - `nukeop/nuclear` (Electron/React) — closest in spirit: no-account
+     multi-source streaming, queue, playlists, lyrics, a visualiser.
+   - `jeffvli/feishin` (Electron/React) — best-in-class queue / playlist /
+     right-click-menu UX in the FOSS ecosystem; React patterns transfer.
+   - `qier222/YesPlayMusic` (Vue) — celebrated clean now-playing + lyrics
+     screen; the "beautiful minimal" reference.
+   - One wildcard the researcher picks (candidates: `th-ch/youtube-music` for
+     the plugin/power-feature list, `Supersonic` for keyboard-driven minimal,
+     `Amberol`/`Harmonoid` for restraint, `Cider` for polish).
+2. **Write `wigl-widgets/music/COMPARISON.md`**: a table of every standard
+   player capability (transport, seek, queue ops, playlists, history, search
+   filters/sort, lyrics, info panels, keyboard, drag, context menus, radio,
+   library/favourites, discovery, visualiser, …) × {have / partial / missing /
+   deliberately-cut-for-a-widget}, each row one line on *why* and, if kept, a
+   sketch of the smallest version that fits a grid tile.
+3. **Rewrite everything below M0** in this file from that table — merge,
+   split, re-scope, cut, add. Keep it backlog-styled. The owner's original
+   list (clickable artist links, watch/search history, seek, foldable info,
+   search filter/sort pills, playlists + track CRUD, non-destructive queue +
+   clear button, drag-reorder, "left-click actions") is the *starting* set,
+   not the final one.
 
-- bundles **`@sendspin/sendspin-js@5.0.0`** (the exact version MA 2.10.1's
-  bundled frontend `2.17.297` pins — matched on purpose).
-- `new SendspinPlayer({ webSocket: <the authed /sendspin socket>, productName:
-  "Web Player", codecs:["pcm"], correctionMode: "quality-local", … })`, then
-  `player.connect()`.
-  - Passing our own `webSocket` avoids monkey-patching `window.WebSocket` (the
-    MA frontend does that; a wigl widget must not — shared realm).
-  - **`codecs:["pcm"]`** — opus needs a WebCodecs `AudioDecoder` (absent in
-    WKWebView) or the WASM `opus-encdec` fallback (which doesn't even resolve
-    under a bare `bun` script, let alone reliably in the webview); Safari has
-    no FLAC. Raw PCM needs no decoder and ~1.4 Mbit/s is nothing over
-    localhost. This was the likeliest cause of round-1 silence.
-  - **Output mode** is `SENDSPIN_OUTPUT` in `music.config.ts` — `"direct"`
-    (AudioContext → output, SDK default, no extra media process) or
-    `"media-element"` (PCM → MediaStream → hidden `<audio>`, WebKit's blessed
-    path + the visualiser tap). Ships on `"direct"`; `tests/audio-check.md`
-    covers flipping it if there's no sound.
-- Auto-pairs with no operator step: after `connect()`, send
-  `sendspin/pair_web_player {"pairing_token": player.pairingToken}`. Server
-  also `_auto_trust_guest_access`-es a `productName:"Web Player"` client, so
-  playback works even before the pair call resolves.
-- `player.clientId` **is** the MA `player_id`. MA auto-creates a queue with
-  the same id. Playback: `player_queues/play_media {"queue_id": clientId,
-  "media": "<uri>", "option": "replace"}`.
-- **Seeking within a track does not work** (flow-mode limitation, as the brief
-  warned) — next/prev/queue reorder do. The widget shows elapsed/duration as
-  display only, no scrubber.
-- **Visualizer seam kept**: `correctionMode` aside, sendspin-js exposes
-  `DecodedAudioChunk` (raw PCM Float32 per channel) — the future visualizer
-  taps that, not an `AnalyserNode` on an `<audio>` element. No CORS concern
-  because the PCM never crosses an origin (it's inside the WS).
+**Deliverable:** `COMPARISON.md` committed + this backlog rewritten. Then
+proceed to the (rewritten) entries.
 
-### Search / browse / now-playing (all provider-agnostic)
+---
 
-- `music/search {"search_query","media_types":["radio","track","artist",…],
-  "limit","providers":["radiobrowser"]?}` → `SearchResults` (`radio[]`,
-  `tracks[]`, …). Each item has `uri` (e.g. `radiobrowser://radio/<id>`),
-  `name`, `metadata.images[]` (`.path` + `.proxy_id`).
-- Image proxy: `http://127.0.0.1:8095/imageproxy?path=<url-enc path>&provider=<prov>&size=<px>`
-  (widget uses this so remote art loads without tainting anything).
-- `music/browse {"path":"radiobrowser://popularity"}` for discovery.
-- `music/recommendations` → library-based rows (empty on a fresh install).
-- Now-playing/queue: subscribe to `queue_updated` / `queue_time_updated` /
-  `player_updated` events; `player_queues/get {"queue_id"}` and
-  `player_queues/items {"queue_id"}` for the snapshot.
-- Controls: `player_queues/{play,pause,next,previous,clear}` `{"queue_id"}`,
-  `player_queues/play_media` with `"radio_mode":true` for "start radio from
-  this", `players/cmd/volume_set {"player_id","volume_level"}`.
+## S — Seek & now-playing
 
-### YouTube Music — done, free, no account
+### S1 — In-track seek (click / drag the timeline to jump)
 
-MA's *built-in* YouTube Music provider requires a **paid** YouTube Music
-subscription + a browser cookie + a PO-token server (it's an explicit MA
-policy check, `_user_has_ytm_premium()`, not a Google API wall). Rejected.
+The now-playing progress bar is display-only today because MA's Sendspin web
+player was assumed to be flow-mode (no per-track seek). **Resolve whether seek
+is actually possible before designing the UI:** test `player_queues/seek
+{queue_id, position}` against the running Sendspin player and watch whether
+playback jumps (check `queue_time_updated` + listen). Also check
+`player_queues/play_index {queue_id, index, seek_position}` and whether a
+non-flow / per-item stream mode is selectable per player or per queue
+(`/api-docs`, and the `flow_mode` field on `PlayerQueue`). One clear next
+step: run that test, write the answer here, then either (a) build a
+click-and-drag scrubber on the existing progress bar, or (b) if seek genuinely
+can't work, cut the scrubber and note it — don't fake it.
 
-Instead the `wigl-ma` container runs `ghcr.io/sproft/ytmusic-free-provider`
-(stock MA + the community `ytmusic_free` provider: `ytmusicapi` for search,
-`yt-dlp` for streams, anonymous). Added the same way as any provider,
-no credentials. `SETUP.md` has the how and the tradeoffs. The widget is
-provider-agnostic — search picks it up with zero code change; the
-"＋ add youtube music" footer only shows if no `ytmusic*` provider is
-configured.
+### S2 — Expandable "more info" panel
 
-### The `/api-docs` reference
+An info icon on the now-playing bar that expands a foldable panel with
+whatever MA has for the current item: full artist/album, year, genre, bitrate
+/ codec / sample rate (from `streamdetails`), the source provider, a
+description/bio if present, external links. Collapsed by default; state
+persisted via `useStorage`. Independent of S1.
 
-The running server publishes the full command list at
-`http://127.0.0.1:8095/api-docs/commands.json` and REST routes at
-`/api-docs/openapi.json`. That's the source of truth for any command shape,
-not this file.
+### S3 — Lyrics (if M0 says it's worth it)
 
-## Phases 1–3 — DONE. `wigl-widgets/music/` is built, installed, verified.
+MA exposes `music/get_track_lyrics` (LRCLIB + others). If M0's comparison
+keeps this: a lyrics view in the expanded panel (S2), time-synced to
+`queue_time_updated` when LRC timestamps are available, plain scroll
+otherwise. Gate on M0.
 
-```
-wigl-widgets/music/
-  index.tsx            # <Widget> root — status dot, now-playing, browser
-  useMusic.ts          # the hook: connect flow, state, all actions
-  maClient.ts          # /ws control client (login, message_id correlation, events)
-  sendspin.ts          # /sendspin audio — authed socket → @sendspin/sendspin-js
-  serverProcess.ts     # Phase 4: reachability check + `docker start` (opt-in)
-  music.config.ts      # ship defaults; per-machine values → Settings
-  types.ts             # the MA shapes actually read
-  music.css            # IBM Plex Mono + Instrument Serif, the VU-bar animation
-  settingsSection.tsx  # host/port/login, search-provider filter, auto-start toggle
-  components/           # NowPlaying, Browser, Equalizer
-  package.json         # deps: @sendspin/sendspin-js@5.0.0 · perms: storage, command
-```
+---
 
-- **Phase 1** — control WS + Sendspin audio, config→effect→transport→state→
-  render, no query lib. `command` permission is for Phase 4's `docker start`
-  only; `ws://` and `fetch` to localhost need no Tauri capability.
-- **Phase 2** — now-playing (art via `/imageproxy/<proxy_id>`, elapsed/duration
-  display-only), up-next list, play/pause/next/prev/clear, play-now vs
-  add-to-queue, "start radio from this" (`radio_mode: true`).
-- **Phase 3** — offline/empty/error states (`ErrorOverlay`), `/` focuses
-  search + space toggles play, WS + Sendspin reconnect with backoff, a
-  Settings section. (Dropped the MP3-vs-FLAC toggle — the SDK negotiates codec
-  with the browser; on WKWebView that lands on PCM over localhost, which is
-  fine and not worth a knob.)
+## Q — Queue & playlists
 
-**Verified live** (headless — see F11 in `backlog.md` for the one gap): control
-auth, Sendspin proxy auth, player registration with MA, `play_media`, queue
-advancing, events flowing. Not verifiable without a human: that sound actually
-comes out of the speakers.
+### Q1 — Non-destructive "play" + explicit clear
 
-## Phase 4 — DONE (minimal). `serverProcess.ts` + the "Auto-start server" toggle.
+Today clicking a search result does `play_media {option:"replace"}` — it wipes
+the queue. Change the default left-click to **play-now-without-clearing**
+(`option:"replace_next"` or play + keep tail — verify which MA option does
+"play this now, keep everything after the current item"), and make queue
+clearing an explicit button in the up-next header (a Clear already exists
+there — make sure it's the *only* thing that empties the queue). One next
+step: nail down the MA `QueueOption` semantics against `/api-docs`, then
+rewire `play()` in `useMusic.ts` + the row click in `Browser.tsx`.
 
-Deliberately smaller than the brief: it only `docker start`s an already-created
-`wigl-ma` container when MA is unreachable and the owner flipped the Settings
-toggle (off by default). It does **not** `docker run` (that needs the image +
-the volume-path decision, made once by hand — see the `docker run` in the
-Phase 0 section). No `shell:allow-spawn` needed — `runCmd` (execute, not spawn)
-is enough for `docker start`, and `command` covers it. `global-deps.md` has the
-Music Assistant entry.
+### Q2 — Drag-to-reorder the queue
 
-## Seams for later (do not build now)
+Up-next rows draggable to reorder → `player_queues/move_item {queue_id,
+queue_item_id, pos_shift}` (or `move_item_end`). Use a pointer-based reorder
+(no new dep — small list, see `wigl-widgets/repos` / `Desktop.tsx` for
+pointer-drag patterns already in the repo). Optimistic local reorder,
+reconcile on the next `queue_items_updated`.
 
-- **Visualizer:** keep the `<audio>` element reachable →
-  `createMediaElementSource` → `AnalyserNode` → `<canvas>`. Needs the `:8097`
-  stream to have permissive CORS (Phase 0 step 3).
-- **More sources:** enable in MA config + widen the search filter. Keep
-  search/results provider-agnostic from day 1 so this is config-only.
-- **Local library:** Navidrome/Jellyfin + MA Subsonic provider → same widget.
-- **Downloading:** `yt-dlp` shelled via `sh -c` to a cache dir, as a per-track
-  action. Adds `yt-dlp` to `global-deps.md`.
-- **Taste discovery:** ListenBrainz — scrobble finished plays, pull
-  weekly-discovery / lb-radio, resolve each MBID via MA search.
+### Q3 — Per-row queue actions
 
-## Fallback if Music Assistant doesn't work out
+Each queue row (and each search-result row) gets a small action affordance —
+remove from queue (`player_queues/delete_item`), play next, add to a playlist
+(needs P1), go to artist/album (needs I1). Decide left-click-opens-menu vs
+hover-icons vs both from M0's comparison. Keep it one compact control, not a
+row of five icons.
 
-Thin `yt-dlp` glue, no backend server:
+### P1 — Playlists: create + CRUD
 
-- HTML5 `<audio>` playing locally-cached files; `yt-dlp -x --audio-format opus`
-  via `sh -c` to a cache dir; `ytmusicapi` (Python) for search +
-  `get_watch_playlist` radio; LRU-evict the cache by mtime.
-- Pros: perfect seeking, offline, small, visualizer works trivially.
-- Cons: hand-build queue/prefetch/cache; own the `yt-dlp -U` treadmill; getting
-  the file into the webview needs an `asset:` protocol scope + a
-  `convertFileSrc` host module (~15 LOC core) or a `base64`-through-shell Blob.
+Full playlist support against MA's `music/playlists/*`:
 
-## Sources
+- list the user's playlists (`music/library/playlists` or `music/browse`)
+- create (`music/playlists/create_playlist`)
+- add a track — from a search result, a queue row, or now-playing
+  (`music/playlists/add_playlist_tracks`)
+- remove / reorder tracks (`remove_playlist_tracks`, and check for a reorder
+  command)
+- rename / delete the playlist
+- play a playlist (`play_media` with the playlist uri) and "add playlist to
+  queue"
 
-- MA API / architecture: <https://www.music-assistant.io/api/>,
-  <https://developers.music-assistant.io/>,
-  <https://github.com/music-assistant/server> (webserver README:
-  `music_assistant/controllers/webserver/README.md`)
-- MA builtin web player: <https://github.com/music-assistant/server/pull/2009>,
-  <https://www.music-assistant.io/faq/stream-to/>
-- MA install / Docker / standalone: <https://www.music-assistant.io/installation/>,
-  <https://github.com/orgs/music-assistant/discussions/1391>
-- MA YouTube Music provider: <https://www.music-assistant.io/music-providers/youtube-music/>
-- yt-dlp 2026 state (fallback): <https://github.com/yt-dlp/yt-dlp/issues/16607>
-- Web Audio CORS / tainted media: <https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Visualizations_with_Web_Audio_API>
-- ListenBrainz APIs: <https://listenbrainz.readthedocs.io/en/latest/users/api/recommendation.html>
+This is the biggest single entry — it may want its own `Playlists.tsx`
+sub-view in the widget (a third pane alongside now-playing / browser, or a
+tab). M0 should sketch where it lives. One next step: read all of
+`music/playlists/*` and `music/library/*` in `/api-docs`, write the exact
+command list here, then build the read path (list + view) before the writes.
+
+### Q4 — "Add queued/playing item to a playlist"
+
+Falls out of P1 + Q3 — the "add to playlist" action wired from queue rows and
+the now-playing bar. Keep as a reminder that it's a required surface, not just
+a playlist-view feature.
+
+---
+
+## H — History
+
+### H1 — Play history ("watch history")
+
+A scrollable list of recently-played tracks/stations, newest first, each
+re-playable in one click. Source: MA fires an event when an item finishes
+(`media_item_played` / a queue event — confirm which in `/api-docs` +
+by watching the live event stream). Persist locally via `useStorage` (cap ~200
+entries, dedup consecutive repeats). If MA already keeps a server-side history
+(`music/recently_played` or similar — check), prefer reading that and only
+fall back to the local log. Independent of everything else.
+
+### H2 — Search history
+
+Recent search queries, shown as tappable chips under the search field when it's
+focused and empty. `useStorage`, cap ~20, most-recent-first, dedup. Small,
+independent.
+
+---
+
+## D — Search & discovery
+
+### D1 — Search filters & sort
+
+Filter pills above the results for which media types to include
+(radio / tracks / artists / albums / playlists) and which providers, plus a
+sort control (relevance / name / … — whatever `music/search` supports, else
+sort client-side). The widget already asks for all media types; this is
+mostly UI + passing `media_types` / `providers` through. Genre filtering:
+check whether `music/search` takes a genre facet or whether it's a
+`music/browse` path thing — note the answer here. Persist the last-used
+filter set.
+
+### D2 — Discovery / browse view
+
+When the search box is empty, instead of just "up next", show browsable rows:
+`music/recommendations` (once the library has content), `music/browse` into
+`radiobrowser://popularity` and `ytmusic_free://` (charts / moods / genres).
+This is the "home screen". Depends on M0 for layout; independent of the Q/P
+entries.
+
+---
+
+## I — Interaction
+
+### I1 — Clickable entities (artist / album / playlist)
+
+Artist and album names in results, the queue, and now-playing become links.
+Clicking an artist opens an artist view (top tracks, albums, "start artist
+radio" via `play_media {radio_mode:true}`); clicking an album opens its track
+list. Needs a lightweight in-widget navigation stack (a `view` state:
+`browse | artist | album | playlist`, with a back affordance) — M0 should
+decide how heavy this gets. `music/artists/*` and `music/albums/*` in
+`/api-docs` for the data. This unblocks the "go to artist" row action in Q3.
+
+### I2 — Row interaction model ("left-click actions")
+
+Decide and implement one consistent model for what a left-click, a
+right-click, and a hover do on a result/queue/playlist row, from M0's
+comparison of how the reference players do it. Likely: left-click plays,
+a `⋯` button (or left-click on a dedicated spot) opens a compact action menu
+(play next, add to queue, add to playlist, go to artist/album, favourite,
+remove). Right-click on a widget body already falls through to the OS menu
+(`docs/widgets.md`) — don't fight that; use an in-content trigger. This entry
+is the umbrella that Q3 / I1 / P1 all plug into — do it alongside M0's output,
+not in isolation.
+
+### I3 — Keyboard
+
+Extend the existing `/` + space. From M0: likely ← / → seek (needs S1),
+n / p next/prev, arrow-navigate the focused list, enter to play,
+`a` add-to-queue. Scope from the comparison; keep it to what fits a widget
+(no global media-key capture — that's an OS-integration rabbit hole, note it
+as out of scope unless M0 strongly disagrees).
+
+---
+
+## X — Cross-cutting / infra these may need
+
+### X1 — In-widget navigation
+
+I1 (artist/album views), P1 (playlists view), D2 (discovery) and H1 (history)
+all imply the widget grows from two panes (now-playing + browser) to a small
+navigable app. Before building the second of those, add the shared piece: a
+`view` state + a back button + a header that reflects where you are. Keep it a
+plain reducer in `useMusic.ts` or a tiny `useView` — not a router lib. M0's
+layout sketch drives this.
+
+### X2 — `useQuery` for expensive reads
+
+Artist pages, album track lists, playlist contents, discovery rows — cache
+them with `@/wigl/hooks`' `useQuery` (`useSql: true` for the ones worth
+persisting) rather than re-fetching on every navigation. Adopt as I1/P1/D2 get
+built, not upfront.
+
+### X3 — Grow the e2e test with each feature
+
+`tests/music.e2e.test.ts` currently covers login / search shapes / audio-proxy
+/ YouTube. Every entry that leans on a new MA command (seek, playlists,
+history, move_item, …) adds one `test.skipIf(!reachable)` asserting that
+command's real shape — the drift regression is the whole value (see AGENTS.md
+"Testing"). Not a separate task; part of "done" for each entry.
+
+---
+
+## Out of scope (revisit only if M0 makes the case)
+
+- **Visualiser** — the seam is kept (`DecodedAudioChunk`), but it's polish, not
+  a core-player gap. After the list above.
+- **Downloading / offline** — the widget is a streaming control surface;
+  offline caching is a different product.
+- **Local library** (Navidrome/Jellyfin via MA's Subsonic provider) — config,
+  not widget code. Works today if the owner adds the provider.
+- **Scrobbling to Last.fm / ListenBrainz** — MA-side provider config.
+- **OS media-key / Now-Playing-widget integration** — needs Rust + entitlements
+  (`docs/architecture.md`'s "one native poller" altitude). Big, separate.
+- **Multi-room / multiple players** — MA supports it; the widget deliberately
+  drives one player (its own). Not a gap.
