@@ -44,6 +44,19 @@ export const SEARCH_LIMIT = 8;
  * to produce sound here. */
 export const SENDSPIN_CODECS = ["pcm"] as const;
 
+/** How the Sendspin SDK gets audio to the output device:
+ * - `"direct"` — AudioContext → destination. No extra WebKit media process,
+ *   no OS media-playback entitlement needed. The SDK default on desktop.
+ * - `"media-element"` — decoded PCM → MediaStream → a hidden `<audio>`. The
+ *   "blessed" WebKit path and the visualiser tap point, but it spawns a
+ *   media process that logs an RBS-assertion warning in an unsigned dev
+ *   build (harmless in the foreground; unproven for an always-on-bottom
+ *   window).
+ *
+ * Start on `"direct"`; if there's no sound, flip this and `widget:install`
+ * (see tests/audio-check.md). */
+export const SENDSPIN_OUTPUT: "direct" | "media-element" = "direct";
+
 /** Docker container name used by Phase 4 adopt/start. Matches the `docker
  * run --name` in todo-musicplayer.md. */
 export const MA_CONTAINER = "wigl-ma";

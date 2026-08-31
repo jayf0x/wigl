@@ -5,14 +5,13 @@
 // never have to monkey-patch `window.WebSocket` the way MA's frontend does
 // (a wigl widget shares one JS realm with its neighbours — hard rule 4).
 //
-// Output goes through a real hidden <audio> element ("media-element" mode),
-// not the SDK's speaker-direct AudioContext path: WebKit reliably routes a
-// playing media element to the output device, and it gives the widget a
-// concrete handle to inspect (a test can read `audio.paused`/`srcObject`)
-// and, later, to tap for a visualiser.
+// Output mode is `SENDSPIN_OUTPUT` in music.config.ts — "direct" (AudioContext
+// straight to the output, the SDK desktop default, no extra media process) or
+// "media-element" (decoded PCM → MediaStream → hidden <audio>, the WebKit-
+// blessed path + visualiser tap). Start on "direct"; flip if it's silent.
 
 import { loadSendspinClientIdentity, SendspinPlayer } from "@sendspin/sendspin-js";
-import { SENDSPIN_CODECS } from "./music.config";
+import { SENDSPIN_CODECS, SENDSPIN_OUTPUT } from "./music.config";
 
 export interface SendspinState {
   isPlaying: boolean;
@@ -66,9 +65,10 @@ const makeAudioElement = (): HTMLAudioElement => {
 export interface SendspinHandle {
   /** == the Music Assistant player_id / queue_id for this widget. */
   playerId: string;
-  /** The hidden output element — inspectable by tests, tap-able for a
-   * future visualiser (`createMediaElementSource`). */
-  audioElement: HTMLAudioElement;
+  /** The hidden output element in `"media-element"` mode, else null (the
+   * `"direct"` mode plays straight through an AudioContext). Inspectable by
+   * tests, tap-able for a future visualiser. */
+  audioElement: HTMLAudioElement | null;
   setVolume: (v: number) => void;
   /** Resume the AudioContext + start the media element. Must be called from
    * within a user gesture, before the first `play_media`. Safe to call
@@ -91,11 +91,11 @@ export const connectSendspin = async (opts: {
 }): Promise<SendspinHandle> => {
   const identity = loadSendspinClientIdentity();
   const socket = await openAuthedSocket(opts.host, opts.port, opts.token, identity.clientId);
-  const audioElement = makeAudioElement();
+  const audioElement = SENDSPIN_OUTPUT === "media-element" ? makeAudioElement() : null;
 
   const player = new SendspinPlayer({
     webSocket: socket,
-    audioElement,
+    audioElement: audioElement ?? undefined,
     clientName: opts.clientName,
     // How MA recognises us as its built-in web player (auto-trusted, no
     // operator pairing step) rather than a third-party device.
@@ -141,13 +141,13 @@ export const connectSendspin = async (opts: {
       // media-element mode: the element itself must be playing for WebKit to
       // route audio. `unlock()` starts it, but a prior autoplay block can
       // leave it paused — nudge it here too (we're inside a gesture).
-      if (audioElement.paused) await audioElement.play().catch(() => {});
+      if (audioElement?.paused) await audioElement.play().catch(() => {});
     },
     disconnect: () => {
       dropped = true;
       socket.removeEventListener("close", fireDrop);
       player.disconnect("user_request");
-      audioElement.remove();
+      audioElement?.remove();
     },
   };
 };

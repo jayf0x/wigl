@@ -86,8 +86,9 @@ docker run -d --name wigl-ma -p 8095:8095 -p 8097:8097 \
 ```
 
 - Data/config persists in `.idea/ma-data/` (gitignored). Onboarded admin user
-  is **`wigl` / `wigl-local-dev`** (localhost-only dev creds; change in the
-  widget's Settings section if you like).
+  is **`test` / `testtest`** (localhost-only dev creds — MA enforces an 8-char
+  minimum, so plain `test`/`test` is rejected; change both in the widget's
+  Settings section if you like). Same login works at `http://127.0.0.1:8095`.
 - Boots in ~15 s on first run (downloads a torch beat-detection checkpoint
   once). `GET /info` → 200 with `onboard_done` once set up.
 - **Docker Desktop wedged once during setup** — container start/rm hung for
@@ -130,10 +131,20 @@ What the widget does instead (verified API shapes, built):
 - bundles **`@sendspin/sendspin-js@5.0.0`** (the exact version MA 2.10.1's
   bundled frontend `2.17.297` pins — matched on purpose).
 - `new SendspinPlayer({ webSocket: <the authed /sendspin socket>, productName:
-  "Web Player", clientName, codecs:["opus","flac","pcm"], correctionMode:
-  "quality-local", onStateChange, onPairing, … })`, then `player.connect()`.
-  Passing our own `webSocket` avoids monkey-patching `window.WebSocket` (the
-  MA frontend does that; a wigl widget must not — shared realm).
+  "Web Player", codecs:["pcm"], correctionMode: "quality-local", … })`, then
+  `player.connect()`.
+  - Passing our own `webSocket` avoids monkey-patching `window.WebSocket` (the
+    MA frontend does that; a wigl widget must not — shared realm).
+  - **`codecs:["pcm"]`** — opus needs a WebCodecs `AudioDecoder` (absent in
+    WKWebView) or the WASM `opus-encdec` fallback (which doesn't even resolve
+    under a bare `bun` script, let alone reliably in the webview); Safari has
+    no FLAC. Raw PCM needs no decoder and ~1.4 Mbit/s is nothing over
+    localhost. This was the likeliest cause of round-1 silence.
+  - **Output mode** is `SENDSPIN_OUTPUT` in `music.config.ts` — `"direct"`
+    (AudioContext → output, SDK default, no extra media process) or
+    `"media-element"` (PCM → MediaStream → hidden `<audio>`, WebKit's blessed
+    path + the visualiser tap). Ships on `"direct"`; `tests/audio-check.md`
+    covers flipping it if there's no sound.
 - Auto-pairs with no operator step: after `connect()`, send
   `sendspin/pair_web_player {"pairing_token": player.pairingToken}`. Server
   also `_auto_trust_guest_access`-es a `productName:"Web Player"` client, so
