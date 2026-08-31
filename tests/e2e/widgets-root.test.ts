@@ -149,6 +149,42 @@ describe("a widget that never renders <Widget> in an external root", () => {
   }, 30_000);
 });
 
+describe("a widget using a gated host export it never declared", () => {
+  test("builds fine but fails widget:check, naming the missing permission", async () => {
+    const root = await makeScenarioRoot(devkitDir, ["undeclared-permission-widget"]);
+    const widgetDir = join(root, "undeclared-permission-widget");
+
+    const build = await runWidgetCli(["build", widgetDir]);
+    expect(build.code).toBe(0);
+
+    const check = await runWidgetCli(["check", widgetDir]);
+    expect(check.code).not.toBe(0);
+    expect(check.stdout + check.stderr).toMatch(/without the "storage" permission/);
+  }, 30_000);
+});
+
+describe("widget:verify", () => {
+  test("builds and checks in one command", async () => {
+    const root = await makeScenarioRoot(devkitDir, ["good-widget"]);
+    const widgetDir = join(root, "good-widget");
+
+    // No prior build: verify's whole reason to exist is that `check` alone
+    // would either fail here or (worse, after an edit) pass against stale
+    // output.
+    const verify = await runWidgetCli(["verify", widgetDir]);
+    expect(verify.code).toBe(0);
+    expect(verify.stdout).toMatch(/loads and renders/);
+  }, 30_000);
+
+  test("fails when the widget doesn't render <Widget>, without needing a separate build step", async () => {
+    const root = await makeScenarioRoot(devkitDir, ["no-widget-export"]);
+
+    const verify = await runWidgetCli(["verify", join(root, "no-widget-export")]);
+    expect(verify.code).not.toBe(0);
+    expect(verify.stdout + verify.stderr).toMatch(/doesn't render <Widget>/);
+  }, 30_000);
+});
+
 describe("WIGL_WIDGETS_ROOT sweep against an external root", () => {
   test("installs every qualifying widget, skips underscore-prefixed ones, prunes stale installs", async () => {
     const root = await makeScenarioRoot(devkitDir, ["good-widget"]);

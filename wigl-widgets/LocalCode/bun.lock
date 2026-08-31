@@ -7,7 +7,7 @@
         "@milkdown/crepe": "^7.22.0",
         "@milkdown/kit": "^7.22.0",
         "@opencode-ai/sdk": "^1.18.18",
-        "yake-ts": "1.2.2",
+        "yake-ts": "^1.2.2",
       },
     },
   },

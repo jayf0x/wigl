@@ -4,6 +4,9 @@
  *
  *   bun run widget:build       wigl-widgets/calendar   # one widget
  *   bun run widget:build                               # every wigl-widgets/<name> folder
+ *   bun run widget:check       wigl-widgets/calendar   # render what's already built
+ *   bun run widget:verify      wigl-widgets/calendar   # build, then render (the edit loop)
+ *   bun run widget:verify                              # ...every widget
  *   bun run widget:install     wigl-widgets/calendar   # build, then copy into app data
  *   bun run widget:install                             # build+install every widget
  *   bun run widget:list
@@ -296,37 +299,45 @@ const pruneStaleInstalls = async (currentIds: Set<string>) => {
  * the cheapest way to force a first render outside a browser/webview.
  * `useEffect` never fires under it, so a widget's actual `setInterval`/shell-
  * command/`useStorage` data-fetch path is never exercised here — only
- * import-time crashes, jsx-runtime mismatches, an undeclared host module, and
- * a first-render throw. That gap is fine to leave open (see docs/debugging.md
- * for how a widget's live behavior actually gets verified) rather than
- * pulling in a DOM shim to close it. */
+ * import-time crashes, jsx-runtime mismatches, an undeclared host module or
+ * permission, and a first-render throw. That gap is fine to leave open (see
+ * docs/debugging.md for how a widget's live behavior actually gets verified)
+ * rather than pulling in a DOM shim to close it.
+ *
+ * The require handed to the bundle is the app's own `createPluginRequire`,
+ * not a permissive stand-in built here: it's what applies the permission
+ * gates and the per-widget storage-key scoping, so a widget that reads a
+ * gated export it never declared fails here the same way it would in the
+ * app. An earlier version of this function served every host module
+ * unconditionally, which meant exactly that class of bug ("shell.spawn not
+ * allowed", found by hand after a build) passed the check. */
 const check = async (dir: string) => {
   requireProductionEnv("check");
   const config = await readWidgetConfig(dir);
   const entry = join(dir, config.entry);
   if (!(await Bun.file(entry).exists())) die(`${config.id}: not built yet — run widget:build first`);
 
-  // Real host modules, resolved through the app's own tsconfig paths — a
-  // stub would defeat the purpose. `@tauri-apps/*` calls inside them do fail
+  // Imported eagerly (and dynamically, so the CLI's other commands never pay
+  // for React) to fail with a clear message here rather than mid-render: the
+  // registry pulls in every host module, and any one of them failing to
+  // resolve outside a webview would otherwise surface as an opaque throw
+  // from inside the widget. `@tauri-apps/*` calls inside them do fail
   // outside a webview, but `renderToString` runs no effects, so a widget's
   // first paint doesn't depend on one.
-  const real = new Map<string, unknown>();
-  for (const spec of HOST_MODULE_IDS) {
-    try {
-      real.set(spec, await import(spec));
-    } catch (e) {
-      die(`host module "${spec}" can't be imported for checking: ${e instanceof Error ? e.message : String(e)}`);
-    }
+  let createPluginRequire: (id: string, permissions: never[]) => (spec: string) => unknown;
+  try {
+    ({ createPluginRequire } = (await import("../src/wigl/plugins/registry")) as never);
+  } catch (e) {
+    die(`host module registry can't be imported for checking: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   const required: string[] = [];
+  const hostRequire = createPluginRequire(config.id, config.permissions as never[]);
   const g = globalThis as unknown as { __wigl_scopes__: Record<string, (s: string) => unknown> };
   g.__wigl_scopes__ = {
     [config.id]: (spec: string) => {
-      const mod = real.get(spec);
-      if (!mod) die(`${config.id}: required "${spec}", which the host doesn't serve`);
       required.push(spec);
-      return mod;
+      return hostRequire(spec);
     },
   };
 
@@ -370,6 +381,17 @@ const check = async (dir: string) => {
   console.log(`✓ ${config.id} loads and renders (${(html as string).length} chars of markup)`);
   console.log(`  host modules: ${unique.join(", ") || "none"}`);
   console.log(`  permissions declared: ${config.permissions.join(", ") || "none"}`);
+};
+
+/** `check` against fresh output rather than whatever `.wigl/` happens to hold
+ * — checking a stale bundle is worse than not checking, since it reports a
+ * pass for source that was never compiled. Separate from plain `check` (which
+ * refuses to build for you) because the two have different callers: `check`
+ * is for CI-shaped "is what's built correct", this is for the edit loop, where
+ * the build is a step you'd otherwise forget. */
+const verifyWidget = async (dir: string) => {
+  await build(dir);
+  await check(dir);
 };
 
 /** Exports what an out-of-repo widget folder needs to typecheck the same way
@@ -530,9 +552,28 @@ const COMMANDS: CliCommand[] = [
   {
     id: "check",
     label: "Check",
-    usage: "widget check <dir>",
+    usage: "widget check [dir]",
     run: async (arg) => {
-      await check(resolve(arg ?? die("usage: widget check <dir>")));
+      if (arg) {
+        await check(resolve(arg));
+      } else {
+        for (const dir of await allWidgetDirs()) await check(dir);
+      }
+    },
+  },
+  {
+    id: "verify",
+    label: "Verify",
+    usage: "widget verify [dir]",
+    run: async (arg) => {
+      if (arg) {
+        await verifyWidget(resolve(arg));
+      } else {
+        for (const dir of await allWidgetDirs()) {
+          if (findEntrySource(dir)) await verifyWidget(dir);
+          else await check(dir);
+        }
+      }
     },
   },
   {

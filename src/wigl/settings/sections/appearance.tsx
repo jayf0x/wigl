@@ -80,7 +80,7 @@ const PresetCard = ({
   >
     <div className="flex h-6 overflow-hidden rounded-md ring-1 ring-foreground/10">
       {colors.map((c, i) => (
-        <span key={i} className="flex-1" style={swatchStyle(c)} />
+        <span key={`${c}-${i}`} className="flex-1" style={swatchStyle(c)} />
       ))}
     </div>
     <span className="px-0.5 font-mono text-[11px] tracking-wide">{name}</span>
