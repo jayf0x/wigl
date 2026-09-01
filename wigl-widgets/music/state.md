@@ -48,13 +48,18 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
   `createMediaElementSource`. Opening the tab now **transparently switches**
   to `"media-element"` (no "enable" step); the switch reconnects the player,
   and `useMusic` captures the play/pause state into `playIntentRef` beforehand
-  and re-asserts it ~1.2 s after `ready` (failsafe against a reconnect that
-  silently pauses/resumes). `audioGraph.ts` owns the Web Audio chain;
-  `useMusic` owns its lifecycle (created on connect if `audio.audioElement`
-  exists, disposed on teardown). **No playback-speed control** — the SDK's
-  `MediaStream` source makes `playbackRate` inert (HTML spec); real
-  time-stretch needs a WSOLA AudioWorklet (parked with a full spec in
-  `backlog-music.md` "Parked — playback speed").
+  and re-asserts it ~1.2 s after `ready`. That failsafe is now **general**:
+  `useMusic`'s connect effect captures `nowRef.current?.playing` in its
+  *cleanup* before every teardown, and `boot()` re-asserts it once the fresh
+  player is `ready` — so a host/port/login edit, the auto-start-server toggle,
+  or a dropped socket resume playback too, not just the output switch.
+  `audioGraph.ts` owns the Web Audio chain; `useMusic` owns its lifecycle
+  (created on connect if `audio.audioElement` exists, disposed on teardown).
+  **No playback-speed control, and it's blocked** — a live `MediaStream`
+  delivers samples at realtime, so time-stretch is physically impossible
+  in-widget (`playbackRate` inert; `@soundtouchjs/audio-worklet` v2 only
+  pitch-shifts a fixed-rate input; `set_playback_speed` audiobook-only). Needs
+  an audio-transport change — see `backlog-music.md` "Blocked — playback speed".
   `SENDSPIN_CODECS` also in config. Login/creds default to `test`/`testtest`.
 
 ## Files
@@ -70,6 +75,7 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | `types.ts` | The MA shapes actually read (partial — `/api-docs` is truth). |
 | `util.ts` | `providerLabel()` and small pure helpers. |
 | `pickImage.ts` | E3 — `pickImageDataUri()`: system file chooser (`osascript` / `zenity`) + `sips`/ImageMagick downscale + base64 through one `sh -c`, returns a self-contained data URI. No dialog plugin, no asset protocol; `command` permission only. |
+| `playlistImage.ts` | `playlistDisplayImage(api, playlist, fallbackArt?)` — the single source of truth for a playlist's image: custom background (`api.playlistImages[id]`, E3) > MA art > first-track art (caller-supplied) > null. Used by the detail header, the Playlists-list rows, and the pinned strip so they never disagree (feedback E). |
 | `music.css` | `IBM Plex Mono` + `Instrument Serif` (serif = track titles only), the `.music-cq` container query, the `.music-eq` VU animation, and the **`.mx-` motion layer** — a documented set of mechanical-feel interaction classes (`.mx-press` key-depress, `.mx-tap` async-click ring pulse, `.mx-pending`/`.mx-pending-long` in-flight shimmer, `.mx-flash` done-ack, `.mx-sync` LED blink, `.mx-enter` view transition) + standardised `--mx-*` duration/easing tokens on `.music-widget`. All `prefers-reduced-motion`-aware, theme-token driven. Applied so far in `NowPlaying` (transport/volume/ⓘ) + the Home tab bar + panel; app-wide application is a later pass. Also the **icon treatment** (feedback I): `.music-widget svg { stroke-width: 2.25px }` globally + `.mx-icon-strong` (2.5px) on the primary transport button, whose glyphs are also bumped to 18px. Line-toggle icons (repeat/shuffle) stay stroke-only — filling those glyphs blobs them. |
 | `settingsSection.tsx` | Settings-modal section: host/port/login, provider filter, auto-start toggle, audio-effects path toggle, and the H1 "Backend" `OpButton`s (Restart / Clear cache / Update server). Password field uses the shared `@/components/ui/password-input` (eye toggle). |
 | `FEATURES.md` | User-facing "what the non-obvious features do" (queue model, ⋯ menu, radio, playlists, search, effects, keys). Keep it current when UX changes. |
@@ -77,9 +83,9 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 module). Scrubber samples `api.getProgress()` every `PROGRESS_TICK_MS` while playing for a smooth clock; transport buttons disable while their action is in `api.pending`. `TrackInfo` fetches the full `music/tracks/get` via `useQuery` (`track:<uri>`) and renders clickable artist/credit chips (C3). |
 | `components/Browser.tsx` | The switchable main pane: search field + `SearchFilters` + results, OR a detail view, OR `<Home>`. Hosts the nav breadcrumb. Shows a `SearchSkeleton` strip at the top of results while any provider search is still in flight; previous results stay rendered underneath. |
 | `components/Home.tsx` | Tabbed default pane: Up next (`QueueList`) / Playlists / Recent / Browse (`BrowseTab`). `PinnedStrip` above the tabs = horizontal quick-access chips for `api.pinnedPlaylists` (F1). |
-| `components/QueueList.tsx` | Up-next list with pointer drag-reorder + per-row `⋯`. `QueueHeader`: "Save" (→ `saveQueueAsPlaylist`, queue untouched) + two-step "Clear" (D2/D4). |
-| `components/DetailView.tsx` | `ArtistView` / `AlbumView` / `PlaylistView` — the nav-stack destinations. `PlayPills` = the D1-toggle-aware primary play button (+ explicit "Play now" in append mode). `PlaylistView`: inline Rename (E1), Background image (E3, `useStorage` key `plbg:<id>`), two-step Delete. Track rows capped at `PLAYLIST_RENDER_CAP`. |
-| `components/Row.tsx` | The universal media row + `RowAction`. Exports `standardActions` (Play now / Play next / Add to queue / Favourite / Add-to-playlist / Merge-into (playlist rows) / "{Track,Artist,Album,Playlist} radio" → navigates to the `radio_playlist` mix / Go to artist·album), `RowActionButtons` (inline icon shortcuts for Add-to-queue / Play-next / Favourite, container-query gated via `.music-row-inline`, + the `⋯` toggle) and `RowActionPanel` (the fold-down pill menu with submenu + inline-input support) — the last two reused by `NowPlaying`. Every list uses `Row`. |
+| `components/QueueList.tsx` | Up-next list with pointer drag-reorder + per-row `⋯`. `QueueHeader`: "Save" (→ `saveQueueAsPlaylist`, queue untouched; on success swaps to a flashing "saved as …" acknowledgement — feedback D) + two-step "Clear" (D2/D4). |
+| `components/DetailView.tsx` | `ArtistView` / `AlbumView` / `PlaylistView` — the nav-stack destinations. `PlayPills` = the D1-toggle-aware primary play button (+ explicit "Play now" in append mode). `PlaylistView`: inline Rename (E1), Background image (E3 — `api.playlistImages` / `api.setPlaylistImage`, also replaces the header cover, feedback E), two-step Delete. Track rows capped at `PLAYLIST_RENDER_CAP`. |
+| `components/Row.tsx` | The universal media row + `RowAction`. A click or double-click anywhere on the row's main area **always** plays (and closes an open `⋯` panel — feedback C), guarded against a click-then-dblclick triple fire. The inline-shortcut vs `⋯`-overflow split is measured per row in JS now (a `ResizeObserver`, `INLINE_MIN_PX`) so `RowActionPanel` can be handed an `exclude` list and never show an action that's already inline (feedback F); plain panel actions collapse to icon + `<Tooltip>` (feedback C/I). Exports `standardActions` (Play now / Play next / Add to queue / Favourite / Add-to-playlist / Merge-into (playlist rows) / "{Track,Artist,Album,Playlist} radio" → navigates to the `radio_playlist` mix / Go to artist·album), `RowActionButtons` (takes the already-resolved `inline` actions + the `⋯` toggle; `.music-row-inline` is now just `display:flex`, JS decides whether to render it) and `RowActionPanel` (the fold-down pill menu with submenu + inline-input support, `exclude?` prop, icon+tooltip for plain actions) — `RowActionPanel` is also reused by `NowPlaying`. Every list uses `Row`. |
 | `components/SearchFilters.tsx` | Media-type + provider filter pills. |
 | `components/BrowseTab.tsx` | `music/browse` folder navigator with its own path stack. Root level has a "＋ add a music source" footer → opens the MA web UI (F2). |
 | `components/EffectsTab.tsx` | The Effects Home tab: a **4-band graphic EQ** (custom `VFader`s, peaking, ±12 dB, centre detent) + **Reverb** fader + a **Bypass (on/off)** toggle distinct from **Reset**. Auto-switches to `media-element` on mount (no enable step). Slider race fix: local `draft` for the instant visual, `api.applyFx` to the graph on rAF, `api.setFx` (persist) debounced 400 ms; faders read `draft` mid-drag, stored `api.fx` otherwise. |
@@ -174,9 +180,11 @@ widget currently uses:
 - **Scope: a music player, nothing more.** Owner: "I really just want a music
   player to replace listening to YouTube via an app." No lyrics, no visualiser,
   no library management beyond playlists + favourites. **Audio effects (4-band
-  EQ + reverb) are in** — the Effects tab, `media-element` output. **Speed
-  is parked** (MediaStream makes `playbackRate` inert; needs a WSOLA
-  AudioWorklet — full spec in `backlog-music.md`).
+  EQ + reverb) are in** — the Effects tab, `media-element` output. **Speed is
+  blocked, not parked**: a live `MediaStream` can't be time-stretched
+  in-widget at all (see the audio paragraph above + `backlog-music.md`
+  "Blocked — playback speed"). Shipping it needs an audio-transport change,
+  which is itself a locked decision — so it's a real owner call, not a build.
 - **No native audio path.** `codecs:["pcm"]` over localhost is already lossless
   from MA; a Tauri audio plugin on `:8097` would only cost the Web Audio tap
   and a Rust dependency. Sendspin stays the audio transport.
@@ -192,5 +200,10 @@ widget currently uses:
 
 - Rich track metadata (performers/label/review) is null without an MA metadata
   provider on the server (backlog "Rich track metadata…").
-- Playlist background image (E3) is a base64 data URI in the widget kv blob —
-  fine for a handful of small images, not a media library.
+- Playlist background images (E3) are base64 data URIs in one `playlist_images`
+  kv map — fine for a handful of small images, not a media library.
+- The `.mx-` motion layer is applied widely now (Row, Home, Browser,
+  DetailView, EffectsTab, QueueList, SearchFilters, BrowseTab, settingsSection
+  + the earlier NowPlaying pass). `settingsSection` opts into the
+  `.music-widget` scope (with `fontFamily: inherit`) so the shared classes
+  reach it inside the app's Settings modal.

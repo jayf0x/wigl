@@ -17,15 +17,22 @@ what's already there — one misclick can't wipe your queue. To change that:
   and it asks twice.
 
 **Save a queue** you like: the **Save** button in the Up-next tab copies it to
-a new playlist (named `queue - …`, rename it after). The queue keeps playing.
+a new playlist (named `queue - …`, rename it after) and confirms with a
+"saved as …" flash. The queue keeps playing.
 
 ## Rows: the ⋯ menu and the inline shortcuts
 
+A click (or double-click) anywhere on a track's main area always plays it —
+even when the **⋯** panel is open, in which case the click also closes the
+panel.
+
 Hovering a track shows a couple of inline icons (add to queue, favourite) — on
-a wider tile more of them appear. The **⋯** opens the full menu: Play next,
-Add to queue, **Add to playlist** (pick one, or "New playlist…"), Favourite,
-**{Track/Artist/Album} radio**, Go to artist, Go to album. On queue rows it
-also has Remove and Move to top/bottom (or just drag rows to reorder).
+a wider tile more of them appear. The **⋯** opens the full menu (icons with
+hover tooltips): Play next, Add to queue, **Add to playlist** (pick one, or
+"New playlist…"), Favourite, **{Track/Artist/Album} radio**, Go to artist, Go
+to album — minus whatever's already shown as an inline icon, so nothing is
+listed twice. On queue rows it also has Remove and Move to top/bottom (or just
+drag rows to reorder).
 
 The **now-playing bar** has the same menu (the ⋯ on the right).
 
@@ -40,7 +47,8 @@ right there. Radio stations and already-generated mixes don't have this.
 
 - **Create** from the Playlists tab, or from any track's ⋯ → Add to playlist →
   New playlist.
-- Open a playlist to **rename** it, set a **background image** (a local file),
+- Open a playlist to **rename** it, set a **background image** (a local file —
+  it also becomes the playlist's cover in the list and the pinned strip),
   **pin** it to the strip above the tabs, or **delete** it (two-tap).
 - **Merge**: a playlist's ⋯ menu → "Merge into…" appends all its tracks to
   another playlist.
@@ -71,8 +79,9 @@ detent) and a reverb, applied live. Opening the tab switches the audio to the
 effects path automatically — playback blips once while it reconnects, then
 picks up where it was. **on/off** bypasses the whole chain but keeps your
 fader positions; **reset** zeroes them. The tab-bar dot lights when the chain
-is actually colouring the sound. No speed control yet (a technical limit of
-how the audio is streamed — see the backlog).
+is actually colouring the sound. **No speed control** — the audio is a live
+stream, which can't be sped up or slowed without changing how playback works;
+see the backlog for the options.
 
 ## Keyboard (when the widget has focus, not a text field)
 

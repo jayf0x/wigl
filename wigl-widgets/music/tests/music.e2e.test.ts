@@ -604,4 +604,40 @@ describe("music widget ↔ Music Assistant (live)", () => {
       client.close();
     }
   });
+
+  // The reconnect play/pause failsafe (feedback G, then generalised in commit
+  // 9a5e8d3) reads `q.state === "playing"` before a teardown and re-issues
+  // player_queues/play|pause after the new player is ready. This guards the
+  // shape that logic depends on: player_queues/get returns a `state` string,
+  // and play / pause actually move it. React-hook wiring is out of scope here.
+  test.skipIf(!reachable)("player_queues/get exposes `state`, and play/pause move it", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const queues = await client.command<PlayerQueue[]>("player_queues/all");
+      const q = queues?.find((x) => x.items > 0 && x.current_item);
+      if (!q) return; // nothing cued — nothing to assert against
+
+      const read = () =>
+        client.command<PlayerQueue>("player_queues/get", { queue_id: q.queue_id });
+      const settle = () => new Promise((r) => setTimeout(r, 700));
+
+      const start = await read();
+      expect(typeof start.state).toBe("string");
+
+      await client.command("player_queues/pause", { queue_id: q.queue_id });
+      await settle();
+      expect((await read()).state).not.toBe("playing");
+
+      await client.command("player_queues/play", { queue_id: q.queue_id });
+      await settle();
+      expect((await read()).state).toBe("playing");
+
+      // leave it as we found it
+      if (start.state !== "playing")
+        await client.command("player_queues/pause", { queue_id: q.queue_id });
+    } finally {
+      client.close();
+    }
+  });
 });

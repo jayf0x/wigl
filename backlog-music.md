@@ -69,9 +69,13 @@ module, so it'd be a widget dep, which is allowed).
 
 ## Playlist background image — a proper picker is deferred · `[deferred]`
 
-E3 shipped: `plbg:<id>` in `useStorage`, a system file chooser + downscale +
-base64 through `sh -c` (`pickImage.ts`), rendered as a dimmed CSS background on
-the playlist header. It works with no new dep and no core change. A *nicer*
+E3 shipped, then extended (feedback E): backgrounds moved from a per-playlist
+`plbg:<id>` key to one `playlist_images` map (`{ [item_id]: dataURI }`) owned
+by `useMusic`, and `playlistImage.ts`'s `playlistDisplayImage()` now resolves
+one image (custom > MA art > first track > icon) for the detail header, the
+Playlists-list rows *and* the pinned strip. A system file chooser + downscale +
+base64 through `sh -c` (`pickImage.ts`) still supplies the data URI, no new dep
+and no core change. A *nicer*
 picker — drag-drop, a preview thumbnail, per-playlist row thumbnails, images
 that survive being large — would want `tauri-plugin-dialog` + the Tauri asset
 protocol + a `convertFileSrc` host module (~15 LOC core). Only worth it if the
@@ -110,39 +114,37 @@ already inside `/data`.
 
 ---
 
-## Effects tab — pending test · `[needs test]`
+## Blocked — playback speed (time-stretch) · `[blocked — needs owner decision]`
 
-The Effects tab auto-switches output to `media-element` on open, which
-reconnects the player. `useMusic` captures `nowRef.current.playing` into
-`playIntentRef` before the switch and re-asserts it ~1.2 s after the new
-player is `ready` (feedback G failsafe). Wanted: a `tests/music.e2e.test.ts`
-case (guarded on `wigl-ma` being up, like the others) — play a track, flip
-`audio_output` to `media-element`, assert the queue is still `playing`; then
-pause, flip back to `direct`, assert still `paused`. Couldn't run it this
-pass (server was down in the build env).
+The owner has asked for a speed slider twice. After a real build attempt this
+pass it's **not shippable without changing the audio transport**, which is a
+locked decision (`state.md`: "Sendspin stays the audio transport"). Evidence:
 
-## Parked — playback speed (time-stretch) · `[researched]`
-
-The rebuilt Effects tab ships a 4-band EQ + reverb but **no speed control**.
-Evidence gathered this pass:
 - **Server-side** `player_queues/set_playback_speed` → `"Invalid or
-  unsupported command"` for the widget's player (it's an audiobook-only
-  command).
-- **`HTMLMediaElement.playbackRate`** is defined by the HTML spec to be
-  ignored when the element's source is a `MediaStream` — and the Sendspin SDK
-  sets `audio.srcObject` to a live `MediaStream`. So the cheap path is a
-  dead end here, confirmed by spec not just by ear.
-- **What's left:** a WSOLA / phase-vocoder **AudioWorklet** spliced into
-  `audioGraph.ts`'s chain between the last EQ band and `master`.
-  `@soundtouchjs/audio-worklet` (MIT, ~30 kB) is the candidate — load its
-  worklet module as an inline `Blob` URL (no external file; CSP is disabled
-  but a bundled data/blob URL is cleanest), add an `AudioWorkletNode` with a
-  `rate` param, expose `setRate()` on the `AudioFx` handle.
-  The clock (`getProgress` / A2) must multiply by that same rate — the
-  `Scrubber` already reads `getProgress().playbackSpeed`, so wire the worklet
-  rate into that field in `useMusic.getProgress()` and the rAF counter picks
-  it up for free.
-- **UI:** a speed `VFader` (already have the component) 0.5–1.5×, `detent={1}`,
-  next to Reverb in `EffectsTab`.
-Non-trivial (worklet lifecycle across the connection, resampling artefacts to
-tune) but fully specced. Build when the owner wants speed.
+  unsupported command"` for a normal player (audiobook-only).
+- **`HTMLMediaElement.playbackRate`** is spec-ignored when the element's
+  source is a `MediaStream`, and the Sendspin SDK sets `audio.srcObject` to a
+  live `MediaStream`. Same for a naive `AudioBufferSourceNode` rate node — we
+  don't own a buffer source, only a `MediaElementSource`.
+- **`@soundtouchjs/audio-worklet` (v2.1.1)** — cloned and read this pass. Its
+  `SoundTouchNode` exposes `pitch` / `pitchSemitones` / `playbackRate` params
+  but **no `tempo` param**: v2 does time-stretch by feeding samples *faster*
+  via the source's `playbackRate` and using the node only to compensate
+  pitch. With a fixed-rate realtime `MediaStream` input the node can pitch-
+  shift but cannot change tempo.
+- **The root problem is physics, not the library:** a live stream delivers
+  samples at exactly realtime. You cannot speed up (the later samples don't
+  exist yet) and slowing down means an unbounded, ever-growing output buffer.
+  Only pure pitch-shift (not "speed") is achievable in-widget.
+
+**Paths that would actually work, each needs an owner call:**
+1. Give the widget a seekable local buffer it controls (drop Sendspin's
+   `MediaStream` path, or add a Tauri audio plugin) — contradicts a locked
+   decision; biggest change.
+2. Accept pitch-shift-only ("chipmunk / slow-mo", not tempo) via the
+   SoundTouch node — cheap, but it's not what "speed" means and would
+   probably annoy more than help.
+3. Ship nothing and take speed off the table for this architecture.
+
+`state.md` "Locked decisions" now records this. `@soundtouchjs/audio-worklet`
+was **not** added as a dependency.
