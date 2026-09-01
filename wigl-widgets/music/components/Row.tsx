@@ -171,7 +171,7 @@ export const Row = ({
   const [open, setOpen] = useState(false);
   const [sub, setSub] = useState<RowAction | null>(null);
   const [text, setText] = useState("");
-  const art = api.imageUrl(item.metadata?.images?.[0] ?? null);
+  const art = api.imageUrl(item.metadata?.images?.[0] ?? item.image ?? null);
   const list = (actions ?? standardActions(api, item)).filter((a) => !a.hidden);
   const isCurrent = api.currentItem?.media_item?.uri && api.currentItem.media_item.uri === item.uri;
 

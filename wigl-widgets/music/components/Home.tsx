@@ -1,17 +1,39 @@
-import { useState } from "react";
-import { ListMusic, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { History, ListMusic, Plus } from "lucide-react";
 import { useStorage } from "@/wigl/hooks";
 import { cn } from "@/wigl/utils";
 import type { MusicApi } from "../useMusic";
 import { QueueList } from "./QueueList";
 import { Row } from "./Row";
 
-type HomeTab = "queue" | "playlists";
+type HomeTab = "queue" | "playlists" | "recent";
 
 const TABS: { id: HomeTab; label: string }[] = [
   { id: "queue", label: "Up next" },
   { id: "playlists", label: "Playlists" },
+  { id: "recent", label: "Recent" },
 ];
+
+const RecentTab = ({ api }: { api: MusicApi }) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refresh once on mount
+  useEffect(() => {
+    api.refreshRecent();
+  }, []);
+  if (api.recentlyPlayed.length === 0)
+    return (
+      <p className="px-2 py-8 text-center text-[11px] text-muted-foreground">
+        Nothing played yet — your history shows here.
+      </p>
+    );
+  return (
+    <>
+      <p className="music-tag px-2 pt-2 pb-1 text-muted-foreground/70">Recently played</p>
+      {api.recentlyPlayed.map((it, i) => (
+        <Row key={`${it.uri}:${i}`} item={it} api={api} />
+      ))}
+    </>
+  );
+};
 
 const PlaylistsTab = ({ api }: { api: MusicApi }) => {
   const [creating, setCreating] = useState(false);
@@ -99,12 +121,19 @@ export const Home = ({ api }: { api: MusicApi }) => {
             )}
           >
             {t.id === "playlists" && <ListMusic className="mr-1 inline size-3 -translate-y-px" />}
+            {t.id === "recent" && <History className="mr-1 inline size-3 -translate-y-px" />}
             {t.label}
           </button>
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5" data-no-drag>
-        {tab === "queue" ? <QueueList api={api} /> : <PlaylistsTab api={api} />}
+        {tab === "queue" ? (
+          <QueueList api={api} />
+        ) : tab === "playlists" ? (
+          <PlaylistsTab api={api} />
+        ) : (
+          <RecentTab api={api} />
+        )}
       </div>
     </div>
   );

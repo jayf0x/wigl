@@ -40,6 +40,9 @@ export interface MediaItem {
   /** playlists: false for MA's built-in "smart" playlists */
   is_editable?: boolean;
   owner?: string;
+  /** ItemMapping (recently-played, queue rows) carries a single `image`
+   * instead of `metadata.images[]` */
+  image?: MediaImage | null;
   metadata?: {
     images?: MediaImage[] | null;
     genres?: string[] | null;

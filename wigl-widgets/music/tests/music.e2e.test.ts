@@ -209,15 +209,36 @@ describe("music widget ↔ Music Assistant (live)", () => {
     }
   });
 
-  test.skipIf(!reachable)("recently_played_items returns replayable items", async () => {
+  test.skipIf(!reachable)("recently_played_items returns replayable items (H1 view)", async () => {
     const client = new MaClient(endpoint, () => {});
     await client.connect();
     try {
-      const items = await client.command<MediaItem[]>("music/recently_played_items", { limit: 10 });
+      const items = await client.command<MediaItem[]>("music/recently_played_items", { limit: 50 });
       expect(Array.isArray(items)).toBe(true);
       for (const it of items) {
         expect(typeof it.uri).toBe("string");
+        expect(it.uri).toMatch(/^\w[\w-]*:\/\//); // provider://… — playable by uri
         expect(typeof it.media_type).toBe("string");
+        // ItemMapping carries a single `image` (may be null), not metadata.images
+        expect("image" in it).toBe(true);
+      }
+    } finally {
+      client.close();
+    }
+  });
+
+  test.skipIf(!reachable)("playlists library_items shape (Home Playlists tab)", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const pls = await client.command<
+        { name: string; uri: string; item_id: string; is_editable?: boolean }[]
+      >("music/playlists/library_items");
+      expect(Array.isArray(pls)).toBe(true);
+      for (const p of pls) {
+        expect(typeof p.name).toBe("string");
+        expect(p.uri).toMatch(/^library:\/\/playlist\//);
+        expect(typeof p.item_id).toBe("string");
       }
     } finally {
       client.close();

@@ -67,6 +67,8 @@ export interface MusicApi {
   volume: number;
   /** The user's library playlists (editable + smart), refreshed after edits. */
   playlists: MediaItem[];
+  /** Server-side recently-played items, newest first. */
+  recentlyPlayed: MediaItem[];
   /** Enabled MA music-provider instance ids (e.g. "radiobrowser", "ytmusic"). */
   providers: string[];
   serverUrl: string;
@@ -99,6 +101,7 @@ export interface MusicApi {
   /** Prime the browser audio output — call from a user gesture (first play). */
   unlock: () => void;
   refreshPlaylists: () => void;
+  refreshRecent: () => void;
   createPlaylist: (name: string) => Promise<MediaItem | null>;
   deletePlaylist: (playlist: MediaItem) => void;
   addToPlaylist: (playlistId: string, uris: string[]) => Promise<void>;
@@ -133,6 +136,7 @@ export const useMusic = (): MusicApi => {
   const [attempt, setAttempt] = useState(0);
   const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
   const [playlists, setPlaylists] = useState<MediaItem[]>([]);
+  const [recentlyPlayed, setRecentlyPlayed] = useState<MediaItem[]>([]);
   const [navStack, setNavStack] = useState<NavView[]>([{ kind: "browse" }]);
 
   const clientRef = useRef<MaClient | null>(null);
@@ -169,6 +173,13 @@ export const useMusic = (): MusicApi => {
       ?.command<MediaItem[]>("music/playlists/library_items")
       .then((p) => setPlaylists(Array.isArray(p) ? p : []))
       .catch((e) => console.warn("[music] playlists", e));
+  }, []);
+
+  const refreshRecent = useCallback(() => {
+    clientRef.current
+      ?.command<MediaItem[]>("music/recently_played_items", { limit: 50 })
+      .then((r) => setRecentlyPlayed(Array.isArray(r) ? r : []))
+      .catch((e) => console.warn("[music] recent", e));
   }, []);
 
   // ── snapshot the queue → now-playing + up-next ───────────────────────────
@@ -295,6 +306,7 @@ export const useMusic = (): MusicApi => {
         setState("ready");
         void refreshQueue();
         refreshPlaylists();
+        refreshRecent();
 
         client
           .command<{ domain: string; instance_id: string; type: string; enabled: boolean }[]>(
@@ -323,7 +335,10 @@ export const useMusic = (): MusicApi => {
       clearTimeout(reconnectTimer);
       teardown();
     };
-  }, [host, port, username, password, manageServer, httpBase, attempt, refreshQueue, refreshPlaylists]);
+  }, [
+    host, port, username, password, manageServer, httpBase, attempt, refreshQueue, refreshPlaylists,
+    refreshRecent,
+  ]);
 
   // ── backstop poll for missed events ─────────────────────────────────────
   useEffect(() => {
@@ -552,6 +567,7 @@ export const useMusic = (): MusicApi => {
       searching,
       volume,
       playlists,
+      recentlyPlayed,
       providers,
       serverUrl: httpBase,
       favorites,
@@ -577,6 +593,7 @@ export const useMusic = (): MusicApi => {
       toggleShuffle,
       toggleFavorite,
       refreshPlaylists,
+      refreshRecent,
       createPlaylist,
       deletePlaylist,
       addToPlaylist,
@@ -589,10 +606,11 @@ export const useMusic = (): MusicApi => {
     }),
     [
       state, error, now, currentItem, upNext, repeatMode, shuffle, results, searching, volume,
-      playlists, providers, httpBase, favorites, nav, navStack.length, navTo, navBack, navHome,
-      search, play, startRadio, seek, removeFromQueue, moveQueueItem, moveQueueItemToEnd,
-      cycleRepeat, toggleShuffle, toggleFavorite, refreshPlaylists, createPlaylist, deletePlaylist,
-      addToPlaylist, removePlaylistTrack, setVolume, openServer, imageUrl, request, cmd,
+      playlists, recentlyPlayed, providers, httpBase, favorites, nav, navStack.length, navTo,
+      navBack, navHome, search, play, startRadio, seek, removeFromQueue, moveQueueItem,
+      moveQueueItemToEnd, cycleRepeat, toggleShuffle, toggleFavorite, refreshPlaylists, refreshRecent,
+      createPlaylist, deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume, openServer,
+      imageUrl, request, cmd,
     ],
   );
 };

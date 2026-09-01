@@ -1,11 +1,14 @@
-import { type FormEvent, type RefObject, useEffect, useState } from "react";
-import { ChevronLeft, LoaderCircle, Search, X } from "lucide-react";
+import { type FormEvent, type RefObject, useEffect, useRef, useState } from "react";
+import { ChevronLeft, Clock, LoaderCircle, Search, X } from "lucide-react";
+import { useStorage } from "@/wigl/hooks";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { NavView, SearchResults } from "../types";
 import type { MusicApi } from "../useMusic";
 import { DetailView } from "./DetailView";
 import { Home } from "./Home";
 import { Row } from "./Row";
+
+const HISTORY_CAP = 20;
 
 const GROUPS: { key: keyof SearchResults; label: string }[] = [
   { key: "radio", label: "Stations" },
@@ -31,7 +34,18 @@ export const Browser = ({
   inputRef: RefObject<HTMLInputElement | null>;
 }) => {
   const [q, setQ] = useState("");
+  const [focused, setFocused] = useState(false);
+  const [history, setHistory] = useStorage<string[]>("search_history", []);
+  const historyRef = useRef(history);
+  historyRef.current = history;
   const { results, nav } = api;
+
+  const remember = (term: string) => {
+    const t = term.trim();
+    if (t.length < 2) return;
+    const h = historyRef.current;
+    setHistory([t, ...h.filter((x) => x.toLowerCase() !== t.toLowerCase())].slice(0, HISTORY_CAP));
+  };
 
   // Debounced live search — only while the browse view is showing.
   useEffect(() => {
@@ -40,10 +54,26 @@ export const Browser = ({
     return () => clearTimeout(t);
   }, [q, api.search, nav.kind]);
 
+  // Remember a query once typing has settled (longer debounce, so prefixes
+  // like "daf" don't pile up — only the query the user stopped on is saved).
+  useEffect(() => {
+    if (nav.kind !== "browse" || q.trim().length < 3) return;
+    const t = setTimeout(() => remember(q), 1400);
+    return () => clearTimeout(t);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: remember is stable enough; q + nav drive it
+  }, [q, nav.kind]);
+  const runSearch = (term: string) => {
+    setQ(term);
+    api.search(term);
+    remember(term);
+  };
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    api.search(q);
+    runSearch(q);
   };
+
+  const showHistory = nav.kind === "browse" && focused && q.trim() === "" && history.length > 0;
 
   const total = results ? GROUPS.reduce((n, g) => n + results[g.key].length, 0) : 0;
   // MA gives an added provider an instance id like "ytmusic_free--iB4KsJ6x";
@@ -53,34 +83,64 @@ export const Browser = ({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {nav.kind === "browse" ? (
-        <form onSubmit={submit} className="flex items-center gap-2 px-3 py-2">
-          <Search className="size-3.5 shrink-0 text-muted-foreground" />
-          <input
-            ref={inputRef}
-            data-no-drag
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search music & radio…"
-            className="min-w-0 flex-1 bg-transparent text-[12px] text-foreground outline-none placeholder:text-muted-foreground/60"
-          />
-          {api.searching ? (
-            <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-          ) : q ? (
-            <button
-              type="button"
+        <div>
+          <form onSubmit={submit} className="flex items-center gap-2 px-3 py-2">
+            <Search className="size-3.5 shrink-0 text-muted-foreground" />
+            <input
+              ref={inputRef}
               data-no-drag
-              aria-label="Clear search"
-              onClick={() => {
-                setQ("");
-                api.clearResults();
-                inputRef.current?.focus();
-              }}
-              className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
-          ) : null}
-        </form>
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setTimeout(() => setFocused(false), 120)}
+              placeholder="Search music & radio…"
+              className="min-w-0 flex-1 bg-transparent text-[12px] text-foreground outline-none placeholder:text-muted-foreground/60"
+            />
+            {api.searching ? (
+              <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+            ) : q ? (
+              <button
+                type="button"
+                data-no-drag
+                aria-label="Clear search"
+                onClick={() => {
+                  setQ("");
+                  api.clearResults();
+                  inputRef.current?.focus();
+                }}
+                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
+          </form>
+          {showHistory && (
+            <div className="flex flex-wrap items-center gap-1 px-3 pb-2">
+              {history.map((term) => (
+                <button
+                  key={term}
+                  type="button"
+                  data-no-drag
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => runSearch(term)}
+                  className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <Clock className="size-2.5" />
+                  {term}
+                </button>
+              ))}
+              <button
+                type="button"
+                data-no-drag
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setHistory([])}
+                className="px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:text-destructive"
+              >
+                clear
+              </button>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="flex items-center gap-1.5 px-2 py-2">
           <button

@@ -176,20 +176,6 @@ Low priority — delete + recreate is the workaround.
 
 ## H — History & discovery
 
-### H1 — Recently played view
-
-A "Recent" view (add `"history"` to the nav reducer + a `DetailView` case) listing `music/recently_played_items {limit:50}` — real
-server-side items, newest first, each one-click re-playable via its uri. No
-local log needed. Optionally filter to `media_types:["track","radio"]`. One
-next step: add the command to `useMusic.ts`, a view + a nav entry to reach it.
-e2e: assert the command returns `ItemMapping[]` with `uri` + `media_type`.
-
-### H2 — Search history
-
-Local. Recent search queries as tappable chips under the search field when it's
-focused and empty. `useStorage`, cap ~20, most-recent-first, dedup. Small,
-fully independent — good filler entry.
-
 ### D1 — Search filters + discovery browse
 
 Two things, same area:
