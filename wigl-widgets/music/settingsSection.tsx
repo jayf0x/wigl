@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { type SettingSection, useStorage } from "@/wigl/hooks";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -7,9 +8,11 @@ import {
   KEYS,
   MA_CONTAINER,
   MA_HOST,
+  MA_IMAGE,
   MA_PORT,
   SENDSPIN_OUTPUT,
 } from "./music.config";
+import { clearMaCache, type OpResult, restartMaContainer, updateMaImage } from "./serverProcess";
 
 const Field = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => (
   <label className="flex items-center justify-between gap-3 py-1.5">
@@ -20,6 +23,42 @@ const Field = ({ label, hint, children }: { label: string; hint?: string; childr
     {children}
   </label>
 );
+
+/** H1 — run a docker op from Settings so the backend can be managed without a
+ * terminal. `confirm` gates the disruptive ones behind a second click. */
+const OpButton = ({ label, hint, run, confirm }: { label: string; hint: string; run: () => Promise<OpResult>; confirm?: boolean }) => {
+  const [busy, setBusy] = useState(false);
+  const [armed, setArmed] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const go = async () => {
+    if (confirm && !armed) {
+      setArmed(true);
+      return;
+    }
+    setArmed(false);
+    setBusy(true);
+    setMsg(null);
+    const r = await run();
+    setBusy(false);
+    setMsg(`${r.ok ? "✓ " : "✗ "}${r.message || (r.ok ? "done" : "failed")}`);
+  };
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <span className="flex min-w-0 flex-col">
+        <span className="text-sm">{label}</span>
+        <span className="truncate text-[11px] text-muted-foreground">{msg ?? hint}</span>
+      </span>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={go}
+        className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+      >
+        {busy ? "…" : armed ? "confirm" : "run"}
+      </button>
+    </div>
+  );
+};
 
 const MusicSettings = () => {
   const [host, setHost] = useStorage<string>(KEYS.host, MA_HOST);
@@ -92,6 +131,24 @@ const MusicSettings = () => {
           onCheckedChange={(on) => setAudioOutput(on ? "media-element" : "direct")}
         />
       </Field>
+
+      <p className="music-tag pt-3 pb-1 text-muted-foreground/60">Backend ({MA_CONTAINER})</p>
+      <OpButton
+        label="Restart server"
+        hint="docker restart — quick, keeps all data"
+        run={() => restartMaContainer(MA_CONTAINER)}
+      />
+      <OpButton
+        label="Clear cache"
+        hint="Wipes MA's image/proxy cache + old logs, then restarts. Library, playlists, and login are untouched."
+        run={() => clearMaCache(MA_CONTAINER)}
+      />
+      <OpButton
+        label="Update server"
+        hint={`docker pull ${MA_IMAGE.split("/").pop()} + recreate. Can take a few minutes; playback drops while it runs.`}
+        confirm
+        run={() => updateMaImage(MA_CONTAINER, MA_IMAGE)}
+      />
     </div>
   );
 };
@@ -107,6 +164,7 @@ const settingsSection: SettingSection = {
     { id: "music-provider", label: "Search provider", keywords: ["radiobrowser", "youtube", "ytmusic", "filter"] },
     { id: "music-manage", label: "Auto-start server", keywords: ["docker", "container"] },
     { id: "music-fx", label: "Audio effects", keywords: ["eq", "equalizer", "reverb", "echo", "dsp"] },
+    { id: "music-backend", label: "Backend controls", keywords: ["docker", "restart", "update", "cache", "clear"] },
   ],
   render: () => <MusicSettings />,
 };

@@ -97,9 +97,12 @@ down.
 | Update MA + provider | `docker pull ghcr.io/sproft/ytmusic-free-provider:latest && docker rm -f wigl-ma && <the `docker run` above>` — the `/data` volume keeps your onboarding + providers |
 | Provider version | `docker logs wigl-ma 2>&1 \| grep 'provider version'` |
 
-The widget's Settings has an **"Auto-start server"** toggle (off by default)
-that runs `docker start wigl-ma` when MA is unreachable — a small convenience
-on top of the `--restart` policy, not a replacement for this setup.
+Most of this table is also in the widget's **Settings → Music → Backend**
+section — buttons for **Restart server**, **Clear cache** (wipes MA's
+image/proxy cache + old logs, keeps library/playlists/login), and **Update
+server** (pull + recreate; a few minutes, playback drops). Plus an
+**"Auto-start server"** toggle that runs `docker start wigl-ma` when MA is
+unreachable. The CLI here is the fallback, not the primary path.
 
 ## Reverting to stock Music Assistant
 

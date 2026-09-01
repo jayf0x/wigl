@@ -140,34 +140,22 @@ specifically for speed.
 
 ---
 
-## Group H — Ops & docs · `[mixed]`
+## Group H — Ops & docs — DONE
 
-### H1 — Widget Settings: manage the backend without a CLI · `[design]`
-
-Owner wants wigl to control Docker / clear caches so no terminal is needed.
-Candidates for the Settings section (or a small "Backend" panel in the
-widget): "Restart MA" (`docker restart wigl-ma`), "Update MA image"
-(`docker pull … && docker rm -f … && docker run …` — needs the full run
-command as a constant), "Clear MA cache" (what cache? `docker exec wigl-ma`
-to clear a dir, or wipe part of `.idea/ma-data`), "Wipe & re-onboard".
-Needs the `command` permission (already held) + `shell:allow-spawn` if any
-are long-running (probably not). Design which actions are safe to expose and
-what confirmation each needs. `SETUP.md` becomes the fallback, not the
-primary path.
-
-### H2 — SETUP.md accuracy pass · `[do now — see below]`
-
-Partly done in this commit (removed the dead `todo-musicplayer.md`
-reference, clarified the community image IS the setup not a migration).
-Re-read it end to end against the running container before closing this.
-
-### H3 — User-facing feature docs · `[do soon]`
-
-Not technical docs — a short "what this widget does" for the non-obvious
-custom features (the `⋯` actions, start-radio's behaviour, playlists,
-overwrite/append, filters, keyboard). Lives in `wigl-widgets/music/` as
-`FEATURES.md` or similar. Write it once groups A-E settle so it's not
-immediately stale.
+- **H1** — Settings → Music → **Backend** section: `OpButton`s for **Restart
+  server** (`docker restart`), **Clear cache** (wipe `/data/.cache` + old
+  logs, restart — never touches library/auth/settings/playlists; the cache
+  runs ~130 MB), and **Update server** (two-tap confirm; `docker inspect` the
+  live ports/mounts → pull → `rm -f` → recreate with `--restart
+  unless-stopped`). Docker ops live in `serverProcess.ts`, discovered docker
+  binary. "Wipe & re-onboard" deliberately left out — rare and destructive,
+  `SETUP.md` covers it.
+- **H2** — `SETUP.md` re-checked against the running container: ports/mount
+  match, the verify command (fixed earlier to read the bare-list `POST /api`
+  envelope) works, and it now points at the Settings Backend section as the
+  primary path.
+- **H3** — `wigl-widgets/music/FEATURES.md` — the user-facing "what the
+  non-obvious features do".
 
 ---
 
