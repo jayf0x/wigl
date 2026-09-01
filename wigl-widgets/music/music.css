@@ -33,6 +33,19 @@
   text-transform: uppercase;
 }
 
+/* Inline row actions (C1): the 2-3 most-used actions surface as icon buttons
+   on hover/focus, but only once the tile is wide enough to spare the room —
+   below that the ⋯ menu is the only affordance. Container-query, not a media
+   query: the tile resizes to anything and viewport breakpoints don't apply. */
+.music-widget .music-row-inline {
+  display: none;
+}
+@container (min-width: 15rem) {
+  .music-widget .music-row-inline {
+    display: flex;
+  }
+}
+
 /* Signal bars — the idle "VU meter" animation used in the empty state and
    behind the minimized tile. Height driven by a per-bar custom property so
    the keyframes stay one rule. */

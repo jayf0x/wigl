@@ -1,6 +1,8 @@
-import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import {
   Disc3,
+  Ellipsis,
+  Heart,
   Info,
   Pause,
   Play,
@@ -14,22 +16,141 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import { useStorage } from "@/wigl/hooks";
+import { hours, useQuery, useStorage } from "@/wigl/hooks";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/wigl/utils";
 import { PROGRESS_TICK_MS } from "../music.config";
+import type { MediaArtistRef, MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
 import { providerLabel } from "../util";
+import { RowActionPanel, standardActions } from "./Row";
 
-/** P3 — fold-down "what am I hearing" panel. Reads the live stream details off
- * the current queue item; open state persisted. No lyrics, no visualiser —
- * facts about the current track only. */
+const asArray = (v: string[] | string | null | undefined): string[] =>
+  Array.isArray(v) ? v : v ? [v] : [];
+
+/** A clickable credit — an artist name navigates to the artist view when it
+ * resolves to a real library artist, otherwise (and for plain composer /
+ * performer strings) it runs a search for the name. */
+const Credit = ({ api, name, artist }: { api: MusicApi; name: string; artist?: MediaArtistRef }) => (
+  <button
+    type="button"
+    data-no-drag
+    onClick={() => {
+      if (artist?.uri?.startsWith("library://artist/") && artist.item_id) {
+        api.navTo({
+          kind: "artist",
+          item: {
+            item_id: artist.item_id,
+            provider: artist.provider ?? "library",
+            name: artist.name,
+            uri: artist.uri,
+            media_type: "artist",
+          },
+        });
+      } else {
+        api.navHome();
+        api.search(name);
+      }
+    }}
+    className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+  >
+    {name}
+  </button>
+);
+
+/** P3 / C3 — fold-down "what am I hearing" panel. Live stream details off the
+ * current queue item, plus the fuller `music/tracks/get` metadata fetched once
+ * per track (cached). Facts only — no lyrics, no visualiser. */
 const TrackInfo = ({ api }: { api: MusicApi }) => {
   const it = api.currentItem;
-  const media = it?.media_item ?? null;
+  const base = it?.media_item ?? null;
   const sd = it?.streamdetails ?? null;
   const af = sd?.audio_format ?? null;
-  const rows: [string, React.ReactNode][] = [];
+
+  const [full] = useQuery<MediaItem | null>({
+    key: `track:${base?.uri ?? "none"}`,
+    stale: hours(6),
+    fn: async () => {
+      if (!base?.item_id || !base.provider || base.media_type !== "track") return null;
+      try {
+        return await api.request<MediaItem>("music/tracks/get", {
+          item_id: base.item_id,
+          provider_instance_id_or_domain: base.provider,
+        });
+      } catch {
+        return null;
+      }
+    },
+  });
+  const media = full ?? base;
+  const md = media?.metadata ?? null;
+
+  const rows: [string, ReactNode][] = [];
+
+  const artists = media?.artists ?? [];
+  if (artists.length) {
+    rows.push([
+      artists.length > 1 ? "Artists" : "Artist",
+      <span key="a" className="flex flex-wrap gap-1">
+        {artists.map((a) => (
+          <Credit key={a.name} api={api} name={a.name} artist={a} />
+        ))}
+      </span>,
+    ]);
+  }
+
+  const album = media?.album ?? null;
+  if (album?.name) {
+    rows.push([
+      "Album",
+      album.uri || album.item_id ? (
+        <button
+          type="button"
+          data-no-drag
+          className="truncate text-left hover:text-foreground hover:underline"
+          onClick={() =>
+            api.navTo({
+              kind: "album",
+              item: {
+                item_id: album.item_id ?? "",
+                provider: album.provider ?? media?.provider ?? "",
+                name: album.name,
+                uri: album.uri ?? "",
+                media_type: "album",
+              },
+            })
+          }
+        >
+          {album.name}
+        </button>
+      ) : (
+        album.name
+      ),
+    ]);
+  }
+
+  const performers = (md?.performers ?? [])
+    .map((p) => (typeof p === "string" ? p : p?.name))
+    .filter((n): n is string => !!n);
+  if (performers.length) {
+    rows.push([
+      "Credits",
+      <span key="p" className="flex flex-wrap gap-1">
+        {performers.slice(0, 8).map((n) => (
+          <Credit key={n} api={api} name={n} />
+        ))}
+      </span>,
+    ]);
+  }
+
+  const year = media?.year ?? album?.year ?? (md?.release_date ? Number(md.release_date.slice(0, 4)) : null);
+  if (year) rows.push(["Year", String(year)]);
+
+  const label = asArray(md?.label);
+  if (label.length) rows.push(["Label", label.join(", ")]);
+
+  const genres = [...asArray(md?.genres), ...asArray(md?.style)];
+  if (genres.length) rows.push(["Genre", [...new Set(genres)].slice(0, 4).join(", ")]);
 
   const source = providerLabel(sd?.provider ?? media?.provider);
   if (source) rows.push(["Source", source]);
@@ -42,52 +163,30 @@ const TrackInfo = ({ api }: { api: MusicApi }) => {
     ].filter(Boolean);
     rows.push(["Format", parts.join(" · ")]);
   }
-  if (media?.album?.name) {
-    rows.push([
-      "Album",
-      media.album.uri || media.album.item_id ? (
-        <button
-          type="button"
-          data-no-drag
-          className="truncate text-left hover:text-foreground hover:underline"
-          onClick={() =>
-            media.album &&
-            api.navTo({
-              kind: "album",
-              item: {
-                item_id: media.album.item_id ?? "",
-                provider: media.album.provider ?? media.provider,
-                name: media.album.name,
-                uri: media.album.uri ?? "",
-                media_type: "album",
-              },
-            })
-          }
-        >
-          {media.album.name}
-        </button>
-      ) : (
-        media.album.name
-      ),
-    ]);
-  }
-  const year = media?.year ?? media?.album?.year;
-  if (year) rows.push(["Year", String(year)]);
   if (sd?.loudness != null) rows.push(["Loudness", `${sd.loudness.toFixed(1)} LUFS`]);
-  if (media?.metadata?.genres?.length) rows.push(["Genre", media.metadata.genres.slice(0, 3).join(", ")]);
+  if (md?.popularity != null) rows.push(["Popularity", `${Math.round(md.popularity)} / 100`]);
 
-  if (rows.length === 0)
+  const description = md?.description?.trim();
+
+  if (rows.length === 0 && !description)
     return <p className="px-1 py-2 text-[10px] text-muted-foreground">No track details available.</p>;
 
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 px-1 py-1 text-[10px]">
-      {rows.map(([k, v]) => (
-        <div key={k} className="contents">
-          <dt className="music-tag text-muted-foreground/70">{k}</dt>
-          <dd className="min-w-0 truncate text-foreground/90">{v}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="flex flex-col gap-2 px-1 py-1">
+      {rows.length > 0 && (
+        <dl className="grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-1 text-[10px]">
+          {rows.map(([k, v]) => (
+            <div key={k} className="contents">
+              <dt className="music-tag pt-0.5 text-muted-foreground/70">{k}</dt>
+              <dd className="min-w-0 text-foreground/90">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {description && (
+        <p className="line-clamp-4 text-[10px] leading-relaxed text-muted-foreground">{description}</p>
+      )}
+    </div>
   );
 };
 
@@ -300,6 +399,15 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
   const artist = media?.artists?.[0];
   const album = media?.album ?? null;
   const [infoOpen, setInfoOpen] = useStorage<boolean>("info_open", false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const fav = media ? api.favorites.has(media.uri) : false;
+  // The current track gets the same action set as a row (C2) — minus the two
+  // that make no sense for what's already playing, and favourite (its own btn).
+  const moreActions = media
+    ? standardActions(api, media).filter(
+        (a) => !["Play next", "Add to queue", "Favourite", "Remove favourite"].includes(a.label),
+      )
+    : [];
 
   return (
     <div className="flex flex-col gap-3 border-border border-b p-3">
@@ -410,9 +518,33 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
           >
             <Info className="size-3.5" />
           </IconBtn>
+          {media && (
+            <>
+              <IconBtn
+                label={fav ? "Remove favourite" : "Favourite"}
+                active={fav}
+                onClick={() => api.toggleFavorite(media)}
+              >
+                <Heart className={cn("size-3.5", fav && "fill-current")} />
+              </IconBtn>
+              <IconBtn label="More actions" active={moreOpen} onClick={() => setMoreOpen((v) => !v)}>
+                <Ellipsis className="size-3.5" />
+              </IconBtn>
+            </>
+          )}
           <VolumeControl api={api} />
         </div>
       </div>
+
+      {moreOpen && media && (
+        <div className="border-border border-t pt-1">
+          <RowActionPanel
+            actions={moreActions}
+            onClose={() => setMoreOpen(false)}
+            className="px-0 pb-0"
+          />
+        </div>
+      )}
 
       {infoOpen && (
         <div className="border-border border-t pt-1.5">

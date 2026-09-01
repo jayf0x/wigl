@@ -464,6 +464,37 @@ describe("music widget ↔ Music Assistant (live)", () => {
     }
   });
 
+  // C3 track info panel: music/tracks/get returns the full Track — artists[] as
+  // navigable objects and a metadata object (rich fields may be null without an
+  // MA metadata provider, but the container keys must not have been renamed).
+  test.skipIf(!reachable)("music/tracks/get returns a Track with artists[] + metadata", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const res = await client.command<SearchResults>("music/search", {
+        search_query: "daft punk",
+        media_types: ["track"],
+        limit: 1,
+      });
+      const t = res.tracks[0];
+      if (!t?.item_id) return;
+
+      const full = await client.command<MediaItem>("music/tracks/get", {
+        item_id: t.item_id,
+        provider_instance_id_or_domain: t.provider,
+      });
+      expect(full.media_type).toBe("track");
+      expect(typeof full.uri).toBe("string");
+      expect(Array.isArray(full.artists)).toBe(true);
+      expect((full.artists ?? []).length).toBeGreaterThan(0);
+      expect(typeof full.artists?.[0].name).toBe("string");
+      // metadata must be an object (its individual fields are allowed to be null)
+      expect(full.metadata == null || typeof full.metadata === "object").toBe(true);
+    } finally {
+      client.close();
+    }
+  });
+
   // P3 info panel reads streamdetails.audio_format off the current queue item.
   test.skipIf(!reachable)("queue items carry the streamdetails shape the info panel reads", async () => {
     const client = new MaClient(endpoint, () => {});

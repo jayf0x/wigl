@@ -59,12 +59,12 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | `util.ts` | `providerLabel()` and small pure helpers. |
 | `music.css` | `IBM Plex Mono` + `Instrument Serif` (serif = track titles only), the `.music-cq` container query, the `.music-eq` VU animation. |
 | `settingsSection.tsx` | Settings-modal section: host/port/login, provider filter, auto-start toggle. |
-| `components/NowPlaying.tsx` | Pinned top zone: art, title, clickable artist/album, scrubber, transport, repeat/shuffle, volume, the P3 fold-down `TrackInfo` panel. Scrubber samples `api.getProgress()` every `PROGRESS_TICK_MS` while playing for a smooth clock; transport buttons disable while their action is in `api.pending`. |
+| `components/NowPlaying.tsx` | Pinned top zone: art, title, clickable artist/album, scrubber, transport, repeat/shuffle, favourite + `⋯` (reuses `RowActionPanel` — C2), volume, the fold-down `TrackInfo` panel. Scrubber samples `api.getProgress()` every `PROGRESS_TICK_MS` while playing for a smooth clock; transport buttons disable while their action is in `api.pending`. `TrackInfo` fetches the full `music/tracks/get` via `useQuery` (`track:<uri>`) and renders clickable artist/credit chips (C3). |
 | `components/Browser.tsx` | The switchable main pane: search field + `SearchFilters` + results, OR a detail view, OR `<Home>`. Hosts the nav breadcrumb. Shows a `SearchSkeleton` strip at the top of results while any provider search is still in flight; previous results stay rendered underneath. |
 | `components/Home.tsx` | Tabbed default pane: Up next (`QueueList`) / Playlists / Recent / Browse (`BrowseTab`). |
 | `components/QueueList.tsx` | Up-next list with pointer drag-reorder + per-row `⋯`. |
 | `components/DetailView.tsx` | `ArtistView` / `AlbumView` / `PlaylistView` — the nav-stack destinations. ~310 lines. |
-| `components/Row.tsx` | The universal media row + `RowAction` (`⋯` menu with submenu + inline-input support). ~320 lines. Every list uses this. |
+| `components/Row.tsx` | The universal media row + `RowAction`. Exports `standardActions`, `RowActionButtons` (inline icon shortcuts for Add-to-queue / Play-next / Favourite, container-query gated via `.music-row-inline`, + the `⋯` toggle) and `RowActionPanel` (the fold-down pill menu with submenu + inline-input support) — the last two reused by `NowPlaying`. Every list uses `Row`. |
 | `components/SearchFilters.tsx` | Media-type + provider filter pills. |
 | `components/BrowseTab.tsx` | `music/browse` folder navigator with its own path stack. |
 | `components/Equalizer.tsx` | Decorative VU bars (NOT audio DSP). Minimized-tile background + empty states. |
@@ -79,7 +79,8 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 **No `useQuery` for the queue / now-playing** — those are event-driven
 (`refreshQueue()` on any `queue*`/`player*` event + a `QUEUE_POLL_MS` backstop).
 `useQuery` (in-memory, keyed by entity uri, ~6h/60s stale) *is* used for the
-detail views: `artist:<uri>`, `album:<uri>`, `playlist:<id>`.
+detail views: `artist:<uri>`, `album:<uri>`, `playlist:<id>`, and the
+now-playing track-info panel `track:<uri>` (full `music/tracks/get`).
 
 **Search** (B1/B2): `search()` fans out one `music/search` per enabled provider
 + `"library"` in parallel, merging (uri-deduped) into an accumulator as each
@@ -129,7 +130,7 @@ widget currently uses:
 | Playlist rename | `music/playlists/update {item_id, update:{name}}` — **does not stick** for builtin-provider playlists (row re-syncs from provider). Unsolved (backlog E1). |
 | Favourites | `music/favorites/add_item {item:<uri>}`, `music/favorites/remove_item {media_type, library_item_id}`. `Track.favorite` on the object. |
 | Artist/album | `music/artists/{get,top_tracks,artist_albums,similar_artists}`, `music/albums/album_tracks` — all `{item_id, provider_instance_id_or_domain}` |
-| Track detail | `music/tracks/get {item_id, provider_instance_id_or_domain}` — full `metadata`: `description, performers, label, genres, mood, style, copyright, release_date, links, popularity` (widget shows only a few). `artists[]` are objects (clickable). |
+| Track detail | `music/tracks/get {item_id, provider_instance_id_or_domain}` → `Track`. `artists[]` are navigable objects; `album` comes back `{}` (use the search-result album instead). `metadata` keys (`description, performers, label, genres, mood, style, release_date, popularity`) exist but are **null on the stock server** — they need an MA metadata provider (see backlog "Rich track metadata…"). `TrackInfo` renders whatever is present. |
 | Image | `http://…:8095/imageproxy/<proxy_id>` (proxy_id on `metadata.images[]`) |
 | Events | `queue_updated`, `queue_time_updated` (rare!), `queue_items_updated`, `player_updated`, `playlog_updated` (fires on track change — history signal) |
 
@@ -149,10 +150,6 @@ widget currently uses:
 
 ## Known rough edges (see backlog-music.md for the fixes)
 
-- `⋯` menu hides actions the owner wants inline on the row (C1); now-playing
-  lacks the row action set (C2).
-- Track-info panel shows a fraction of the available metadata; nothing
-  clickable in it beyond album (C3).
 - Queue is destructive — one Clear and it's gone; no save/restore (group D).
 - Playlist rename doesn't work (E1). Playlist-in-playlist / merge doesn't
   work via the API (E4).

@@ -57,6 +57,15 @@ export interface MediaItem {
     genres?: string[] | null;
     description?: string | null;
     links?: { name: string; url: string }[] | null;
+    /** Populated only when an MA metadata provider (MusicBrainz / TheAudioDB /
+     * fanart.tv) is configured — mostly null on the stock setup. See
+     * backlog-music.md "Rich track metadata needs an MA metadata provider". */
+    label?: string | string[] | null;
+    performers?: (string | { name: string; role?: string })[] | null;
+    release_date?: string | null;
+    popularity?: number | null;
+    mood?: string[] | string | null;
+    style?: string[] | string | null;
   };
 }
 

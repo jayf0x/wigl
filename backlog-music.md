@@ -34,43 +34,17 @@ history, browse, keyboard). This is the list for the next round of refinement.
 
 ---
 
-## Group C — Row actions & now-playing parity · `[researched + design]`
+## Rich track metadata needs an MA metadata provider · `[needs backend]`
 
-Touches `Row.tsx`, `NowPlaying.tsx`, `useMusic.ts`. The `⋯` menu was M0's
-"spine" but the owner wants the common actions visible, not hidden.
-
-### C1 — Promote common actions to inline row controls · `[design]`
-
-Owner: "we can simply merge those [⋯ options] as icons with titles into the
-row of the track itself, right?" Investigate: the full action set is
-Play next · Add to queue · Add to playlist · Go to artist · Go to album ·
-Favourite · Start radio · Remove/Move (queue only). That's too many to all be
-inline. Decide a split: 2-3 inline icon+label buttons for the most-used
-(likely: Add to queue, Favourite, and one more) that appear on hover/focus,
-`⋯` keeps the long tail. Some actions are contextual (Remove only on queue
-rows, Go-to-album only when there's an album) — inline set must adapt. The
-overwrite/append toggle (D4) changes what "Add to queue" even means.
-Prototype it at a few tile widths before committing — this is the entry most
-likely to feel wrong.
-
-### C2 — Now-playing gets the row action set
-
-The currently-playing track has no action menu. Give `NowPlaying` the same
-inline actions + `⋯` as a row (favourite, add current to a playlist, go to
-artist/album, start radio from current, etc). Reuse `Row.tsx`'s `RowAction`.
-
-### C3 — Full track metadata + clickable credits
-
-`music/tracks/get` returns far more than the P3 panel shows (verified):
-`description`, `performers` (composer/writer credits), `label`, `genres`,
-`mood`, `style`, `release_date`, `links` (external), `popularity`, plus
-`artists[]` as objects and `album` as an object. Expand `TrackInfo` to show
-the "basics" the owner listed — full artist/composer/performer list,
-description (when present), album, year/release date, label, genre — and make
-**artist / composer / performer names clickable → run a search for that name**
-(or navigate to the artist view when it resolves to an artist uri). Fetch the
-full track via `music/tracks/get` behind `useQuery` (`track:<uri>`) the first
-time the panel opens for a track. Keep it a facts panel — no lyrics.
+C3 shipped the expanded `TrackInfo` (clickable artists/credits, description,
+label, genre, year, popularity) but on the stock `wigl-ma` server every rich
+`music/tracks/get` `metadata.*` field comes back **null** — `performers`,
+`label`, `review`/`description`, `mood`, `style`, `release_date`, `popularity`.
+`allow_update_metadata:true` doesn't help. These are populated by MA's
+**metadata providers** (MusicBrainz, TheAudioDB, fanart.tv), none configured on
+this image. Next step: add one (MusicBrainz is free, no key) in `SETUP.md`'s
+`docker run` / onboarding, or a Settings "enrich metadata" helper (H group).
+The widget code already renders whatever shows up, so this is backend-only.
 
 ---
 

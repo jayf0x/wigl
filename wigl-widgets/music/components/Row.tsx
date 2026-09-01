@@ -149,6 +149,156 @@ export const standardActions = (
   ];
 };
 
+/** The 2-3 actions surfaced as inline icon buttons on the row (C1), by label.
+ * Everything else stays in the `⋯` tail. Order here is the render order. */
+const INLINE_ACTION_LABELS = ["Add to queue", "Play next", "Favourite", "Remove favourite"];
+
+/** The `⋯` toggle plus the inline icon shortcuts, rendered inside the row's
+ * flex line. `open`/`onToggle` are owned by the caller so the fold-down
+ * `<RowActionPanel>` can live as its sibling. Used by `Row` and `NowPlaying`. */
+export const RowActionButtons = ({
+  actions,
+  open,
+  onToggle,
+}: {
+  actions: RowAction[];
+  open: boolean;
+  onToggle: () => void;
+}) => {
+  const inline = INLINE_ACTION_LABELS.map((l) => actions.find((a) => a.label === l && a.run && !a.hidden)).filter(
+    (a): a is RowAction => !!a,
+  );
+  return (
+    <>
+      {inline.length > 0 && (
+        <div className="music-row-inline shrink-0 items-center gap-0.5">
+          {inline.map((a) => (
+            <button
+              key={a.label}
+              type="button"
+              data-no-drag
+              aria-label={a.label}
+              title={a.label}
+              onClick={() => a.run?.()}
+              className={cn(
+                "rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:opacity-100",
+                open ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+              )}
+            >
+              {a.icon}
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        data-no-drag
+        aria-label="More actions"
+        aria-expanded={open}
+        onClick={onToggle}
+        className={cn(
+          "shrink-0 rounded p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
+          open ? "opacity-100" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100",
+        )}
+      >
+        <Ellipsis className="size-3.5" />
+      </button>
+    </>
+  );
+};
+
+/** The fold-down pill strip: the full action list, with submenu + inline-input
+ * support. Caller renders it conditionally on its own `open` state. */
+export const RowActionPanel = ({
+  actions,
+  onClose,
+  className,
+}: {
+  actions: RowAction[];
+  onClose: () => void;
+  className?: string;
+}) => {
+  const [sub, setSub] = useState<RowAction | null>(null);
+  const [text, setText] = useState("");
+  const list = actions.filter((a) => !a.hidden);
+  const pills = sub?.submenu ? sub.submenu.filter((a) => !a.hidden) : list;
+  const close = () => {
+    setSub(null);
+    setText("");
+    onClose();
+  };
+
+  return (
+    <div className={cn("flex flex-wrap items-center gap-1 px-2 pt-1 pb-2", className)}>
+      {sub && (
+        <button
+          type="button"
+          data-no-drag
+          onClick={() => {
+            setSub(null);
+            setText("");
+          }}
+          className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <ChevronLeft className="size-3.5" /> back
+        </button>
+      )}
+      {sub?.input ? (
+        <form
+          className="flex items-center gap-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (text.trim()) sub.input?.onSubmit(text.trim());
+            close();
+          }}
+        >
+          {/* biome-ignore lint/a11y/noAutofocus: opens on an explicit user click */}
+          <input
+            data-no-drag
+            autoFocus
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={sub.input.placeholder}
+            className="w-32 rounded border border-border bg-input/40 px-2 py-1 text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60"
+          />
+          <button
+            type="submit"
+            data-no-drag
+            className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            add
+          </button>
+        </form>
+      ) : (
+        pills.map((a) => (
+          <button
+            key={a.label}
+            type="button"
+            data-no-drag
+            onClick={() => {
+              if (a.submenu || a.input) setSub(a);
+              else {
+                a.run?.();
+                close();
+              }
+            }}
+            className={cn(
+              "flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] transition-colors hover:bg-muted",
+              a.danger
+                ? "text-muted-foreground hover:text-destructive"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {a.icon}
+            <span className="max-w-32 truncate">{a.label}</span>
+            {(a.submenu || a.input) && <ChevronRight className="size-3" />}
+          </button>
+        ))
+      )}
+    </div>
+  );
+};
+
 export const Row = ({
   item,
   api,
@@ -169,18 +319,9 @@ export const Row = ({
   dragHandle?: ReactNode;
 }) => {
   const [open, setOpen] = useState(false);
-  const [sub, setSub] = useState<RowAction | null>(null);
-  const [text, setText] = useState("");
   const art = api.imageUrl(item.metadata?.images?.[0] ?? item.image ?? null);
   const list = (actions ?? standardActions(api, item)).filter((a) => !a.hidden);
   const isCurrent = api.currentItem?.media_item?.uri && api.currentItem.media_item.uri === item.uri;
-
-  const close = () => {
-    setOpen(false);
-    setSub(null);
-    setText("");
-  };
-  const pills = sub?.submenu ? sub.submenu.filter((a) => !a.hidden) : list;
 
   return (
     <div className="rounded-md">
@@ -232,90 +373,10 @@ export const Row = ({
             <span className="block truncate text-[10px] text-muted-foreground">{subtitleFor(item)}</span>
           </span>
         </button>
-        <button
-          type="button"
-          data-no-drag
-          aria-label="More actions"
-          aria-expanded={open}
-          onClick={() => (open ? close() : setOpen(true))}
-          className={cn(
-            "shrink-0 rounded p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
-            open ? "opacity-100" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100",
-          )}
-        >
-          <Ellipsis className="size-3.5" />
-        </button>
+        <RowActionButtons actions={list} open={open} onToggle={() => setOpen((v) => !v)} />
       </div>
 
-      {open && (
-        <div className="flex flex-wrap items-center gap-1 px-2 pt-1 pb-2">
-          {sub && (
-            <button
-              type="button"
-              data-no-drag
-              onClick={() => {
-                setSub(null);
-                setText("");
-              }}
-              className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <ChevronLeft className="size-3.5" /> back
-            </button>
-          )}
-          {sub?.input ? (
-            <form
-              className="flex items-center gap-1"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (text.trim()) sub.input?.onSubmit(text.trim());
-                close();
-              }}
-            >
-              {/* biome-ignore lint/a11y/noAutofocus: opens on an explicit user click */}
-              <input
-                data-no-drag
-                autoFocus
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder={sub.input.placeholder}
-                className="w-32 rounded border border-border bg-input/40 px-2 py-1 text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60"
-              />
-              <button
-                type="submit"
-                data-no-drag
-                className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                add
-              </button>
-            </form>
-          ) : (
-            pills.map((a) => (
-              <button
-                key={a.label}
-                type="button"
-                data-no-drag
-                onClick={() => {
-                  if (a.submenu || a.input) setSub(a);
-                  else {
-                    a.run?.();
-                    close();
-                  }
-                }}
-                className={cn(
-                  "flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] transition-colors hover:bg-muted",
-                  a.danger
-                    ? "text-muted-foreground hover:text-destructive"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {a.icon}
-                <span className="max-w-32 truncate">{a.label}</span>
-                {(a.submenu || a.input) && <ChevronRight className="size-3" />}
-              </button>
-            ))
-          )}
-        </div>
-      )}
+      {open && <RowActionPanel actions={list} onClose={() => setOpen(false)} />}
     </div>
   );
 };
