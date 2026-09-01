@@ -73,6 +73,9 @@ export interface MusicApi {
   /** D1 — what a plain left-click on a track does (persisted). */
   queueMode: QueueMode;
   setQueueMode: (m: QueueMode) => void;
+  /** F1 — playlist item_ids pinned to the Home quick-access strip. */
+  pinnedPlaylists: string[];
+  togglePinPlaylist: (id: string) => void;
   /** Transport actions fired but not yet confirmed by a server event
    * ("playPause" | "next" | "previous" | "play"). The triggering control
    * disables itself while its name is in here (backlog A1). */
@@ -147,6 +150,7 @@ export const useMusic = (): MusicApi => {
   const [providerFilter] = useStorage<string>(KEYS.providerFilter, "");
   const [manageServer] = useStorage<boolean>(KEYS.manageServer, false);
   const [queueMode, setQueueMode] = useStorage<QueueMode>(KEYS.queueMode, "append");
+  const [pinnedPlaylists, setPinnedPlaylists] = useStorage<string[]>(KEYS.pinnedPlaylists, []);
 
   const [state, setState] = useState<ConnState>("connecting");
   const [error, setError] = useState<string | null>(null);
@@ -780,6 +784,16 @@ export const useMusic = (): MusicApi => {
     sendspinRef.current?.setVolume(v);
   }, []);
 
+  const togglePinPlaylist = useCallback(
+    (id: string) =>
+      setPinnedPlaylists(
+        pinnedPlaylists.includes(id)
+          ? pinnedPlaylists.filter((x) => x !== id)
+          : [...pinnedPlaylists, id],
+      ),
+    [pinnedPlaylists, setPinnedPlaylists],
+  );
+
   const openServer = useCallback(() => {
     runCmd("sh", ["-c", `open ${httpBase} || xdg-open ${httpBase}`]).catch((e) =>
       console.warn("[music] openServer", e),
@@ -797,6 +811,8 @@ export const useMusic = (): MusicApi => {
       shuffle,
       queueMode,
       setQueueMode,
+      pinnedPlaylists,
+      togglePinPlaylist,
       pending,
       results,
       searching,
@@ -853,7 +869,8 @@ export const useMusic = (): MusicApi => {
       request,
     }),
     [
-      state, error, now, currentItem, upNext, repeatMode, shuffle, queueMode, setQueueMode, pending,
+      state, error, now, currentItem, upNext, repeatMode, shuffle, queueMode, setQueueMode,
+      pinnedPlaylists, togglePinPlaylist, pending,
       results, searching, volume, playlists, recentlyPlayed, providers, httpBase, favorites, nav,
       navStack.length, navTo, navBack, navHome, search, play, startRadio, playPause, next, previous,
       seek, removeFromQueue, moveQueueItem, moveQueueItemToEnd, cycleRepeat, toggleShuffle,

@@ -10,6 +10,7 @@ import {
   ListPlus,
   MicVocal,
   Music2,
+  Pin,
   Play,
   Plus,
   Radio,
@@ -132,6 +133,12 @@ export const standardActions = (
           icon: <ListMusic className="size-3.5" />,
           run: () => void api.mergePlaylist(item, p.item_id),
         })),
+    },
+    {
+      label: api.pinnedPlaylists.includes(item.item_id) ? "Unpin" : "Pin to top",
+      icon: <Pin className="size-3.5" />,
+      run: () => api.togglePinPlaylist(item.item_id),
+      hidden: item.media_type !== "playlist" || item.is_editable === false,
     },
     {
       label: "Start radio",

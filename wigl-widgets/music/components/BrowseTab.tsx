@@ -103,6 +103,17 @@ export const BrowseTab = ({ api }: { api: MusicApi }) => {
             ),
           )
         )}
+        {stack.length === 1 && !loading && (
+          <button
+            type="button"
+            data-no-drag
+            onClick={api.openServer}
+            title="Opens Music Assistant → Settings → Music — add local files, a NAS/SMB share, or a streaming account"
+            className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <span className="music-tag">＋ add a music source</span>
+          </button>
+        )}
       </div>
     </div>
   );

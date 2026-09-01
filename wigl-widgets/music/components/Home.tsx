@@ -2,10 +2,46 @@ import { useEffect, useState } from "react";
 import { Compass, History, ListMusic, Plus } from "lucide-react";
 import { useStorage } from "@/wigl/hooks";
 import { cn } from "@/wigl/utils";
+import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
 import { BrowseTab } from "./BrowseTab";
 import { QueueList } from "./QueueList";
 import { Row } from "./Row";
+
+/** F1 — quick-access strip of pinned playlists above the tabs (the "YouTube
+ * sidebar" idea, horizontal so it costs no width a narrow tile can't spare). */
+const PinnedStrip = ({ api }: { api: MusicApi }) => {
+  const pinned = api.pinnedPlaylists
+    .map((id) => api.playlists.find((p) => p.item_id === id))
+    .filter((p): p is MediaItem => !!p);
+  if (pinned.length === 0) return null;
+  return (
+    <div className="flex shrink-0 gap-1.5 overflow-x-auto px-1.5 pt-1.5" data-no-drag>
+      {pinned.map((p) => {
+        const art = api.imageUrl(p.metadata?.images?.[0] ?? p.image ?? null);
+        return (
+          <button
+            key={p.item_id}
+            type="button"
+            data-no-drag
+            onClick={() => api.navTo({ kind: "playlist", item: p })}
+            title={p.name}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-border py-0.5 pr-2.5 pl-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <span className="grid size-5 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-background text-muted-foreground/40">
+              {art ? (
+                <img src={art} alt="" className="size-full object-cover" draggable={false} />
+              ) : (
+                <ListMusic className="size-2.5" />
+              )}
+            </span>
+            <span className="max-w-24 truncate">{p.name}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 type HomeTab = "queue" | "playlists" | "recent" | "browse";
 
@@ -110,6 +146,7 @@ export const Home = ({ api }: { api: MusicApi }) => {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <PinnedStrip api={api} />
       <div className="flex shrink-0 flex-wrap gap-1 px-1.5 pt-1.5">
         {TABS.map((t) => {
           const Icon = ICON[t.id as keyof typeof ICON];

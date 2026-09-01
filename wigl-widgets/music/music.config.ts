@@ -34,6 +34,9 @@ export const KEYS = {
    * of the queue, non-destructive — the default, "a queue is fragile") or
    * `"replace"` (wipe + play). "Play now" stays available explicitly. */
   queueMode: "queue_mode",
+  /** F1: library-playlist item_ids the user pinned to the quick-access strip
+   * above the Home tabs. */
+  pinnedPlaylists: "pinned_playlists",
 } as const;
 
 /** Media types the search box asks MA for, in display order. */

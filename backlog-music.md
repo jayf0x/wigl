@@ -79,29 +79,34 @@ base64-in-kv approach proves too limiting in practice.
 
 ---
 
-## Group F — Navigation & sources · `[design]` + `[needs research]`
+## Navigation — full sidebar vs. the shipped pinned strip · `[deferred]`
 
-### F1 — Sidebar (YouTube vibe) · `[design]`
+F1 shipped the **smaller version**: a horizontal `PinnedStrip` of pinned
+playlists above the Home tabs (pin/unpin from a playlist row's `⋯` or the
+playlist-view header, `useStorage` `pinned_playlists`). A full left rail that
+*replaces* the tab bar was evaluated and rejected for now: the widget is often
+narrow, a permanent vertical rail eats width a small tile can't spare, and it's
+a large layout rewrite for a mostly-cosmetic gain. If the tab bar genuinely
+becomes the bottleneck (more than ~5 top-level destinations), revisit as a rail
+that collapses to an icon strip / a bottom bar under a container-width
+threshold — same `.music-cq` container-query mechanism the row inline actions
+already use.
 
-Owner: "a lot of options… we might need a sidebar to abstract some. Some more
-of a YouTube vibe could be nice, where you have a sidebar with playlist
-icons." Currently: 4 Home tabs + search + a nav stack. A left rail (icons:
-Now/Queue, Search, Playlists, Recent, Browse, + pinned playlist thumbnails)
-would replace the tab bar and free vertical space. This is a layout
-redesign — sketch it against the tile-at-any-size rule (a rail costs
-horizontal space a narrow tile can't spare — maybe it collapses to icons, or
-becomes a bottom bar under a width threshold). Decide with the owner. Big.
+## Local files — MA `filesystem_local` provider · `[needs backend]`
 
-### F2 — Local file / folder browser · `[needs research]`
-
-Add local tracks. Research paths: (a) MA's **filesystem provider** — add it
-pointed at a folder, MA scans + serves it, the widget just searches/browses
-it like any provider (cleanest, no widget code beyond a "add local folder"
-setup helper); (b) `builtin/add_track {url:"file:///data/…"}` — works but the
-file must be inside MA's Docker volume (verified earlier this project); (c) a
-widget-side file picker (`tauri-plugin-dialog`) + copy into the volume. (a)
-is almost certainly the answer. Verify MA's filesystem provider setup flow and
-whether it can point at an arbitrary host path given the container mount.
+F2 research: MA ships a `filesystem_local` music-provider domain
+(`providers/manifests` confirms it). The blocker is the Docker mount — `wigl-ma`
+only bind-mounts `.idea/ma-data → /data`, so `filesystem_local` can only see
+paths *inside* the container. Concrete next steps:
+1. `SETUP.md`: add `-v "$HOME/Music":/media:ro` (or a documented configurable
+   path) to the `docker run`.
+2. Then `filesystem_local` can be added in the MA web UI pointed at `/media`
+   (the "＋ add a music source" footer in the Browse tab already opens that UI).
+3. Optional later: drive `config/providers/setup {provider_domain:
+   "filesystem_local"}` from the widget — it's a multi-step config-entry flow,
+   non-trivial in a compact tile, so the web-UI handoff is the pragmatic path.
+`builtin/add_track {url:"file:///data/…"}` also still works for one-off files
+already inside `/data`.
 
 ---
 

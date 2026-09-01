@@ -316,6 +316,11 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
               editable && <PillBtn onClick={() => setRenaming(true)}>Rename</PillBtn>
             )}
             {editable && !renaming && (
+              <PillBtn onClick={() => api.togglePinPlaylist(item.item_id)}>
+                {api.pinnedPlaylists.includes(item.item_id) ? "Unpin" : "Pin to top"}
+              </PillBtn>
+            )}
+            {editable && !renaming && (
               <PillBtn
                 onClick={async () => {
                   if (bg) {

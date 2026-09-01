@@ -62,12 +62,12 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | `settingsSection.tsx` | Settings-modal section: host/port/login, provider filter, auto-start toggle. |
 | `components/NowPlaying.tsx` | Pinned top zone: art, title, clickable artist/album, scrubber, transport, repeat/shuffle, favourite + `⋯` (reuses `RowActionPanel` — C2), volume, the fold-down `TrackInfo` panel. Scrubber samples `api.getProgress()` every `PROGRESS_TICK_MS` while playing for a smooth clock; transport buttons disable while their action is in `api.pending`. `TrackInfo` fetches the full `music/tracks/get` via `useQuery` (`track:<uri>`) and renders clickable artist/credit chips (C3). |
 | `components/Browser.tsx` | The switchable main pane: search field + `SearchFilters` + results, OR a detail view, OR `<Home>`. Hosts the nav breadcrumb. Shows a `SearchSkeleton` strip at the top of results while any provider search is still in flight; previous results stay rendered underneath. |
-| `components/Home.tsx` | Tabbed default pane: Up next (`QueueList`) / Playlists / Recent / Browse (`BrowseTab`). |
+| `components/Home.tsx` | Tabbed default pane: Up next (`QueueList`) / Playlists / Recent / Browse (`BrowseTab`). `PinnedStrip` above the tabs = horizontal quick-access chips for `api.pinnedPlaylists` (F1). |
 | `components/QueueList.tsx` | Up-next list with pointer drag-reorder + per-row `⋯`. `QueueHeader`: "Save" (→ `saveQueueAsPlaylist`, queue untouched) + two-step "Clear" (D2/D4). |
 | `components/DetailView.tsx` | `ArtistView` / `AlbumView` / `PlaylistView` — the nav-stack destinations. `PlayPills` = the D1-toggle-aware primary play button (+ explicit "Play now" in append mode). `PlaylistView`: inline Rename (E1), Background image (E3, `useStorage` key `plbg:<id>`), two-step Delete. Track rows capped at `PLAYLIST_RENDER_CAP`. |
 | `components/Row.tsx` | The universal media row + `RowAction`. Exports `standardActions` (Play now / Play next / Add to queue / Favourite / Add-to-playlist / Merge-into (playlist rows) / Start radio / Go to artist·album), `RowActionButtons` (inline icon shortcuts for Add-to-queue / Play-next / Favourite, container-query gated via `.music-row-inline`, + the `⋯` toggle) and `RowActionPanel` (the fold-down pill menu with submenu + inline-input support) — the last two reused by `NowPlaying`. Every list uses `Row`. |
 | `components/SearchFilters.tsx` | Media-type + provider filter pills. |
-| `components/BrowseTab.tsx` | `music/browse` folder navigator with its own path stack. |
+| `components/BrowseTab.tsx` | `music/browse` folder navigator with its own path stack. Root level has a "＋ add a music source" footer → opens the MA web UI (F2). |
 | `components/Equalizer.tsx` | Decorative VU bars (NOT audio DSP). Minimized-tile background + empty states. |
 | `tests/music.e2e.test.ts` | 15 live drift-regression tests vs `wigl-ma` (skip when down). |
 | `tests/audio-check.md` | By-ear checklist for the DAC hop. |
