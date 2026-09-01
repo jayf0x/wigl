@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -17,7 +17,9 @@ import {
   Trash2,
   User,
 } from "lucide-react";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/wigl/utils";
+import { playlistDisplayImage } from "../playlistImage";
 import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
 
@@ -202,63 +204,66 @@ export const standardActions = (
   ];
 };
 
-/** The 2-3 actions surfaced as inline icon buttons on the row (C1), by label.
- * Everything else stays in the `⋯` tail. Order here is the render order. */
-const INLINE_ACTION_LABELS = ["Add to queue", "Play next", "Favourite", "Remove favourite"];
+/** The actions surfaced as inline icon buttons on the row (C1), by label, in
+ * render order. Which of these actually fit is decided per-row by tile width
+ * (see `Row`'s `inlineLabels`); whatever ends up inline is then excluded from
+ * the `⋯` panel so nothing shows twice (feedback F). */
+export const INLINE_ACTION_LABELS = ["Add to queue", "Play next", "Favourite", "Remove favourite"];
+
+/** Row width (px) at/above which the inline shortcuts get shown. Mirrors the
+ * old `@container (min-width: 15rem)` rule, but measured in JS so the `⋯`
+ * panel can exclude exactly what's inline. */
+const INLINE_MIN_PX = 232;
 
 /** The `⋯` toggle plus the inline icon shortcuts, rendered inside the row's
  * flex line. `open`/`onToggle` are owned by the caller so the fold-down
- * `<RowActionPanel>` can live as its sibling. Used by `Row` and `NowPlaying`. */
+ * `<RowActionPanel>` can live as its sibling. */
 export const RowActionButtons = ({
-  actions,
+  inline,
   open,
   onToggle,
 }: {
-  actions: RowAction[];
+  /** the already-resolved inline actions (subset of the row's action set) */
+  inline: RowAction[];
   open: boolean;
   onToggle: () => void;
-}) => {
-  const inline = INLINE_ACTION_LABELS.map((l) => actions.find((a) => a.label === l && a.run && !a.hidden)).filter(
-    (a): a is RowAction => !!a,
-  );
-  return (
-    <>
-      {inline.length > 0 && (
-        <div className="music-row-inline shrink-0 items-center gap-0.5">
-          {inline.map((a) => (
-            <button
-              key={a.label}
-              type="button"
-              data-no-drag
-              aria-label={a.label}
-              title={a.label}
-              onClick={() => a.run?.()}
-              className={cn(
-                "rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:opacity-100",
-                open ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-              )}
-            >
-              {a.icon}
-            </button>
-          ))}
-        </div>
+}) => (
+  <>
+    {inline.length > 0 && (
+      <div className="music-row-inline shrink-0 items-center gap-0.5">
+        {inline.map((a) => (
+          <button
+            key={a.label}
+            type="button"
+            data-no-drag
+            aria-label={a.label}
+            title={a.label}
+            onClick={() => a.run?.()}
+            className={cn(
+              "mx-press mx-tap rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:opacity-100",
+              open ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+            )}
+          >
+            {a.icon}
+          </button>
+        ))}
+      </div>
+    )}
+    <button
+      type="button"
+      data-no-drag
+      aria-label="More actions"
+      aria-expanded={open}
+      onClick={onToggle}
+      className={cn(
+        "mx-press shrink-0 rounded p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
+        open ? "opacity-100" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100",
       )}
-      <button
-        type="button"
-        data-no-drag
-        aria-label="More actions"
-        aria-expanded={open}
-        onClick={onToggle}
-        className={cn(
-          "shrink-0 rounded p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
-          open ? "opacity-100" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100",
-        )}
-      >
-        <Ellipsis className="size-3.5" />
-      </button>
-    </>
-  );
-};
+    >
+      <Ellipsis className="size-3.5" />
+    </button>
+  </>
+);
 
 /** The fold-down pill strip: the full action list, with submenu + inline-input
  * support. Caller renders it conditionally on its own `open` state. */
@@ -266,14 +271,20 @@ export const RowActionPanel = ({
   actions,
   onClose,
   className,
+  exclude,
 }: {
   actions: RowAction[];
   onClose: () => void;
   className?: string;
+  /** labels already shown as inline shortcuts on the row — dropped here so the
+   * panel is pure overflow, never a duplicate (feedback F). */
+  exclude?: string[];
 }) => {
   const [sub, setSub] = useState<RowAction | null>(null);
   const [text, setText] = useState("");
-  const list = actions.filter((a) => !a.hidden);
+  const list = actions.filter(
+    (a) => !a.hidden && !(exclude?.includes(a.label) && a.run && !a.submenu),
+  );
   const pills = sub?.submenu ? sub.submenu.filter((a) => !a.hidden) : list;
   const close = () => {
     setSub(null);
@@ -291,7 +302,7 @@ export const RowActionPanel = ({
             setSub(null);
             setText("");
           }}
-          className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="mx-press flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <ChevronLeft className="size-3.5" /> back
         </button>
@@ -317,36 +328,54 @@ export const RowActionPanel = ({
           <button
             type="submit"
             data-no-drag
-            className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="mx-press rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             add
           </button>
         </form>
       ) : (
-        pills.map((a) => (
-          <button
-            key={a.label}
-            type="button"
-            data-no-drag
-            onClick={() => {
-              if (a.submenu || a.input) setSub(a);
-              else {
-                a.run?.();
-                close();
-              }
-            }}
-            className={cn(
-              "flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] transition-colors hover:bg-muted",
-              a.danger
-                ? "text-muted-foreground hover:text-destructive"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {a.icon}
-            <span className="max-w-32 truncate">{a.label}</span>
-            {(a.submenu || a.input) && <ChevronRight className="size-3" />}
-          </button>
-        ))
+        pills.map((a) => {
+          const branch = !!(a.submenu || a.input);
+          // Top-level plain actions collapse to an icon + hover/focus tooltip
+          // (feedback C/I); submenu contents (playlist names, radio seeds) and
+          // any branch keep their text label — an icon alone wouldn't name them.
+          const iconOnly = !sub && !branch;
+          return (
+            <button
+              key={a.label}
+              type="button"
+              data-no-drag
+              aria-label={a.label}
+              onClick={() => {
+                if (branch) setSub(a);
+                else {
+                  a.run?.();
+                  close();
+                }
+              }}
+              className={cn(
+                "mx-press flex items-center gap-1.5 rounded border border-border text-[10px] transition-colors hover:bg-muted",
+                iconOnly ? "p-1.5" : "px-2 py-1",
+                a.danger
+                  ? "text-muted-foreground hover:text-destructive"
+                  : "text-muted-foreground hover:text-foreground",
+                a.run && !branch && "mx-tap",
+              )}
+            >
+              {iconOnly ? (
+                <Tooltip content={a.label}>
+                  <span className="flex">{a.icon}</span>
+                </Tooltip>
+              ) : (
+                <>
+                  {a.icon}
+                  <span className="max-w-32 truncate">{a.label}</span>
+                  {branch && <ChevronRight className="size-3" />}
+                </>
+              )}
+            </button>
+          );
+        })
       )}
     </div>
   );
@@ -372,12 +401,42 @@ export const Row = ({
   dragHandle?: ReactNode;
 }) => {
   const [open, setOpen] = useState(false);
-  const art = api.imageUrl(item.metadata?.images?.[0] ?? item.image ?? null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [wide, setWide] = useState(true);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setWide(e.contentRect.width >= INLINE_MIN_PX));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const rawArt = api.imageUrl(item.metadata?.images?.[0] ?? item.image ?? null);
+  const art = item.media_type === "playlist" ? playlistDisplayImage(api, item, rawArt) : rawArt;
   const list = (actions ?? standardActions(api, item)).filter((a) => !a.hidden);
   const isCurrent = api.currentItem?.media_item?.uri && api.currentItem.media_item.uri === item.uri;
 
+  // Which shortcuts fit inline right now; the panel excludes exactly these.
+  const inlineLabels = wide ? INLINE_ACTION_LABELS : [];
+  const inline = inlineLabels
+    .map((l) => list.find((a) => a.label === l && a.run && !a.submenu))
+    .filter((a): a is RowAction => !!a);
+
+  // A click anywhere on the main row area always plays — even with the ⋯ panel
+  // open, in which case it also closes the panel (feedback C). Guarded so the
+  // click that precedes a dblclick doesn't fire play three times.
+  const lastPlay = useRef(0);
+  const playRow = () => {
+    const t = Date.now();
+    if (t - lastPlay.current < 350) return;
+    lastPlay.current = t;
+    api.unlock();
+    (onPlay ?? (() => api.play(item)))();
+    setOpen(false);
+  };
+
   return (
-    <div className="rounded-md">
+    <div ref={rootRef} className="rounded-md">
       <div
         className={cn(
           "group flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-accent focus-within:bg-accent",
@@ -389,17 +448,15 @@ export const Row = ({
           type="button"
           data-no-drag
           data-music-row
-          onClick={() => {
-            api.unlock();
-            (onPlay ?? (() => api.play(item)))();
-          }}
+          onClick={playRow}
+          onDoubleClick={playRow}
           onKeyDown={(e) => {
             if (e.key === "a" && !item.uri.startsWith("queue:")) {
               e.preventDefault();
               api.play(item, "add");
             }
           }}
-          className="flex min-w-0 flex-1 items-center gap-2.5 text-left outline-none"
+          className="mx-press mx-tap flex min-w-0 flex-1 items-center gap-2.5 text-left outline-none"
         >
           {index != null ? (
             <span className="w-5 shrink-0 text-right text-[10px] text-muted-foreground tabular-nums">
@@ -426,10 +483,16 @@ export const Row = ({
             <span className="block truncate text-[10px] text-muted-foreground">{subtitleFor(item)}</span>
           </span>
         </button>
-        <RowActionButtons actions={list} open={open} onToggle={() => setOpen((v) => !v)} />
+        <RowActionButtons inline={inline} open={open} onToggle={() => setOpen((v) => !v)} />
       </div>
 
-      {open && <RowActionPanel actions={list} onClose={() => setOpen(false)} />}
+      {open && (
+        <RowActionPanel
+          actions={list}
+          exclude={inline.map((a) => a.label)}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </div>
   );
 };

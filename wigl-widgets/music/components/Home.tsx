@@ -3,6 +3,7 @@ import { Compass, History, ListMusic, Plus, SlidersHorizontal } from "lucide-rea
 import { useStorage } from "@/wigl/hooks";
 import { cn } from "@/wigl/utils";
 import { fxIsActive } from "../audioGraph";
+import { playlistDisplayImage } from "../playlistImage";
 import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
 import { BrowseTab } from "./BrowseTab";
@@ -20,7 +21,7 @@ const PinnedStrip = ({ api }: { api: MusicApi }) => {
   return (
     <div className="flex shrink-0 gap-1.5 overflow-x-auto px-1.5 pt-1.5" data-no-drag>
       {pinned.map((p) => {
-        const art = api.imageUrl(p.metadata?.images?.[0] ?? p.image ?? null);
+        const art = playlistDisplayImage(api, p);
         return (
           <button
             key={p.item_id}
@@ -28,7 +29,7 @@ const PinnedStrip = ({ api }: { api: MusicApi }) => {
             data-no-drag
             onClick={() => api.navTo({ kind: "playlist", item: p })}
             title={p.name}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-border py-0.5 pr-2.5 pl-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="mx-press flex shrink-0 items-center gap-1.5 rounded-full border border-border py-0.5 pr-2.5 pl-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <span className="grid size-5 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-background text-muted-foreground/40">
               {art ? (
@@ -105,7 +106,7 @@ const PlaylistsTab = ({ api }: { api: MusicApi }) => {
               placeholder="Playlist name"
               className="w-28 rounded border border-border bg-input/40 px-2 py-0.5 text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60"
             />
-            <button type="submit" data-no-drag className="text-[10px] text-muted-foreground hover:text-foreground">
+            <button type="submit" data-no-drag className="mx-press text-[10px] text-muted-foreground hover:text-foreground">
               add
             </button>
           </form>
@@ -114,7 +115,7 @@ const PlaylistsTab = ({ api }: { api: MusicApi }) => {
             type="button"
             data-no-drag
             onClick={() => setCreating(true)}
-            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+            className="mx-press flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
           >
             <Plus className="size-3" /> New
           </button>

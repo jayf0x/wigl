@@ -146,6 +146,10 @@ export interface MusicApi {
   /** Apply to the live graph only (no persist) — use on every slider move. */
   applyFx: (fx: FxState) => void;
   fxAvailable: boolean;
+  /** E3 — per-playlist custom cover/background images, `{ [item_id]: dataURI }`.
+   * Resolve a playlist's display image via `playlistDisplayImage` (playlistImage.ts). */
+  playlistImages: Record<string, string>;
+  setPlaylistImage: (playlistId: string, dataUri: string | null) => void;
   audioOutput: "direct" | "media-element";
   setAudioOutput: (mode: "direct" | "media-element") => void;
   /** Open the Music Assistant web UI (to add a provider like YouTube Music). */
@@ -170,6 +174,21 @@ export const useMusic = (): MusicApi => {
     SENDSPIN_OUTPUT,
   );
   const [fxStored, setFxStored] = useStorage<FxState>(KEYS.fx, DEFAULT_FX);
+  const [playlistImages, setPlaylistImagesStored] = useStorage<Record<string, string>>(
+    KEYS.playlistImages,
+    {},
+  );
+  const playlistImagesRef = useRef(playlistImages);
+  playlistImagesRef.current = playlistImages;
+  const setPlaylistImage = useCallback(
+    (id: string, uri: string | null) => {
+      const next = { ...playlistImagesRef.current };
+      if (uri) next[id] = uri;
+      else delete next[id];
+      setPlaylistImagesStored(next);
+    },
+    [setPlaylistImagesStored],
+  );
   // Storage may still hold the pre-4-band `{low,mid,high,reverb,echo}` shape —
   // normalise on read so every consumer sees the current `FxState`.
   const fx = useMemo(() => normalizeFx(fxStored), [fxStored]);
@@ -952,6 +971,8 @@ export const useMusic = (): MusicApi => {
       setFx,
       applyFx,
       fxAvailable: audioOutput === "media-element",
+      playlistImages,
+      setPlaylistImage,
       audioOutput,
       setAudioOutput,
       setVolume,
@@ -981,7 +1002,7 @@ export const useMusic = (): MusicApi => {
       seek, removeFromQueue, moveQueueItem, moveQueueItemToEnd, cycleRepeat, toggleShuffle,
       toggleFavorite, refreshPlaylists, refreshRecent, createPlaylist, saveQueueAsPlaylist,
       renamePlaylist, mergePlaylist, deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume,
-      fx, setFx, applyFx, audioOutput, setAudioOutput,
+      fx, setFx, applyFx, audioOutput, setAudioOutput, playlistImages, setPlaylistImage,
       openServer, imageUrl, request, cmd,
     ],
   );

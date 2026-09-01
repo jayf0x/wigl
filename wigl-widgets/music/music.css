@@ -49,15 +49,12 @@
 
 /* Inline row actions (C1): the 2-3 most-used actions surface as icon buttons
    on hover/focus, but only once the tile is wide enough to spare the room —
-   below that the ⋯ menu is the only affordance. Container-query, not a media
-   query: the tile resizes to anything and viewport breakpoints don't apply. */
+   below that the ⋯ menu is the only affordance. Whether there's room is now
+   decided per-row in JS (a ResizeObserver in Row.tsx) so the ⋯ panel can
+   exclude exactly what's shown inline (feedback F); this class only styles the
+   container once Row has decided to render it. */
 .music-widget .music-row-inline {
-  display: none;
-}
-@container (min-width: 15rem) {
-  .music-widget .music-row-inline {
-    display: flex;
-  }
+  display: flex;
 }
 
 /* Signal bars — the idle "VU meter" animation used in the empty state and

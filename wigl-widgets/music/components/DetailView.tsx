@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { hours, useQuery, useStorage } from "@/wigl/hooks";
+import { hours, useQuery } from "@/wigl/hooks";
 import { Disc3, LoaderCircle, Radio, Trash2, User } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PLAYLIST_RENDER_CAP } from "../music.config";
 import { pickImageDataUri } from "../pickImage";
+import { playlistDisplayImage } from "../playlistImage";
 import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
 import { Row, standardActions } from "./Row";
@@ -259,7 +260,7 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
   const [renaming, setRenaming] = useState(false);
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
-  const [bg, setBg] = useStorage<string | null>(`plbg:${item.item_id}`, null);
+  const bg = api.playlistImages[item.item_id] ?? null;
   const [data, loading, { refresh }] = useQuery<{ tracks: MediaItem[] }>({
     key: `playlist:${item.item_id}`,
     stale: 60_000,
@@ -284,7 +285,12 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
   // Only real library playlists can be renamed / deleted / have tracks added.
   const editable = item.is_editable !== false && (!item.provider || item.provider === "library");
   const shownName = nameOverride ?? item.name;
-  const art = api.imageUrl(item.metadata?.images?.[0] ?? tracks[0]?.metadata?.images?.[0] ?? null);
+  // Custom background wins over MA art and the first-track fallback (feedback E).
+  const art = playlistDisplayImage(
+    api,
+    item,
+    api.imageUrl(tracks[0]?.metadata?.images?.[0] ?? null),
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -335,12 +341,12 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
               <PillBtn
                 onClick={async () => {
                   if (bg) {
-                    setBg(null);
+                    api.setPlaylistImage(item.item_id, null);
                     return;
                   }
                   setPicking(true);
                   const uri = await pickImageDataUri();
-                  if (uri) setBg(uri);
+                  if (uri) api.setPlaylistImage(item.item_id, uri);
                   setPicking(false);
                 }}
               >

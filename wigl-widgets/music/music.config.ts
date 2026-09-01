@@ -43,6 +43,10 @@ export const KEYS = {
   audioOutput: "audio_output",
   /** G1: FX chain settings (`FxState` JSON). */
   fx: "fx",
+  /** E3: per-playlist custom background/cover image, `{ [item_id]: dataURI }`.
+   * One map key (was `plbg:<id>` per playlist) so non-hook consumers — the
+   * Playlists list rows, the pinned strip — can resolve it too (feedback E). */
+  playlistImages: "playlist_images",
 } as const;
 
 /** Media types the search box asks MA for, in display order. */
