@@ -110,66 +110,11 @@ already inside `/data`.
 
 ---
 
-## Audio engine — done / parked
+## Parked — playback speed (time-stretch) · `[deferred]`
 
-- **G1 audio-effects tab — DONE.** `audioGraph.ts` + `EffectsTab.tsx`: 3-band
-  EQ + synth-IR reverb + feedback echo, live on `api.fx`. Needs `media-element`
-  output (only mode with an `<audio>` to `createMediaElementSource`) — the tab
-  prompts a one-tap switch when on `direct`. **Playback speed was cut**: the
-  SDK feeds the element a live `MediaStream` (`srcObject`) and `playbackRate`
-  is ignored on those; real time-stretch needs a phase-vocoder AudioWorklet —
-  parked below.
-- **G2 higher-quality audio — decided, not doing.** `codecs:["pcm"]` over
-  localhost is already lossless end-to-end from MA; the ceiling is the source
-  (YouTube opus ~130-160 kbps, radio varies) and no client change fixes that.
-  A native Tauri audio plugin playing the `:8097` HTTP flow stream would
-  bypass WKWebView but kill the Web Audio tap (G1) and needs a Rust plugin +
-  capability. Not worth it barring an audible defect. (Documented in `state.md`.)
-- **G3 fetch priority — DONE (minimal).** Audio is on its own `/sendspin` WS
-  and never competed with `fetch`/`<img>` in the first place; list-thumbnail
-  `<img>`s now carry `loading="lazy" decoding="async" fetchPriority="low"`,
-  now-playing art stays normal priority. Nothing else needed.
-
-### Parked — playback speed (time-stretch)
-
-A pitch-preserving speed control needs a phase-vocoder / WSOLA AudioWorklet in
-`audioGraph.ts` (the `<audio>` element's `playbackRate` is inert on a
-MediaStream source). It also has to feed back into A2's clock so the displayed
-time slows with the audio. Non-trivial; revisit only if the owner asks
-specifically for speed.
-
----
-
-## Group H — Ops & docs — DONE
-
-- **H1** — Settings → Music → **Backend** section: `OpButton`s for **Restart
-  server** (`docker restart`), **Clear cache** (wipe `/data/.cache` + old
-  logs, restart — never touches library/auth/settings/playlists; the cache
-  runs ~130 MB), and **Update server** (two-tap confirm; `docker inspect` the
-  live ports/mounts → pull → `rm -f` → recreate with `--restart
-  unless-stopped`). Docker ops live in `serverProcess.ts`, discovered docker
-  binary. "Wipe & re-onboard" deliberately left out — rare and destructive,
-  `SETUP.md` covers it.
-- **H2** — `SETUP.md` re-checked against the running container: ports/mount
-  match, the verify command (fixed earlier to read the bare-list `POST /api`
-  envelope) works, and it now points at the Settings Backend section as the
-  primary path.
-- **H3** — `wigl-widgets/music/FEATURES.md` — the user-facing "what the
-  non-obvious features do".
-
----
-
-## Group I — "Start radio" — DONE
-
-Reworked to MA's non-deprecated pattern (matching the MA frontend's
-`helpers/radio.ts`): a "radio" is the `radio_playlist` provider —
-`radio_playlist://playlist/<seed uri>` — a generated playlist of the seed's
-tracks + similar. `startRadio()` now **navigates to that playlist** (a
-`PlaylistView`) instead of the old destructive `play_media {radio_mode:true}`.
-From there Play respects the queue-mode toggle (I1) and "Add to queue" is one
-tap. Actions are per-type ("Track radio" / "Artist radio" / "Album radio" /
-"Playlist radio", I2) and only shown for track/artist/album/non-dynamic-
-playlist seeds — never a radio station or an already-dynamic playlist.
-`PlaylistView` now resolves tracks under `item.provider` (was hardcoded
-`"library"`) and only shows rename/delete/add for real library playlists.
-
+The Effects tab does EQ / reverb / echo but **no speed control**: the SDK
+feeds the `<audio>` a live `MediaStream` (`srcObject`) and `playbackRate` is
+inert on those. A pitch-preserving speed control needs a phase-vocoder /
+WSOLA AudioWorklet in `audioGraph.ts`, and it has to feed back into the
+now-playing clock (`getProgress` / A2) so the displayed time slows with the
+audio. Non-trivial; revisit only if the owner asks specifically for speed.
