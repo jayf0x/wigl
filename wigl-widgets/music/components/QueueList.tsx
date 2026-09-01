@@ -1,5 +1,5 @@
 import { type PointerEvent as ReactPointerEvent, useRef, useState } from "react";
-import { ArrowDownToLine, ArrowUpToLine, GripVertical, ListPlus, Trash2 } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, Check, GripVertical, ListPlus, Trash2 } from "lucide-react";
 import { cn } from "@/wigl/utils";
 import type { MusicApi } from "../useMusic";
 import { Equalizer } from "./Equalizer";
@@ -11,18 +11,33 @@ const QueueHeader = ({ api, count }: { api: MusicApi; count: number }) => {
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
+  // feedback D — the Save button gave no sign it worked. After a successful
+  // save, swap it for a checked "saved as <name>" that flashes, and lock it
+  // out briefly so a double-tap can't make two playlists.
+  const [saved, setSaved] = useState<string | null>(null);
 
   return (
     <div className="flex items-center justify-between gap-2 px-2 pt-2 pb-1">
       <p className="music-tag shrink-0 text-muted-foreground/70">Up next · {count}</p>
-      {saving ? (
+      {saved !== null ? (
+        <span
+          key="saved"
+          className="mx-flash flex shrink-0 items-center gap-1 rounded px-1 text-[10px] text-muted-foreground"
+        >
+          <Check className="size-3" /> saved{saved ? ` as “${saved}”` : ""}
+        </span>
+      ) : saving ? (
         <form
           className="flex min-w-0 items-center gap-1"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            void api.saveQueueAsPlaylist(name);
+            const label = name.trim();
             setName("");
             setSaving(false);
+            const pl = await api.saveQueueAsPlaylist(label);
+            const shown = pl?.name ?? label;
+            setSaved(shown);
+            setTimeout(() => setSaved(null), 2200);
           }}
         >
           {/* biome-ignore lint/a11y/noAutofocus: opened by an explicit click */}
@@ -34,7 +49,7 @@ const QueueHeader = ({ api, count }: { api: MusicApi; count: number }) => {
             placeholder={`queue ${new Date().toISOString().slice(5, 16).replace("T", " ")}`}
             className="w-28 min-w-0 rounded border border-border bg-input/40 px-2 py-0.5 text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60"
           />
-          <button type="submit" data-no-drag className="text-[10px] text-muted-foreground hover:text-foreground">
+          <button type="submit" data-no-drag className="mx-press text-[10px] text-muted-foreground hover:text-foreground">
             save
           </button>
         </form>
@@ -44,7 +59,7 @@ const QueueHeader = ({ api, count }: { api: MusicApi; count: number }) => {
             type="button"
             data-no-drag
             onClick={() => setSaving(true)}
-            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+            className="mx-press flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
           >
             <ListPlus className="size-3" /> Save
           </button>
@@ -60,7 +75,7 @@ const QueueHeader = ({ api, count }: { api: MusicApi; count: number }) => {
                 setTimeout(() => setConfirmClear(false), 3000);
               }
             }}
-            className="text-[10px] text-muted-foreground hover:text-destructive"
+            className="mx-press text-[10px] text-muted-foreground hover:text-destructive"
           >
             {confirmClear ? "clear queue?" : "Clear"}
           </button>

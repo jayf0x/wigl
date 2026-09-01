@@ -2,6 +2,7 @@ import { type FormEvent, type RefObject, useEffect, useRef, useState } from "rea
 import { ChevronLeft, Clock, LoaderCircle, Search, X } from "lucide-react";
 import { useStorage } from "@/wigl/hooks";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/wigl/utils";
 import type { NavView, SearchResults } from "../types";
 import type { MusicApi } from "../useMusic";
 import { DetailView } from "./DetailView";
@@ -65,7 +66,7 @@ export const Browser = ({
   // the filter selection changes too.
   useEffect(() => {
     if (nav.kind !== "browse") return;
-    const t = setTimeout(() => api.search(q, { mediaTypes: types, providers }), 260);
+    const t = setTimeout(() => api.search(q, { mediaTypes: types, providers }), 220);
     return () => clearTimeout(t);
   }, [q, api.search, nav.kind, types, providers]);
 
@@ -109,7 +110,10 @@ export const Browser = ({
               onFocus={() => setFocused(true)}
               onBlur={() => setTimeout(() => setFocused(false), 120)}
               placeholder="Search music & radio…"
-              className="min-w-0 flex-1 bg-transparent text-[12px] text-foreground outline-none placeholder:text-muted-foreground/60"
+              className={cn(
+                "min-w-0 flex-1 bg-transparent text-[12px] text-foreground outline-none placeholder:text-muted-foreground/60",
+                api.searching && "mx-pending-long",
+              )}
             />
             {api.searching ? (
               <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
@@ -123,7 +127,7 @@ export const Browser = ({
                   api.clearResults();
                   inputRef.current?.focus();
                 }}
-                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                className="mx-press shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
               >
                 <X className="size-3.5" />
               </button>
@@ -138,7 +142,7 @@ export const Browser = ({
                   data-no-drag
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => runSearch(term)}
-                  className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                  className="mx-press flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
                   <Clock className="size-2.5" />
                   {term}
@@ -172,7 +176,7 @@ export const Browser = ({
             data-no-drag
             aria-label="Back"
             onClick={api.navBack}
-            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="mx-press shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <ChevronLeft className="size-4" />
           </button>
@@ -181,7 +185,7 @@ export const Browser = ({
             type="button"
             data-no-drag
             onClick={api.navHome}
-            className="music-tag shrink-0 rounded px-1.5 py-1 text-muted-foreground/70 hover:text-foreground"
+            className="music-tag mx-press shrink-0 rounded px-1.5 py-1 text-muted-foreground/70 hover:text-foreground"
           >
             search
           </button>
@@ -190,11 +194,21 @@ export const Browser = ({
 
       <div className="h-px bg-border" />
 
+      <div
+        key={
+          nav.kind !== "browse"
+            ? `nav:${crumb(nav)}`
+            : results || api.searching
+              ? "search"
+              : "home"
+        }
+        className="mx-enter flex min-h-0 flex-1 flex-col"
+      >
       {nav.kind !== "browse" ? (
         <DetailView api={api} />
       ) : results || api.searching ? (
         <ScrollArea className="min-h-0 flex-1" scrollFade>
-          <div className="p-1.5">
+          <div className={cn("p-1.5", api.searching && "mx-pending-long")}>
             {api.searching && <SearchSkeleton />}
             {results && total === 0 && !api.searching ? (
               <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">
@@ -216,6 +230,7 @@ export const Browser = ({
       ) : (
         <Home api={api} />
       )}
+      </div>
 
       {nav.kind === "browse" && !ytReady && (
         <button
@@ -223,7 +238,7 @@ export const Browser = ({
           data-no-drag
           onClick={api.openServer}
           title="Opens Music Assistant → Settings → Music sources → add “YouTube Music (Free)” (no account needed)"
-          className="flex shrink-0 items-center justify-center gap-1.5 border-border border-t px-3 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="mx-press flex shrink-0 items-center justify-center gap-1.5 border-border border-t px-3 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <span className="music-tag">＋ add youtube music</span>
         </button>
