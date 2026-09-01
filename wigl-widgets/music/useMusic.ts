@@ -123,6 +123,11 @@ export interface MusicApi {
   refreshRecent: () => void;
   createPlaylist: (name: string) => Promise<MediaItem | null>;
   saveQueueAsPlaylist: (name: string) => Promise<MediaItem | null>;
+  /** E1 — rename an editable library playlist (sticks; needs `overwrite:true`
+   * and the full playlist object as `update`). No-op for smart playlists. */
+  renamePlaylist: (playlist: MediaItem, name: string) => Promise<void>;
+  /** E4 — append every track of `source` into playlist `targetId`. */
+  mergePlaylist: (source: MediaItem, targetId: string) => Promise<void>;
   deletePlaylist: (playlist: MediaItem) => void;
   addToPlaylist: (playlistId: string, uris: string[]) => Promise<void>;
   removePlaylistTrack: (playlistId: string, position: number) => Promise<void>;
@@ -718,6 +723,48 @@ export const useMusic = (): MusicApi => {
     [refreshPlaylists],
   );
 
+  const renamePlaylist = useCallback(
+    async (playlist: MediaItem, name: string) => {
+      const client = clientRef.current;
+      const next = name.trim();
+      if (!client || !next || playlist.is_editable === false || next === playlist.name) return;
+      setPlaylists((list) =>
+        list.map((p) => (p.item_id === playlist.item_id ? { ...p, name: next } : p)),
+      );
+      try {
+        await client.command("music/playlists/update", {
+          item_id: playlist.item_id,
+          update: { ...playlist, name: next },
+          overwrite: true,
+        });
+      } catch (e) {
+        console.warn("[music] renamePlaylist", e);
+      }
+      refreshPlaylists();
+    },
+    [refreshPlaylists],
+  );
+
+  const mergePlaylist = useCallback(async (source: MediaItem, targetId: string) => {
+    const client = clientRef.current;
+    if (!client || !targetId) return;
+    try {
+      const tracks = await client.command<MediaItem[]>("music/playlists/playlist_tracks", {
+        item_id: source.item_id,
+        provider_instance_id_or_domain: source.provider || "library",
+      });
+      const uris = (tracks ?? []).map((t) => t.uri).filter((u): u is string => !!u);
+      if (uris.length) {
+        await client.command("music/playlists/add_playlist_tracks", {
+          db_playlist_id: targetId,
+          uris,
+        });
+      }
+    } catch (e) {
+      console.warn("[music] mergePlaylist", e);
+    }
+  }, []);
+
   const removePlaylistTrack = useCallback(async (playlistId: string, position: number) => {
     await clientRef.current
       ?.command("music/playlists/remove_playlist_tracks", {
@@ -784,6 +831,8 @@ export const useMusic = (): MusicApi => {
       refreshRecent,
       createPlaylist,
       saveQueueAsPlaylist,
+      renamePlaylist,
+      mergePlaylist,
       deletePlaylist,
       addToPlaylist,
       removePlaylistTrack,
@@ -809,8 +858,8 @@ export const useMusic = (): MusicApi => {
       navStack.length, navTo, navBack, navHome, search, play, startRadio, playPause, next, previous,
       seek, removeFromQueue, moveQueueItem, moveQueueItemToEnd, cycleRepeat, toggleShuffle,
       toggleFavorite, refreshPlaylists, refreshRecent, createPlaylist, saveQueueAsPlaylist,
-      deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume, openServer, imageUrl, request,
-      cmd,
+      renamePlaylist, mergePlaylist, deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume,
+      openServer, imageUrl, request, cmd,
     ],
   );
 };

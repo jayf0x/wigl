@@ -117,6 +117,23 @@ export const standardActions = (
       ],
     },
     {
+      // E4 — the only real "playlist into playlist": read source tracks, append
+      // each uri to the target. Playlist rows only.
+      label: "Merge into…",
+      icon: <ListMusic className="size-3.5" />,
+      hidden:
+        item.media_type !== "playlist" ||
+        api.playlists.filter((p) => p.is_editable !== false && p.item_id !== item.item_id).length ===
+          0,
+      submenu: api.playlists
+        .filter((p) => p.is_editable !== false && p.item_id !== item.item_id)
+        .map((p) => ({
+          label: p.name,
+          icon: <ListMusic className="size-3.5" />,
+          run: () => void api.mergePlaylist(item, p.item_id),
+        })),
+    },
+    {
       label: "Start radio",
       icon: <Radio className="size-3.5" />,
       run: () => api.startRadio(item),

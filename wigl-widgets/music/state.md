@@ -57,14 +57,15 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | `music.config.ts` | Ship defaults + `KEYS` (storage), `SENDSPIN_OUTPUT`, `MA_IMAGE`, `MA_CONTAINER`, timings. |
 | `types.ts` | The MA shapes actually read (partial — `/api-docs` is truth). |
 | `util.ts` | `providerLabel()` and small pure helpers. |
+| `pickImage.ts` | E3 — `pickImageDataUri()`: system file chooser (`osascript` / `zenity`) + `sips`/ImageMagick downscale + base64 through one `sh -c`, returns a self-contained data URI. No dialog plugin, no asset protocol; `command` permission only. |
 | `music.css` | `IBM Plex Mono` + `Instrument Serif` (serif = track titles only), the `.music-cq` container query, the `.music-eq` VU animation. |
 | `settingsSection.tsx` | Settings-modal section: host/port/login, provider filter, auto-start toggle. |
 | `components/NowPlaying.tsx` | Pinned top zone: art, title, clickable artist/album, scrubber, transport, repeat/shuffle, favourite + `⋯` (reuses `RowActionPanel` — C2), volume, the fold-down `TrackInfo` panel. Scrubber samples `api.getProgress()` every `PROGRESS_TICK_MS` while playing for a smooth clock; transport buttons disable while their action is in `api.pending`. `TrackInfo` fetches the full `music/tracks/get` via `useQuery` (`track:<uri>`) and renders clickable artist/credit chips (C3). |
 | `components/Browser.tsx` | The switchable main pane: search field + `SearchFilters` + results, OR a detail view, OR `<Home>`. Hosts the nav breadcrumb. Shows a `SearchSkeleton` strip at the top of results while any provider search is still in flight; previous results stay rendered underneath. |
 | `components/Home.tsx` | Tabbed default pane: Up next (`QueueList`) / Playlists / Recent / Browse (`BrowseTab`). |
 | `components/QueueList.tsx` | Up-next list with pointer drag-reorder + per-row `⋯`. `QueueHeader`: "Save" (→ `saveQueueAsPlaylist`, queue untouched) + two-step "Clear" (D2/D4). |
-| `components/DetailView.tsx` | `ArtistView` / `AlbumView` / `PlaylistView` — the nav-stack destinations. `PlayPills` = the D1-toggle-aware primary play button (+ explicit "Play now" in append mode). Playlist track rows capped at `PLAYLIST_RENDER_CAP`. |
-| `components/Row.tsx` | The universal media row + `RowAction`. Exports `standardActions`, `RowActionButtons` (inline icon shortcuts for Add-to-queue / Play-next / Favourite, container-query gated via `.music-row-inline`, + the `⋯` toggle) and `RowActionPanel` (the fold-down pill menu with submenu + inline-input support) — the last two reused by `NowPlaying`. Every list uses `Row`. |
+| `components/DetailView.tsx` | `ArtistView` / `AlbumView` / `PlaylistView` — the nav-stack destinations. `PlayPills` = the D1-toggle-aware primary play button (+ explicit "Play now" in append mode). `PlaylistView`: inline Rename (E1), Background image (E3, `useStorage` key `plbg:<id>`), two-step Delete. Track rows capped at `PLAYLIST_RENDER_CAP`. |
+| `components/Row.tsx` | The universal media row + `RowAction`. Exports `standardActions` (Play now / Play next / Add to queue / Favourite / Add-to-playlist / Merge-into (playlist rows) / Start radio / Go to artist·album), `RowActionButtons` (inline icon shortcuts for Add-to-queue / Play-next / Favourite, container-query gated via `.music-row-inline`, + the `⋯` toggle) and `RowActionPanel` (the fold-down pill menu with submenu + inline-input support) — the last two reused by `NowPlaying`. Every list uses `Row`. |
 | `components/SearchFilters.tsx` | Media-type + provider filter pills. |
 | `components/BrowseTab.tsx` | `music/browse` folder navigator with its own path stack. |
 | `components/Equalizer.tsx` | Decorative VU bars (NOT audio DSP). Minimized-tile background + empty states. |
@@ -135,7 +136,8 @@ widget currently uses:
 | Queue edit | `move_item {queue_id, queue_item_id, pos_shift}`, `move_item_end`, `delete_item {queue_id, item_id_or_index}`, `play_index {queue_id, index, seek_position?}` |
 | Repeat/shuffle | `player_queues/repeat {queue_id, repeat_mode}`, `player_queues/shuffle {queue_id, shuffle_enabled}` |
 | Playlists | `music/playlists/library_items` · `playlist_tracks {item_id, provider_instance_id_or_domain:"library"}` · `create_playlist {name}` → `library://playlist/N` · `add_playlist_tracks {db_playlist_id, uris[]}` (async; **silently ignores a playlist uri passed as a track — no merge**) · `remove_playlist_tracks {db_playlist_id, positions_to_remove[]}` · `music/library/remove_item {media_type:"playlist", library_item_id}` (delete) |
-| Playlist rename | `music/playlists/update {item_id, update:{name}}` — **does not stick** for builtin-provider playlists (row re-syncs from provider). Unsolved (backlog E1). |
+| Playlist rename | `music/playlists/update {item_id, update:{...fullPlaylistObject, name}, overwrite:true}` — **sticks** for a `library://` playlist (E1). Both `overwrite:true` and the full object (not just `{name}`) are required; a partial `update` errors "Field item_id … is missing". |
+| Playlist merge (E4) | no free merge (`add_playlist_tracks` no-ops on a playlist uri). Real path: `playlist_tracks` on the source → `add_playlist_tracks` each track uri into the target (`mergePlaylist`). |
 | Favourites | `music/favorites/add_item {item:<uri>}`, `music/favorites/remove_item {media_type, library_item_id}`. `Track.favorite` on the object. |
 | Artist/album | `music/artists/{get,top_tracks,artist_albums,similar_artists}`, `music/albums/album_tracks` — all `{item_id, provider_instance_id_or_domain}` |
 | Track detail | `music/tracks/get {item_id, provider_instance_id_or_domain}` → `Track`. `artists[]` are navigable objects; `album` comes back `{}` (use the search-result album instead). `metadata` keys (`description, performers, label, genres, mood, style, release_date, popularity`) exist but are **null on the stock server** — they need an MA metadata provider (see backlog "Rich track metadata…"). `TrackInfo` renders whatever is present. |
@@ -160,6 +162,7 @@ widget currently uses:
 
 ## Known rough edges (see backlog-music.md for the fixes)
 
-- Playlist rename doesn't work (E1).
 - Rich track metadata (performers/label/review) is null without an MA metadata
   provider on the server (backlog "Rich track metadata…").
+- Playlist background image (E3) is a base64 data URI in the widget kv blob —
+  fine for a handful of small images, not a media library.

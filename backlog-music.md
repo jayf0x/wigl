@@ -67,49 +67,15 @@ module, so it'd be a widget dep, which is allowed).
 
 ---
 
-## Group E — Playlists: the gaps · `[researched + design]`
+## Playlist background image — a proper picker is deferred · `[deferred]`
 
-### E1 — Playlist rename · `[needs research]`
-
-`music/playlists/update {item_id, update:{name}}` updates the library row but
-a builtin-provider playlist keeps its own name and the row re-syncs from the
-provider — verified the rename doesn't stick. The MA frontend renames
-playlists somehow; find how (watch its network tab against the running
-server, or read `.idea/refplayers/frontend` — search for `rename` /
-`playlist` / `update`). If there's genuinely no working path for
-builtin-provider playlists, document that and make rename a delete+recreate
-under the hood (preserving tracks). Until then P6 stands.
-
-### E2 — Playlist delete + rename UI
-
-Delete exists (`music/library/remove_item`) — make sure it's reachable and
-confirmed (two-tap). Add an inline rename field to the playlist view header
-(gated on E1 actually working).
-
-### E3 — Playlist custom background image (local file) · `[needs research]`
-
-Owner wants a local image as a playlist background. Research: a widget can't
-read arbitrary local files — needs the Tauri **asset protocol** scope + a
-`convertFileSrc` host module (~15 LOC core, noted in the old fallback
-section), OR read the file as base64 through `sh -c` and use a data URI, OR
-copy the picked file into MA's data volume and serve it via MA. Also: where
-does the picked-path come from — a native file dialog needs
-`tauri-plugin-dialog` (not currently a dep). Scope this properly before
-committing to an approach. The image itself is then a CSS `background-image`
-on the playlist view / a thumbnail on the playlist row, path persisted per
-playlist in `useStorage`.
-
-### E4 — Playlist merge — CUT or make it explicit · `[researched]`
-
-`add_playlist_tracks` **silently ignores a playlist uri** passed as a track
-(verified — accepted, added 0). So there's no free merge. Options: (a) cut
-"add to playlist" *for playlist rows* entirely — the `⋯` on a playlist only
-offers play/queue/rename/delete; (b) implement a real "Merge into…" action
-that reads the source playlist's tracks and `add_playlist_tracks` each uri.
-Owner likes the merge idea but flagged it as advanced. Recommend (a) for now
-+ a backlog note for (b). Either way: **the current UI offers "add to
-playlist" on playlist rows and it does nothing** — fix that (it's misleading).
-Add an e2e assertion for whichever path is kept.
+E3 shipped: `plbg:<id>` in `useStorage`, a system file chooser + downscale +
+base64 through `sh -c` (`pickImage.ts`), rendered as a dimmed CSS background on
+the playlist header. It works with no new dep and no core change. A *nicer*
+picker — drag-drop, a preview thumbnail, per-playlist row thumbnails, images
+that survive being large — would want `tauri-plugin-dialog` + the Tauri asset
+protocol + a `convertFileSrc` host module (~15 LOC core). Only worth it if the
+base64-in-kv approach proves too limiting in practice.
 
 ---
 
@@ -241,8 +207,3 @@ different track") is *mostly* accurate — it's destructive.
   `radio_playlist://` uri for a genuinely dynamic, self-extending queue.
   Research what that uri looks like (`/api-docs`, the MA frontend).
 
----
-
-## P6 — Playlist rename (carried over)
-
-Folded into E1. Delete this line once E1 resolves it.

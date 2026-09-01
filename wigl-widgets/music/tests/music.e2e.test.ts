@@ -432,6 +432,39 @@ describe("music widget ↔ Music Assistant (live)", () => {
     }
   });
 
+  // E1 rename: music/playlists/update sticks for a library playlist **only**
+  // with overwrite:true and the full playlist object as `update`.
+  test.skipIf(!reachable)("music/playlists/update renames a library playlist (overwrite:true)", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    let plId: string | undefined;
+    try {
+      const created = await client.command<MediaItem>("music/playlists/create_playlist", {
+        name: `wigl rename ${Date.now()}`,
+      });
+      plId = created.item_id;
+      const rows = await client.command<MediaItem[]>("music/playlists/library_items");
+      const row = (rows ?? []).find((p) => p.item_id === plId);
+      expect(row).toBeTruthy();
+
+      const newName = `wigl renamed ${Date.now()}`;
+      await client.command("music/playlists/update", {
+        item_id: plId,
+        update: { ...row, name: newName },
+        overwrite: true,
+      });
+      await new Promise((r) => setTimeout(r, 500));
+      const after = await client.command<MediaItem[]>("music/playlists/library_items");
+      expect((after ?? []).find((p) => p.item_id === plId)?.name).toBe(newName);
+    } finally {
+      if (plId)
+        await client
+          .command("music/library/remove_item", { media_type: "playlist", library_item_id: plId })
+          .catch(() => {});
+      client.close();
+    }
+  });
+
   // Q2 drag-reorder: move_item pos_shift is a relative delta; move_item_end
   // sends the item to the tail. Enqueue two throwaway tracks, reorder, clean up.
   test.skipIf(!reachable)("move_item / move_item_end reorder the queue", async () => {
