@@ -259,6 +259,58 @@ describe("music widget ↔ Music Assistant (live)", () => {
     }
   });
 
+  // P4/P5 playlists: create → add → read positions → remove → delete round-trip.
+  test.skipIf(!reachable)("playlist create / add / read / remove / delete round-trips", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    let plId: string | undefined;
+    try {
+      const created = await client.command<{ item_id: string; is_editable?: boolean; provider: string }>(
+        "music/playlists/create_playlist",
+        { name: `wigl e2e ${Date.now()}` },
+      );
+      plId = created.item_id;
+      expect(created.provider).toBe("library");
+      expect(created.is_editable).toBe(true);
+
+      const res = await client.command<SearchResults>("music/search", {
+        search_query: "daft punk",
+        media_types: ["track"],
+        limit: 2,
+      });
+      const uris = res.tracks.slice(0, 2).map((t) => t.uri);
+      if (uris.length < 2) return;
+
+      await client.command("music/playlists/add_playlist_tracks", { db_playlist_id: plId, uris });
+      await new Promise((r) => setTimeout(r, 1500)); // add is an async BackgroundTask
+
+      const tracks = await client.command<{ position?: number; uri: string }[]>("music/playlists/playlist_tracks", {
+        item_id: plId,
+        provider_instance_id_or_domain: "library",
+      });
+      expect(tracks.length).toBe(2);
+      // positions are 1-based
+      expect(tracks.map((t) => t.position).sort()).toEqual([1, 2]);
+
+      await client.command("music/playlists/remove_playlist_tracks", {
+        db_playlist_id: plId,
+        positions_to_remove: [1],
+      });
+      await new Promise((r) => setTimeout(r, 1500));
+      const after = await client.command<unknown[]>("music/playlists/playlist_tracks", {
+        item_id: plId,
+        provider_instance_id_or_domain: "library",
+      });
+      expect(after.length).toBe(1);
+    } finally {
+      if (plId)
+        await client
+          .command("music/library/remove_item", { media_type: "playlist", library_item_id: plId })
+          .catch(() => {});
+      client.close();
+    }
+  });
+
   // Q2 drag-reorder: move_item pos_shift is a relative delta; move_item_end
   // sends the item to the tail. Enqueue two throwaway tracks, reorder, clean up.
   test.skipIf(!reachable)("move_item / move_item_end reorder the queue", async () => {

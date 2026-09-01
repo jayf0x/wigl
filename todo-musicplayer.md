@@ -153,28 +153,24 @@ those the same way; only add `useSql: true` if a specific read turns out slow
 
 ## Q — Queue & playlists
 
-### P4 — Playlists: read path (list + view)
+### P6 — Playlist rename
 
-Read-only first. `music/playlists/library_items` → the user's playlists (skip
-or visually separate the non-editable `is_editable:false` smart playlists like
-"All favorited tracks"). Selecting one → a `playlist` view (add `"playlist"` to the nav reducer + `DetailView.tsx`) showing
-`music/playlists/playlist_tracks {item_id, provider_instance_id_or_domain:
-"library"}`, each track a normal row (left-click plays, `⋯` menu). A "Play all"
-/ "Add all to queue" header button = `play_media` with the playlist uri.
-`useQuery` the track list. e2e: assert `library_items` + `playlist_tracks`
-shapes.
+Everything else about playlists is done (`Home.tsx` Playlists tab — list +
+create + delete; `DetailView.tsx` `PlaylistView` — track list, Play all / Add
+all / Delete, per-track "Remove from playlist"; `Row.tsx` "Add to playlist"
+submenu with inline "New playlist…" wired from every media row;
+`useMusic.ts` `createPlaylist`/`deletePlaylist`/`addToPlaylist`/
+`removePlaylistTrack`; `playlists` state refreshed after each edit).
 
-### P5 — Playlists: write path (create / add / remove / rename / delete)
-
-Builds on P4. `create_playlist {name}` (→ editable `library://playlist/N`,
-verified), `add_playlist_tracks {db_playlist_id, uris[]}` (async — show a brief
-"added" toast, reconcile on refetch), `remove_playlist_tracks {db_playlist_id,
-positions_to_remove[]}` (positions are the provider playlist positions from
-`playlist_tracks`), `update {item_id, update:{name}}` for rename,
-`music/library/remove_item {media_type:"playlist", library_item_id}` for
-delete. The "Add to playlist" action in the row `⋯` menu (`Row.tsx` standardActions) (wired from search
-rows, queue rows, and now-playing) is part of *this* entry, not a separate one.
-e2e: create → add → read-back → delete round-trip (clean up after itself).
+**Rename is the one gap.** `music/playlists/update {item_id, update:{name}}`
+updates the *library* record but the builtin-provider playlist keeps its own
+name and the library row re-syncs from it — verified: the new name doesn't
+stick (via `playlists/get` right after). The MA frontend renames through a
+provider path this backlog hasn't found. One next step: watch the MA
+frontend's network tab while renaming a builtin playlist, or read
+`music-assistant/frontend` in `.idea/refplayers/` for the call it makes, then
+add `renamePlaylist` + an inline rename field to `PlaylistView`'s header.
+Low priority — delete + recreate is the workaround.
 
 ---
 

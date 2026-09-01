@@ -4,7 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { NavView, SearchResults } from "../types";
 import type { MusicApi } from "../useMusic";
 import { DetailView } from "./DetailView";
-import { QueueList } from "./QueueList";
+import { Home } from "./Home";
 import { Row } from "./Row";
 
 const GROUPS: { key: keyof SearchResults; label: string }[] = [
@@ -108,29 +108,27 @@ export const Browser = ({
 
       {nav.kind !== "browse" ? (
         <DetailView api={api} />
-      ) : (
+      ) : results ? (
         <ScrollArea className="min-h-0 flex-1" scrollFade>
           <div className="p-1.5">
-            {results ? (
-              total === 0 ? (
-                <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">
-                  Nothing found for “{q.trim()}”.
-                </p>
-              ) : (
-                GROUPS.filter((g) => results[g.key].length > 0).map((g) => (
-                  <section key={g.key} className="mb-1.5">
-                    <p className="music-tag px-2 pt-2 pb-1 text-muted-foreground/70">{g.label}</p>
-                    {results[g.key].map((it) => (
-                      <Row key={it.uri} item={it} api={api} />
-                    ))}
-                  </section>
-                ))
-              )
+            {total === 0 ? (
+              <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">
+                Nothing found for “{q.trim()}”.
+              </p>
             ) : (
-              <QueueList api={api} />
+              GROUPS.filter((g) => results[g.key].length > 0).map((g) => (
+                <section key={g.key} className="mb-1.5">
+                  <p className="music-tag px-2 pt-2 pb-1 text-muted-foreground/70">{g.label}</p>
+                  {results[g.key].map((it) => (
+                    <Row key={it.uri} item={it} api={api} />
+                  ))}
+                </section>
+              ))
             )}
           </div>
         </ScrollArea>
+      ) : (
+        <Home api={api} />
       )}
 
       {nav.kind === "browse" && !ytReady && (

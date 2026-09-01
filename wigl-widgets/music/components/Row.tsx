@@ -1,16 +1,35 @@
 import { type ReactNode, useState } from "react";
-import { Disc3, Ellipsis, Heart, ListEnd, ListPlus, MicVocal, Music2, Radio, Trash2, User } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Disc3,
+  Ellipsis,
+  Heart,
+  ListEnd,
+  ListMusic,
+  ListPlus,
+  MicVocal,
+  Music2,
+  Plus,
+  Radio,
+  Trash2,
+  User,
+} from "lucide-react";
 import { cn } from "@/wigl/utils";
 import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
 
-/** One action in a row's fold-down menu. `hidden` drops it entirely. */
+/** One action in a row's fold-down menu. `hidden` drops it entirely.
+ * `submenu` swaps the pill strip for a nested set; `input` swaps it for a
+ * one-field text form whose value is passed to `run`'s companion `onInput`. */
 export interface RowAction {
   label: string;
   icon: ReactNode;
-  run: () => void;
+  run?: () => void;
   hidden?: boolean;
   danger?: boolean;
+  submenu?: RowAction[];
+  input?: { placeholder: string; onSubmit: (value: string) => void };
 }
 
 const iconFor = (t: MediaItem["media_type"]) => {
@@ -56,6 +75,31 @@ export const standardActions = (
       label: fav ? "Remove favourite" : "Favourite",
       icon: <Heart className={cn("size-3.5", fav && "fill-current")} />,
       run: () => api.toggleFavorite(item),
+    },
+    {
+      label: "Add to playlist",
+      icon: <ListMusic className="size-3.5" />,
+      hidden: item.media_type === "artist" || !item.uri || item.uri.startsWith("queue:"),
+      submenu: [
+        {
+          label: "New playlist…",
+          icon: <Plus className="size-3.5" />,
+          input: {
+            placeholder: "Playlist name",
+            onSubmit: async (name) => {
+              const pl = await api.createPlaylist(name);
+              if (pl) await api.addToPlaylist(pl.item_id, [item.uri]);
+            },
+          },
+        },
+        ...api.playlists
+          .filter((p) => p.is_editable !== false)
+          .map((p) => ({
+            label: p.name,
+            icon: <ListMusic className="size-3.5" />,
+            run: () => void api.addToPlaylist(p.item_id, [item.uri]),
+          })),
+      ],
     },
     {
       label: "Start radio",
@@ -125,9 +169,18 @@ export const Row = ({
   dragHandle?: ReactNode;
 }) => {
   const [open, setOpen] = useState(false);
+  const [sub, setSub] = useState<RowAction | null>(null);
+  const [text, setText] = useState("");
   const art = api.imageUrl(item.metadata?.images?.[0] ?? null);
   const list = (actions ?? standardActions(api, item)).filter((a) => !a.hidden);
   const isCurrent = api.currentItem?.media_item?.uri && api.currentItem.media_item.uri === item.uri;
+
+  const close = () => {
+    setOpen(false);
+    setSub(null);
+    setText("");
+  };
+  const pills = sub?.submenu ? sub.submenu.filter((a) => !a.hidden) : list;
 
   return (
     <div className="rounded-md">
@@ -172,7 +225,7 @@ export const Row = ({
           data-no-drag
           aria-label="More actions"
           aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => (open ? close() : setOpen(true))}
           className={cn(
             "shrink-0 rounded p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
             open ? "opacity-100" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100",
@@ -183,27 +236,72 @@ export const Row = ({
       </div>
 
       {open && (
-        <div className="flex flex-wrap gap-1 px-2 pt-1 pb-2">
-          {list.map((a) => (
+        <div className="flex flex-wrap items-center gap-1 px-2 pt-1 pb-2">
+          {sub && (
             <button
-              key={a.label}
               type="button"
               data-no-drag
               onClick={() => {
-                a.run();
-                setOpen(false);
+                setSub(null);
+                setText("");
               }}
-              className={cn(
-                "flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] transition-colors hover:bg-muted",
-                a.danger
-                  ? "text-muted-foreground hover:text-destructive"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
+              className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
             >
-              {a.icon}
-              {a.label}
+              <ChevronLeft className="size-3.5" /> back
             </button>
-          ))}
+          )}
+          {sub?.input ? (
+            <form
+              className="flex items-center gap-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (text.trim()) sub.input?.onSubmit(text.trim());
+                close();
+              }}
+            >
+              {/* biome-ignore lint/a11y/noAutofocus: opens on an explicit user click */}
+              <input
+                data-no-drag
+                autoFocus
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder={sub.input.placeholder}
+                className="w-32 rounded border border-border bg-input/40 px-2 py-1 text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60"
+              />
+              <button
+                type="submit"
+                data-no-drag
+                className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                add
+              </button>
+            </form>
+          ) : (
+            pills.map((a) => (
+              <button
+                key={a.label}
+                type="button"
+                data-no-drag
+                onClick={() => {
+                  if (a.submenu || a.input) setSub(a);
+                  else {
+                    a.run?.();
+                    close();
+                  }
+                }}
+                className={cn(
+                  "flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] transition-colors hover:bg-muted",
+                  a.danger
+                    ? "text-muted-foreground hover:text-destructive"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {a.icon}
+                <span className="max-w-32 truncate">{a.label}</span>
+                {(a.submenu || a.input) && <ChevronRight className="size-3" />}
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>

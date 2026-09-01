@@ -36,6 +36,10 @@ export interface MediaItem {
   year?: number;
   favorite?: boolean;
   track_number?: number;
+  position?: number;
+  /** playlists: false for MA's built-in "smart" playlists */
+  is_editable?: boolean;
+  owner?: string;
   metadata?: {
     images?: MediaImage[] | null;
     genres?: string[] | null;

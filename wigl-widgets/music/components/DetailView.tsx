@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { hours, useQuery } from "@/wigl/hooks";
-import { Disc3, LoaderCircle, Radio, User } from "lucide-react";
+import { Disc3, LoaderCircle, Radio, Trash2, User } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
-import { Row } from "./Row";
+import { Row, standardActions } from "./Row";
 
 interface ArtistPayload {
   header: MediaItem | null;
@@ -211,9 +212,99 @@ const AlbumView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
   );
 };
 
+const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [data, loading, { refresh }] = useQuery<{ tracks: MediaItem[] }>({
+    key: `playlist:${item.item_id}`,
+    stale: 60_000,
+    fn: async () => {
+      const tracks = await guard(
+        () =>
+          api.request<MediaItem[]>("music/playlists/playlist_tracks", {
+            item_id: item.item_id,
+            provider_instance_id_or_domain: "library",
+          }),
+        [],
+      );
+      return { tracks };
+    },
+  });
+
+  if (loading && !data) return <Loading />;
+  const tracks = data?.tracks ?? [];
+  const editable = item.is_editable !== false;
+  const art = api.imageUrl(item.metadata?.images?.[0] ?? tracks[0]?.metadata?.images?.[0] ?? null);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <Header
+        item={item}
+        art={art}
+        sub={`${tracks.length} track${tracks.length === 1 ? "" : "s"}${item.owner ? ` · ${item.owner}` : ""}`}
+        actions={
+          <>
+            <PillBtn onClick={() => { api.unlock(); api.play(item, "play"); }}>Play all</PillBtn>
+            <PillBtn onClick={() => api.play(item, "add")}>Add to queue</PillBtn>
+            {editable &&
+              (confirmDel ? (
+                <PillBtn
+                  onClick={() => {
+                    api.deletePlaylist(item);
+                    api.navBack();
+                  }}
+                >
+                  really delete?
+                </PillBtn>
+              ) : (
+                <PillBtn onClick={() => setConfirmDel(true)}>Delete</PillBtn>
+              ))}
+          </>
+        }
+      />
+      <ScrollArea className="min-h-0 flex-1" scrollFade>
+        <div className="p-1.5">
+          {tracks.length ? (
+            tracks.map((t, i) => {
+              const pos = t.position ?? i + 1;
+              return (
+                <Row
+                  key={`${t.uri}:${pos}`}
+                  item={t}
+                  api={api}
+                  index={i + 1}
+                  actions={
+                    editable
+                      ? standardActions(api, t, [
+                          {
+                            label: "Remove from playlist",
+                            icon: <Trash2 className="size-3.5" />,
+                            danger: true,
+                            run: async () => {
+                              await api.removePlaylistTrack(item.item_id, pos);
+                              setTimeout(refresh, 600);
+                            },
+                          },
+                        ])
+                      : undefined
+                  }
+                />
+              );
+            })
+          ) : (
+            <p className="px-2 py-8 text-center text-[11px] text-muted-foreground">
+              {loading ? "" : "This playlist is empty."}
+            </p>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+};
+
 export const DetailView = ({ api }: { api: MusicApi }) => {
   const { nav } = api;
   if (nav.kind === "artist") return <ArtistView api={api} item={nav.item} />;
   if (nav.kind === "album") return <AlbumView api={api} item={nav.item} />;
+  if (nav.kind === "playlist") return <PlaylistView api={api} item={nav.item} />;
   return null;
 };
