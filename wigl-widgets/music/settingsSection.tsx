@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { type SettingSection, useStorage } from "@/wigl/hooks";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Switch } from "@/components/ui/switch";
 import {
   DEFAULT_PASSWORD,
@@ -98,9 +99,8 @@ const MusicSettings = () => {
         />
       </Field>
       <Field label="Password" hint="Localhost only — plain text in local storage.">
-        <Input
+        <PasswordInput
           className="h-7 w-40 text-xs"
-          type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />

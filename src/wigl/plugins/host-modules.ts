@@ -24,6 +24,7 @@ export const HOST_MODULE_IDS = [
   "@/components/ui/button",
   "@/components/ui/checkbox",
   "@/components/ui/input",
+  "@/components/ui/password-input",
   "@/components/ui/popover",
   "@/components/ui/progress",
   "@/components/ui/scroll-area",
@@ -34,6 +35,7 @@ export const HOST_MODULE_IDS = [
   "@/components/ui/table",
   "@/components/ui/tabs",
   "@/components/ui/textarea",
+  "@/components/ui/tooltip",
 ] as const;
 
 export type HostModuleId = (typeof HOST_MODULE_IDS)[number];

@@ -9,6 +9,7 @@ import * as Badge from "@/components/ui/badge";
 import * as Button from "@/components/ui/button";
 import * as Checkbox from "@/components/ui/checkbox";
 import * as Input from "@/components/ui/input";
+import * as PasswordInput from "@/components/ui/password-input";
 import * as Popover from "@/components/ui/popover";
 import * as Progress from "@/components/ui/progress";
 import * as ScrollArea from "@/components/ui/scroll-area";
@@ -19,6 +20,7 @@ import * as Switch from "@/components/ui/switch";
 import * as Table from "@/components/ui/table";
 import * as Tabs from "@/components/ui/tabs";
 import * as Textarea from "@/components/ui/textarea";
+import * as Tooltip from "@/components/ui/tooltip";
 import type { HostModuleId } from "./host-modules";
 import type { WidgetPermission } from "./types";
 
@@ -88,6 +90,7 @@ const HOST_MODULES: Record<HostModuleId, HostModule> = {
   "@/components/ui/button": { value: Button },
   "@/components/ui/checkbox": { value: Checkbox },
   "@/components/ui/input": { value: Input },
+  "@/components/ui/password-input": { value: PasswordInput },
   "@/components/ui/popover": { value: Popover },
   "@/components/ui/progress": { value: Progress },
   "@/components/ui/scroll-area": { value: ScrollArea },
@@ -98,6 +101,7 @@ const HOST_MODULES: Record<HostModuleId, HostModule> = {
   "@/components/ui/table": { value: Table },
   "@/components/ui/tabs": { value: Tabs },
   "@/components/ui/textarea": { value: Textarea },
+  "@/components/ui/tooltip": { value: Tooltip },
 };
 
 class PluginPermissionError extends Error {}

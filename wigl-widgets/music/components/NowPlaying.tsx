@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { hours, useQuery, useStorage } from "@/wigl/hooks";
 import { Slider } from "@/components/ui/slider";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/wigl/utils";
 import type { MediaArtistRef, MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
@@ -226,6 +227,7 @@ const IconBtn = ({
   disabled,
   pending,
   tap,
+  tip,
   children,
 }: {
   onClick: () => void;
@@ -237,29 +239,40 @@ const IconBtn = ({
   pending?: boolean;
   /** fires an async API call — click gets the mx-tap ring pulse */
   tap?: boolean;
+  /** show `label` as a hover tooltip (ui/tooltip host component) */
+  tip?: boolean;
   children: React.ReactNode;
-}) => (
-  <button
-    type="button"
-    data-no-drag
-    aria-label={label}
-    aria-pressed={active}
-    disabled={disabled}
-    onClick={onClick}
-    className={cn(
-      "mx-press flex items-center justify-center rounded-full transition-colors disabled:opacity-40",
-      tap && "mx-tap",
-      pending && "mx-pending",
-      primary
-        ? "mx-icon-strong size-9 bg-foreground text-background hover:bg-foreground/85"
-        : active
-          ? "size-7 text-foreground"
-          : "size-7 text-muted-foreground hover:text-foreground",
-    )}
-  >
-    {children}
-  </button>
-);
+}) => {
+  const btn = (
+    <button
+      type="button"
+      data-no-drag
+      aria-label={label}
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "mx-press flex items-center justify-center rounded-full transition-colors disabled:opacity-40",
+        tap && "mx-tap",
+        pending && "mx-pending",
+        primary
+          ? "mx-icon-strong size-9 bg-foreground text-background hover:bg-foreground/85"
+          : active
+            ? "size-7 text-foreground"
+            : "size-7 text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+  return tip ? (
+    <Tooltip content={label} side="top">
+      {btn}
+    </Tooltip>
+  ) : (
+    btn
+  );
+};
 
 /** Click / drag the timeline to seek. Frozen to the drag position while the
  * pointer is down; snaps back to the live `elapsed` on release + reconcile. */
@@ -514,6 +527,7 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
           <IconBtn
             label="Previous track"
             tap
+            tip
             pending={api.pending.has("previous")}
             disabled={api.pending.has("previous")}
             onClick={api.previous}
@@ -540,6 +554,7 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
           <IconBtn
             label="Next track"
             tap
+            tip
             pending={api.pending.has("next")}
             disabled={api.pending.has("next")}
             onClick={api.next}
