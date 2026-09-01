@@ -10,6 +10,7 @@ import {
   ListPlus,
   MicVocal,
   Music2,
+  Play,
   Plus,
   Radio,
   Trash2,
@@ -62,6 +63,14 @@ export const standardActions = (
   return [
     ...extra,
     {
+      label: "Play now",
+      icon: <Play className="size-3.5" />,
+      run: () => {
+        api.unlock();
+        api.play(item, "play");
+      },
+    },
+    {
       label: "Play next",
       icon: <ListPlus className="size-3.5" />,
       run: () => api.play(item, "next"),
@@ -79,7 +88,13 @@ export const standardActions = (
     {
       label: "Add to playlist",
       icon: <ListMusic className="size-3.5" />,
-      hidden: item.media_type === "artist" || !item.uri || item.uri.startsWith("queue:"),
+      // Not for artists (no track uri) or playlists (add_playlist_tracks
+      // silently no-ops on a playlist uri — verified; backlog E4, cut).
+      hidden:
+        item.media_type === "artist" ||
+        item.media_type === "playlist" ||
+        !item.uri ||
+        item.uri.startsWith("queue:"),
       submenu: [
         {
           label: "New playlist…",
@@ -338,7 +353,7 @@ export const Row = ({
           data-music-row
           onClick={() => {
             api.unlock();
-            (onPlay ?? (() => api.play(item, "play")))();
+            (onPlay ?? (() => api.play(item)))();
           }}
           onKeyDown={(e) => {
             if (e.key === "a" && !item.uri.startsWith("queue:")) {

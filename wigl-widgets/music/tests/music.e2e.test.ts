@@ -405,6 +405,33 @@ describe("music widget ↔ Music Assistant (live)", () => {
     }
   });
 
+  // D1/D3: play_media accepts option:"replace" (the D1 toggle's Replace mode)
+  // and a playlist uri as `media` (loading a playlist into the queue).
+  test.skipIf(!reachable)("play_media accepts option:replace and a playlist uri", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    let queueId: string | undefined;
+    try {
+      const queues = await client.command<PlayerQueue[]>("player_queues/all");
+      queueId = (queues ?? [])[0]?.queue_id;
+      if (!queueId) return;
+      const pls = await client.command<{ uri: string }[]>("music/playlists/library_items");
+      const pl = (pls ?? []).find((p) => p.uri.startsWith("library://playlist/"));
+      if (!pl) return;
+
+      await client.command("player_queues/play_media", {
+        queue_id: queueId,
+        media: pl.uri,
+        option: "replace",
+      });
+      const items = await client.command<unknown[]>("player_queues/items", { queue_id: queueId });
+      expect(Array.isArray(items)).toBe(true);
+    } finally {
+      if (queueId) await client.command("player_queues/clear", { queue_id: queueId }).catch(() => {});
+      client.close();
+    }
+  });
+
   // Q2 drag-reorder: move_item pos_shift is a relative delta; move_item_end
   // sends the item to the tail. Enqueue two throwaway tracks, reorder, clean up.
   test.skipIf(!reachable)("move_item / move_item_end reorder the queue", async () => {

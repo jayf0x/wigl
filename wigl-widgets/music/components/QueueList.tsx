@@ -1,9 +1,74 @@
 import { type PointerEvent as ReactPointerEvent, useRef, useState } from "react";
-import { ArrowDownToLine, ArrowUpToLine, GripVertical, Trash2 } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, GripVertical, ListPlus, Trash2 } from "lucide-react";
 import { cn } from "@/wigl/utils";
 import type { MusicApi } from "../useMusic";
 import { Equalizer } from "./Equalizer";
 import { Row, standardActions } from "./Row";
+
+/** D2 + D4 — the queue is server-persistent; make losing it deliberate.
+ * "Save" copies it to a new playlist (queue stays); "Clear" is two-step. */
+const QueueHeader = ({ api, count }: { api: MusicApi; count: number }) => {
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState("");
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  return (
+    <div className="flex items-center justify-between gap-2 px-2 pt-2 pb-1">
+      <p className="music-tag shrink-0 text-muted-foreground/70">Up next · {count}</p>
+      {saving ? (
+        <form
+          className="flex min-w-0 items-center gap-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void api.saveQueueAsPlaylist(name);
+            setName("");
+            setSaving(false);
+          }}
+        >
+          {/* biome-ignore lint/a11y/noAutofocus: opened by an explicit click */}
+          <input
+            data-no-drag
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={`queue ${new Date().toISOString().slice(5, 16).replace("T", " ")}`}
+            className="w-28 min-w-0 rounded border border-border bg-input/40 px-2 py-0.5 text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60"
+          />
+          <button type="submit" data-no-drag className="text-[10px] text-muted-foreground hover:text-foreground">
+            save
+          </button>
+        </form>
+      ) : (
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            data-no-drag
+            onClick={() => setSaving(true)}
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+          >
+            <ListPlus className="size-3" /> Save
+          </button>
+          <button
+            type="button"
+            data-no-drag
+            onClick={() => {
+              if (confirmClear) {
+                api.clearQueue();
+                setConfirmClear(false);
+              } else {
+                setConfirmClear(true);
+                setTimeout(() => setConfirmClear(false), 3000);
+              }
+            }}
+            className="text-[10px] text-muted-foreground hover:text-destructive"
+          >
+            {confirmClear ? "clear queue?" : "Clear"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const ROW_H = 42; // approx collapsed row height, for drag-target math
 
@@ -58,17 +123,7 @@ export const QueueList = ({ api }: { api: MusicApi }) => {
 
   return (
     <>
-      <div className="flex items-center justify-between px-2 pt-2 pb-1">
-        <p className="music-tag text-muted-foreground/70">Up next · {list.length}</p>
-        <button
-          type="button"
-          data-no-drag
-          onClick={api.clearQueue}
-          className="text-[10px] text-muted-foreground hover:text-destructive"
-        >
-          Clear
-        </button>
-      </div>
+      <QueueHeader api={api} count={list.length} />
       {view.map((it, i) => {
         const media = it.media_item ?? null;
         const asItem =

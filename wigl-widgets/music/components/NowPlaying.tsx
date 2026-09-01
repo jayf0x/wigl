@@ -4,11 +4,13 @@ import {
   Ellipsis,
   Heart,
   Info,
+  ListPlus,
   Pause,
   Play,
   Radio,
   Repeat,
   Repeat1,
+  Replace,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -497,6 +499,21 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
         </div>
 
         <div className="flex items-center gap-1">
+          <IconBtn
+            label={
+              api.queueMode === "replace"
+                ? "Clicking a track replaces the queue — switch to add"
+                : "Clicking a track adds to the queue — switch to replace"
+            }
+            active={api.queueMode === "append"}
+            onClick={() => api.setQueueMode(api.queueMode === "replace" ? "append" : "replace")}
+          >
+            {api.queueMode === "replace" ? (
+              <Replace className="size-3.5" />
+            ) : (
+              <ListPlus className="size-3.5" />
+            )}
+          </IconBtn>
           <IconBtn
             label={`Shuffle ${shuffle ? "on" : "off"}`}
             active={shuffle}

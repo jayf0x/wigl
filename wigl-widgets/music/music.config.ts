@@ -30,6 +30,10 @@ export const KEYS = {
   /** Phase 4: whether the widget may `docker start` the MA container when it
    * finds it stopped. Off by default — the owner starts MA. */
   manageServer: "manage_server",
+  /** D1: what a plain left-click on a track does — `"append"` (add to the end
+   * of the queue, non-destructive — the default, "a queue is fragile") or
+   * `"replace"` (wipe + play). "Play now" stays available explicitly. */
+  queueMode: "queue_mode",
 } as const;
 
 /** Media types the search box asks MA for, in display order. */
@@ -71,6 +75,12 @@ export const MA_CONTAINER = "wigl-ma";
  * Not used by the widget at runtime; here so SETUP.md and the code agree on
  * one string. */
 export const MA_IMAGE = "ghcr.io/sproft/ytmusic-free-provider:latest";
+
+/** D5: max playlist tracks rendered as rows at once. The queue is server-capped
+ * at 50; a library playlist can be thousands, and Row isn't virtualized (drag-
+ * reorder makes that awkward — see backlog "Virtualize long lists"). A hard cap
+ * with a "+N more" footer is the cheap guard until a real perf problem shows. */
+export const PLAYLIST_RENDER_CAP = 250;
 
 export const RECONNECT_MIN_MS = 1_000;
 export const RECONNECT_MAX_MS = 15_000;

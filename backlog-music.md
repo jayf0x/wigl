@@ -48,60 +48,22 @@ The widget code already renders whatever shows up, so this is backend-only.
 
 ---
 
-## Group D — Queue as a first-class playlist · `[design]` (big)
+## Queue-as-playlist — the fuller D4 reframe · `[deferred]`
 
-Owner's framing: "a queue is something fragile. One misclick and it's gone.
-So I would turn a queue into a temp playlist." This reshapes how enqueue,
-row-click, start-radio, and playlists all interact. Design round-trip with
-the owner recommended before building. Touches `useMusic.ts` heavily +
-`Home.tsx` + `QueueList.tsx` + `Row.tsx`.
+D1/D2/D3 shipped (append-by-default toggle, save-queue-as-playlist,
+two-step clear, toggle-aware playlist/album/artist play, `+N more` cap on
+playlist track rows). The **literal** D4 reframe — rendering the queue as a
+pinned entry in the Playlists tab, add/remove/reorder through the exact same
+components as a real playlist — was NOT done: it's a large UI restructure for
+unclear payoff in a compact tile, and the owner's core concern ("one misclick
+and it's gone") is already covered by append-default + two-step clear + Save.
+Revisit only if the current Up-next tab still feels fragile in use.
 
-### D1 — Overwrite-vs-append toggle · `[researched]`
-
-A persistent UI toggle (owner's idea: a small icon next to repeat/shuffle)
-with two states — **Replace** / **Append** — that governs what a plain
-left-click on a track does, and what "load playlist into queue" and "start
-radio" do. `player_queues/play_media`'s `option` maps: Replace → `"replace"`,
-Append → `"add"`; the current non-destructive `"play"` (insert-after-current +
-skip) could be a third "Play now" that's always available as an explicit
-action regardless of the toggle. Persist via `useStorage`. This is the
-smallest, most independently-shippable piece of group D — consider doing it
-first, even standalone.
-
-### D2 — Save queue as playlist
-
-An action (button in the Up-next tab header) that copies the current queue
-into a new editable playlist named `queue - <timestamp>` (editable name),
-via `create_playlist` + `add_playlist_tracks` with the queue items' uris.
-Does **not** clear the queue. Needs `player_queues/items` → uris → the two
-playlist calls. Straightforward once D-group direction is set.
-
-### D3 — Load playlist into queue
-
-From a playlist view / row: "Play" (respects the D1 toggle) and an explicit
-"Add to queue". `play_media` with the playlist uri and the mapped `option`.
-Verify a playlist uri is accepted by `play_media` (it should be — it's a
-`Playlist` media type).
-
-### D4 — Queue-as-playlist model (the full version)
-
-Model the queue in the UI as an always-present, un-deletable playlist:
-add/remove/reorder use the same components and mental model as a real
-playlist, just different label/icon. "Clear" becomes a deliberate two-step.
-This is mostly a UI/naming reframe over the existing `player_queues/*`
-commands — MA's queue *is* already persistent server-side. Decide with the
-owner how far to take it (is it literally rendered in the Playlists tab as a
-pinned entry? or just the Up-next tab restyled?).
-
-### D5 — Virtualize long queue / playlist lists · `[needs research]`
-
-Owner: "Should we virtualize the queue and playlist items? Draggable might
-make this difficult." Research: current lists are capped (`limit:50` queue
-items, playlists likely similar) so this may be premature. If a playlist can
-have thousands of tracks and the UI renders all of them, virtualize —
-`@tanstack/react-virtual` is the small option, but check it survives the
-host-module boundary and the pointer drag-reorder. Measure first: how big do
-real playlists get, does render lag at 500 rows. If not a problem, cut this.
+D5 (virtualize long lists) is also deferred — no measured perf problem, and a
+virtualizer fights the pointer drag-reorder. The `PLAYLIST_RENDER_CAP` (250)
+guard is in place. Pick this up only when a real large playlist visibly lags;
+`@tanstack/react-virtual` bundled into the widget is the path (it's not a host
+module, so it'd be a widget dep, which is allowed).
 
 ---
 

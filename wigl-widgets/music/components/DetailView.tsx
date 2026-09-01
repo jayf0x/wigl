@@ -2,6 +2,7 @@ import { useState } from "react";
 import { hours, useQuery } from "@/wigl/hooks";
 import { Disc3, LoaderCircle, Radio, Trash2, User } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { PLAYLIST_RENDER_CAP } from "../music.config";
 import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
 import { Row, standardActions } from "./Row";
@@ -70,6 +71,31 @@ const PillBtn = ({ onClick, children }: { onClick: () => void; children: React.R
   </button>
 );
 
+/** Primary "play this collection" button — follows the D1 queue-mode toggle
+ * (label reflects it), with an explicit "Play now" alongside in append mode. */
+const PlayPills = ({ api, item }: { api: MusicApi; item: MediaItem }) => (
+  <>
+    <PillBtn
+      onClick={() => {
+        api.unlock();
+        api.play(item);
+      }}
+    >
+      {api.queueMode === "replace" ? "Play" : "Add to queue"}
+    </PillBtn>
+    {api.queueMode !== "replace" && (
+      <PillBtn
+        onClick={() => {
+          api.unlock();
+          api.play(item, "play");
+        }}
+      >
+        Play now
+      </PillBtn>
+    )}
+  </>
+);
+
 const SectionLabel = ({ children }: { children: React.ReactNode }) => (
   <p className="music-tag px-2 pt-3 pb-1 text-muted-foreground/70">{children}</p>
 );
@@ -110,9 +136,7 @@ const ArtistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
         sub={head.metadata?.genres?.slice(0, 3).join(" · ") || "Artist"}
         actions={
           <>
-            <PillBtn onClick={() => { api.unlock(); api.play(head, "play"); }}>
-              <Radio className="size-3" /> Play
-            </PillBtn>
+            <PlayPills api={api} item={head} />
             <PillBtn onClick={() => { api.unlock(); api.startRadio(head); }}>
               <Radio className="size-3" /> Artist radio
             </PillBtn>
@@ -188,12 +212,7 @@ const AlbumView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
         item={item}
         art={art}
         sub={[artistSub, item.year].filter(Boolean).join(" · ")}
-        actions={
-          <>
-            <PillBtn onClick={() => { api.unlock(); api.play(item, "play"); }}>Play</PillBtn>
-            <PillBtn onClick={() => api.play(item, "add")}>Add to queue</PillBtn>
-          </>
-        }
+        actions={<PlayPills api={api} item={item} />}
       />
       <ScrollArea className="min-h-0 flex-1" scrollFade>
         <div className="p-1.5">
@@ -243,8 +262,7 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
         sub={`${tracks.length} track${tracks.length === 1 ? "" : "s"}${item.owner ? ` · ${item.owner}` : ""}`}
         actions={
           <>
-            <PillBtn onClick={() => { api.unlock(); api.play(item, "play"); }}>Play all</PillBtn>
-            <PillBtn onClick={() => api.play(item, "add")}>Add to queue</PillBtn>
+            <PlayPills api={api} item={item} />
             {editable &&
               (confirmDel ? (
                 <PillBtn
@@ -264,32 +282,40 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
       <ScrollArea className="min-h-0 flex-1" scrollFade>
         <div className="p-1.5">
           {tracks.length ? (
-            tracks.map((t, i) => {
-              const pos = t.position ?? i + 1;
-              return (
-                <Row
-                  key={`${t.uri}:${pos}`}
-                  item={t}
-                  api={api}
-                  index={i + 1}
-                  actions={
-                    editable
-                      ? standardActions(api, t, [
-                          {
-                            label: "Remove from playlist",
-                            icon: <Trash2 className="size-3.5" />,
-                            danger: true,
-                            run: async () => {
-                              await api.removePlaylistTrack(item.item_id, pos);
-                              setTimeout(refresh, 600);
+            <>
+              {tracks.slice(0, PLAYLIST_RENDER_CAP).map((t, i) => {
+                const pos = t.position ?? i + 1;
+                return (
+                  <Row
+                    key={`${t.uri}:${pos}`}
+                    item={t}
+                    api={api}
+                    index={i + 1}
+                    actions={
+                      editable
+                        ? standardActions(api, t, [
+                            {
+                              label: "Remove from playlist",
+                              icon: <Trash2 className="size-3.5" />,
+                              danger: true,
+                              run: async () => {
+                                await api.removePlaylistTrack(item.item_id, pos);
+                                setTimeout(refresh, 600);
+                              },
                             },
-                          },
-                        ])
-                      : undefined
-                  }
-                />
-              );
-            })
+                          ])
+                        : undefined
+                    }
+                  />
+                );
+              })}
+              {tracks.length > PLAYLIST_RENDER_CAP && (
+                <p className="px-2 py-3 text-center text-[10px] text-muted-foreground/70">
+                  showing first {PLAYLIST_RENDER_CAP} of {tracks.length} — Play all still queues
+                  everything
+                </p>
+              )}
+            </>
           ) : (
             <p className="px-2 py-8 text-center text-[11px] text-muted-foreground">
               {loading ? "" : "This playlist is empty."}

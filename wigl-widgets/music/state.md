@@ -62,8 +62,8 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | `components/NowPlaying.tsx` | Pinned top zone: art, title, clickable artist/album, scrubber, transport, repeat/shuffle, favourite + `⋯` (reuses `RowActionPanel` — C2), volume, the fold-down `TrackInfo` panel. Scrubber samples `api.getProgress()` every `PROGRESS_TICK_MS` while playing for a smooth clock; transport buttons disable while their action is in `api.pending`. `TrackInfo` fetches the full `music/tracks/get` via `useQuery` (`track:<uri>`) and renders clickable artist/credit chips (C3). |
 | `components/Browser.tsx` | The switchable main pane: search field + `SearchFilters` + results, OR a detail view, OR `<Home>`. Hosts the nav breadcrumb. Shows a `SearchSkeleton` strip at the top of results while any provider search is still in flight; previous results stay rendered underneath. |
 | `components/Home.tsx` | Tabbed default pane: Up next (`QueueList`) / Playlists / Recent / Browse (`BrowseTab`). |
-| `components/QueueList.tsx` | Up-next list with pointer drag-reorder + per-row `⋯`. |
-| `components/DetailView.tsx` | `ArtistView` / `AlbumView` / `PlaylistView` — the nav-stack destinations. ~310 lines. |
+| `components/QueueList.tsx` | Up-next list with pointer drag-reorder + per-row `⋯`. `QueueHeader`: "Save" (→ `saveQueueAsPlaylist`, queue untouched) + two-step "Clear" (D2/D4). |
+| `components/DetailView.tsx` | `ArtistView` / `AlbumView` / `PlaylistView` — the nav-stack destinations. `PlayPills` = the D1-toggle-aware primary play button (+ explicit "Play now" in append mode). Playlist track rows capped at `PLAYLIST_RENDER_CAP`. |
 | `components/Row.tsx` | The universal media row + `RowAction`. Exports `standardActions`, `RowActionButtons` (inline icon shortcuts for Add-to-queue / Play-next / Favourite, container-query gated via `.music-row-inline`, + the `⋯` toggle) and `RowActionPanel` (the fold-down pill menu with submenu + inline-input support) — the last two reused by `NowPlaying`. Every list uses `Row`. |
 | `components/SearchFilters.tsx` | Media-type + provider filter pills. |
 | `components/BrowseTab.tsx` | `music/browse` folder navigator with its own path stack. |
@@ -101,6 +101,14 @@ when the SDK has no metadata yet (radio, first second). `getProgress()` also
 returns the seeked target for 1.5 s after a local `seek()` so the bar doesn't
 snap backward during the server rebuffer.
 
+**Queue mode (D1)**: `queueMode` (`useStorage`, `"append"` default) drives what
+a plain row click / a detail-view "Play" does — append to the tail without
+interrupting, or replace + play. Toggle lives next to shuffle/repeat in
+`NowPlaying`. "Play now" (`option:"play"`, insert-after-current) is always
+available explicitly (row `⋯`, detail-view pill). `saveQueueAsPlaylist` copies
+the live queue (`player_queues/items` → uris → `create_playlist` +
+`add_playlist_tracks`) without clearing it.
+
 **Optimism (A1)**: `playPause` / `next` / `previous` / `play` (row click) flip
 local state immediately, add their name to `pending`, and disable their control
 until the confirming `queue*`/`player*` event lands (`clearAllPending()` +
@@ -121,7 +129,7 @@ widget currently uses:
 | Browse | `music/browse {path}` — root → provider folders → Artists/Albums/Tracks/Playlists |
 | Recently played | `music/recently_played_items {limit, media_types[]?}` → `ItemMapping[]` |
 | Queue read | `player_queues/get {queue_id}` (→ `PlayerQueue`: `flow_mode`, `repeat_mode`, `shuffle_enabled`, `current_index`, `elapsed_time`, `current_item`), `player_queues/items {queue_id, limit, offset}` |
-| Enqueue | `player_queues/play_media {queue_id, media, option:"play"|"replace"|"next"|"add"|"replace_next", radio_mode?}`. `"play"` = insert after current + skip to it (non-destructive). `radio_mode:true` **replaces the whole queue** with [seed + ~25 similar tracks] (deprecated → `radio_playlist://`; `radio_source` stays `[]`). |
+| Enqueue | `player_queues/play_media {queue_id, media, option:"play"|"replace"|"next"|"add"|"replace_next", radio_mode?}`. `media` accepts a uri **or a playlist uri** (loads the whole playlist). `"play"` = insert after current + skip (non-destructive); `"replace"` wipes; `"add"` appends to the tail (an idle queue is cued but not auto-started). Widget `play(item)` with no explicit option follows `queueMode` (D1): `"append"`→`"add"`, `"replace"`→`"replace"`; an empty queue always replaces. `radio_mode:true` **replaces the whole queue** with [seed + ~25 similar tracks] (deprecated → `radio_playlist://`; `radio_source` stays `[]`). |
 | Transport | `player_queues/{play,pause,next,previous,stop,clear}` `{queue_id}` |
 | Seek | `player_queues/seek {queue_id, position}` (seconds) — **works even in flow mode**, ~1 s rebuffer |
 | Queue edit | `move_item {queue_id, queue_item_id, pos_shift}`, `move_item_end`, `delete_item {queue_id, item_id_or_index}`, `play_index {queue_id, index, seek_position?}` |
@@ -146,10 +154,12 @@ widget currently uses:
   the 7×11 default.
 - Monochrome (ink-on-paper). Theme tokens only, no hardcoded colours.
 - `IBM Plex Mono` + `Instrument Serif`.
+- Queue-mode default is **append** (D1) — "a queue is fragile"; a plain click
+  never wipes it. Replace + Clear are the only queue-emptiers, both deliberate.
 - No OS media-key integration (Rust + entitlements).
 
 ## Known rough edges (see backlog-music.md for the fixes)
 
-- Queue is destructive — one Clear and it's gone; no save/restore (group D).
-- Playlist rename doesn't work (E1). Playlist-in-playlist / merge doesn't
-  work via the API (E4).
+- Playlist rename doesn't work (E1).
+- Rich track metadata (performers/label/review) is null without an MA metadata
+  provider on the server (backlog "Rich track metadata…").

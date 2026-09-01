@@ -46,12 +46,19 @@ const EMPTY_RESULTS: SearchResults = {
   audiobooks: [],
 };
 
-export type PlayOption = "play" | "next" | "add";
+export type PlayOption = "play" | "replace" | "next" | "add";
+export type QueueMode = "append" | "replace";
 
 /** MA QueueOption for each widget-level intent. `"play"` inserts after the
  * current item and skips to it, keeping history + tail intact — the
- * non-destructive "play now". Only the explicit Clear button empties a queue. */
-const MA_OPTION: Record<PlayOption, string> = { play: "play", next: "next", add: "add" };
+ * non-destructive "play now". `"replace"` wipes the queue. `"add"` appends to
+ * the tail. Only the explicit Clear button (or a Replace) empties a queue. */
+const MA_OPTION: Record<PlayOption, string> = {
+  play: "play",
+  replace: "replace",
+  next: "next",
+  add: "add",
+};
 
 const REPEAT_CYCLE: RepeatMode[] = ["off", "all", "one"];
 
@@ -63,6 +70,9 @@ export interface MusicApi {
   upNext: QueueItem[];
   repeatMode: RepeatMode;
   shuffle: boolean;
+  /** D1 — what a plain left-click on a track does (persisted). */
+  queueMode: QueueMode;
+  setQueueMode: (m: QueueMode) => void;
   /** Transport actions fired but not yet confirmed by a server event
    * ("playPause" | "next" | "previous" | "play"). The triggering control
    * disables itself while its name is in here (backlog A1). */
@@ -112,6 +122,7 @@ export interface MusicApi {
   refreshPlaylists: () => void;
   refreshRecent: () => void;
   createPlaylist: (name: string) => Promise<MediaItem | null>;
+  saveQueueAsPlaylist: (name: string) => Promise<MediaItem | null>;
   deletePlaylist: (playlist: MediaItem) => void;
   addToPlaylist: (playlistId: string, uris: string[]) => Promise<void>;
   removePlaylistTrack: (playlistId: string, position: number) => Promise<void>;
@@ -130,6 +141,7 @@ export const useMusic = (): MusicApi => {
   const [password] = useStorage<string>(KEYS.password, DEFAULT_PASSWORD);
   const [providerFilter] = useStorage<string>(KEYS.providerFilter, "");
   const [manageServer] = useStorage<boolean>(KEYS.manageServer, false);
+  const [queueMode, setQueueMode] = useStorage<QueueMode>(KEYS.queueMode, "append");
 
   const [state, setState] = useState<ConnState>("connecting");
   const [error, setError] = useState<string | null>(null);
@@ -472,16 +484,22 @@ export const useMusic = (): MusicApi => {
     [providerFilter],
   );
 
+  /** Plain call (no `option`) follows the D1 queue-mode toggle: `"append"` adds
+   * to the tail without interrupting, `"replace"` wipes + plays. An empty queue
+   * always replaces (nothing to append to). Explicit options: `"play"` =
+   * play-now (insert after current + skip), `"next"`, `"add"`, `"replace"`. */
   const play = useCallback(
-    (item: MediaItem, option: PlayOption = "play") => {
-      cmd("player_queues/play_media", { media: item.uri, option: MA_OPTION[option] });
-      if (option === "play") {
+    (item: MediaItem, option?: PlayOption) => {
+      const opt: PlayOption =
+        option ?? (queueMode === "replace" || !nowRef.current ? "replace" : "add");
+      cmd("player_queues/play_media", { media: item.uri, option: MA_OPTION[opt] });
+      if (opt === "play" || opt === "replace") {
         markPending("play");
         setResults(null);
         setNavStack([{ kind: "browse" }]);
       }
     },
-    [cmd, markPending],
+    [cmd, markPending, queueMode],
   );
 
   const playPause = useCallback(() => {
@@ -665,6 +683,41 @@ export const useMusic = (): MusicApi => {
       .catch((e) => console.warn("[music] addToPlaylist", e));
   }, []);
 
+  /** D2 — copy the current queue into a fresh editable playlist. Does NOT
+   * clear the queue. Returns the new playlist (or null). */
+  const saveQueueAsPlaylist = useCallback(
+    async (name: string): Promise<MediaItem | null> => {
+      const client = clientRef.current;
+      const queueId = queueIdRef.current;
+      if (!client || !queueId) return null;
+      try {
+        const items = await client.command<QueueItem[]>("player_queues/items", {
+          queue_id: queueId,
+          limit: 500,
+        });
+        const uris = (items ?? [])
+          .map((i) => i.media_item?.uri)
+          .filter((u): u is string => !!u && !u.startsWith("queue:"));
+        if (uris.length === 0) return null;
+        const pl = await client.command<MediaItem>("music/playlists/create_playlist", {
+          name: name.trim() || `queue ${new Date().toISOString().slice(0, 16).replace("T", " ")}`,
+        });
+        if (pl?.item_id) {
+          await client.command("music/playlists/add_playlist_tracks", {
+            db_playlist_id: pl.item_id,
+            uris,
+          });
+        }
+        refreshPlaylists();
+        return pl ?? null;
+      } catch (e) {
+        console.warn("[music] saveQueueAsPlaylist", e);
+        return null;
+      }
+    },
+    [refreshPlaylists],
+  );
+
   const removePlaylistTrack = useCallback(async (playlistId: string, position: number) => {
     await clientRef.current
       ?.command("music/playlists/remove_playlist_tracks", {
@@ -695,6 +748,8 @@ export const useMusic = (): MusicApi => {
       upNext,
       repeatMode,
       shuffle,
+      queueMode,
+      setQueueMode,
       pending,
       results,
       searching,
@@ -728,6 +783,7 @@ export const useMusic = (): MusicApi => {
       refreshPlaylists,
       refreshRecent,
       createPlaylist,
+      saveQueueAsPlaylist,
       deletePlaylist,
       addToPlaylist,
       removePlaylistTrack,
@@ -748,12 +804,13 @@ export const useMusic = (): MusicApi => {
       request,
     }),
     [
-      state, error, now, currentItem, upNext, repeatMode, shuffle, pending, results, searching, volume,
-      playlists, recentlyPlayed, providers, httpBase, favorites, nav, navStack.length, navTo,
-      navBack, navHome, search, play, startRadio, playPause, next, previous, seek, removeFromQueue,
-      moveQueueItem, moveQueueItemToEnd, cycleRepeat, toggleShuffle, toggleFavorite, refreshPlaylists,
-      refreshRecent, createPlaylist, deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume,
-      openServer, imageUrl, request, cmd,
+      state, error, now, currentItem, upNext, repeatMode, shuffle, queueMode, setQueueMode, pending,
+      results, searching, volume, playlists, recentlyPlayed, providers, httpBase, favorites, nav,
+      navStack.length, navTo, navBack, navHome, search, play, startRadio, playPause, next, previous,
+      seek, removeFromQueue, moveQueueItem, moveQueueItemToEnd, cycleRepeat, toggleShuffle,
+      toggleFavorite, refreshPlaylists, refreshRecent, createPlaylist, saveQueueAsPlaylist,
+      deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume, openServer, imageUrl, request,
+      cmd,
     ],
   );
 };
