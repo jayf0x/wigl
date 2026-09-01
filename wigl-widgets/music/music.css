@@ -83,3 +83,168 @@
     transform: scaleY(0.4);
   }
 }
+
+/* ===========================================================================
+   MOTION / INTERACTION LANGUAGE  (the "mx-" layer)
+   ---------------------------------------------------------------------------
+   The widget is a rackmount audio unit. Motion here is MECHANICAL, not
+   playful: fast attack, slower release, no overshoot, no bounce. Everything
+   is theme-token driven (no hardcoded colour) and collapses to a no-op under
+   `prefers-reduced-motion`.
+
+   Durations / easings are standardised as custom properties on `.music-widget`
+   so components stop hand-rolling `duration-150` everywhere — reach for a
+   class below, or `transition: … var(--mx-quick) var(--mx-ease)` if you must
+   roll your own.
+
+   Vocabulary — one class per intent:
+     .mx-press        physical key-depress on `:active` (any button). Fast in,
+                      slower settle out. Pair with any real button.
+     .mx-tap          one-shot ring/flash pulse fired on click — bridges the
+                      API round-trip for controls that kick off an async call.
+                      Add the class, then toggle `data-mx-tap` (or re-add) to
+                      replay; simplest is a keyed remount or the .mx-tap-run
+                      helper toggled in a rAF.
+     .mx-pending      calm slow opacity shimmer for a control whose action is
+                      in flight (optimistic-pending set, slow ops).
+     .mx-pending-long even calmer / longer cycle for multi-second waits
+                      (search cold-start, backend restart).
+     .mx-flash        one-shot acknowledgement (~350ms): bg flashes toward
+                      `foreground` and fades back. "saved" / "done" / "copied".
+     .mx-sync         one-shot LED blink (~280ms): brief brightness/contrast
+                      bump. The playback clock fires this on every server
+                      re-sync — the "synth" flourish.
+     .mx-enter        subtle fade + few-px slide for view/tab/panel swaps
+                      (~150ms ease-out).
+   =========================================================================== */
+
+.music-widget {
+  --mx-instant: 70ms;
+  --mx-quick: 120ms;
+  --mx-settle: 180ms;
+  --mx-slow: 320ms;
+  /* mechanical: near-linear attack, eased release. No cubic overshoot. */
+  --mx-ease: cubic-bezier(0.2, 0, 0.1, 1);
+  --mx-ease-out: cubic-bezier(0.16, 0.84, 0.44, 1);
+}
+
+/* --- .mx-press : key-depress feedback ------------------------------------- */
+.music-widget .mx-press {
+  transition:
+    transform var(--mx-settle) var(--mx-ease),
+    opacity var(--mx-settle) var(--mx-ease),
+    filter var(--mx-settle) var(--mx-ease);
+}
+.music-widget .mx-press:active:not(:disabled) {
+  transform: scale(0.96);
+  opacity: 0.82;
+  transition:
+    transform var(--mx-instant) linear,
+    opacity var(--mx-instant) linear,
+    filter var(--mx-instant) linear;
+}
+
+/* --- .mx-tap : async-action click pulse --------------------------------- */
+.music-widget .mx-tap {
+  position: relative;
+}
+.music-widget .mx-tap::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 1px solid var(--foreground);
+  opacity: 0;
+  pointer-events: none;
+}
+.music-widget .mx-tap:active:not(:disabled)::after {
+  animation: mx-tap-pulse 320ms var(--mx-ease-out);
+}
+@keyframes mx-tap-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+/* --- .mx-pending : action in flight ------------------------------------- */
+.music-widget .mx-pending {
+  animation: mx-shimmer 1s ease-in-out infinite;
+}
+.music-widget .mx-pending-long {
+  animation: mx-shimmer 2.4s ease-in-out infinite;
+}
+@keyframes mx-shimmer {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* --- .mx-flash : one-shot "done" acknowledgement ----------------------- */
+.music-widget .mx-flash {
+  animation: mx-flash 350ms var(--mx-ease-out);
+}
+@keyframes mx-flash {
+  0% {
+    background-color: color-mix(in oklch, var(--foreground) 45%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* --- .mx-sync : one-shot status-LED blink ----------------------------- */
+.music-widget .mx-sync {
+  animation: mx-sync 280ms var(--mx-ease-out);
+}
+@keyframes mx-sync {
+  0% {
+    filter: brightness(1);
+  }
+  30% {
+    filter: brightness(1.9) contrast(1.25);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+/* --- .mx-enter : view / tab / panel transition ----------------------- */
+.music-widget .mx-enter {
+  animation: mx-enter var(--mx-settle) var(--mx-ease-out);
+}
+@keyframes mx-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-widget .mx-press,
+  .music-widget .mx-tap::after,
+  .music-widget .mx-pending,
+  .music-widget .mx-pending-long,
+  .music-widget .mx-flash,
+  .music-widget .mx-sync,
+  .music-widget .mx-enter {
+    animation: none;
+    transition: none;
+  }
+  .music-widget .mx-press:active:not(:disabled) {
+    transform: none;
+    opacity: 1;
+  }
+}

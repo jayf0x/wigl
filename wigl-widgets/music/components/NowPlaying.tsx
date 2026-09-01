@@ -225,6 +225,8 @@ const IconBtn = ({
   primary,
   active,
   disabled,
+  pending,
+  tap,
   children,
 }: {
   onClick: () => void;
@@ -232,6 +234,10 @@ const IconBtn = ({
   primary?: boolean;
   active?: boolean;
   disabled?: boolean;
+  /** action is in flight — calm shimmer (mx-pending) */
+  pending?: boolean;
+  /** fires an async API call — click gets the mx-tap ring pulse */
+  tap?: boolean;
   children: React.ReactNode;
 }) => (
   <button
@@ -242,7 +248,9 @@ const IconBtn = ({
     disabled={disabled}
     onClick={onClick}
     className={cn(
-      "flex items-center justify-center rounded-full transition-colors duration-150 disabled:opacity-40",
+      "mx-press flex items-center justify-center rounded-full transition-colors disabled:opacity-40",
+      tap && "mx-tap",
+      pending && "mx-pending",
       primary
         ? "size-9 bg-foreground text-background hover:bg-foreground/85"
         : active
@@ -385,7 +393,7 @@ const VolumeControl = ({ api }: { api: MusicApi }) => {
         aria-label={open ? "Hide volume" : "Volume"}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "rounded-md p-1 transition-colors",
+          "mx-press rounded-md p-1 transition-colors",
           open ? "text-foreground" : "text-muted-foreground hover:text-foreground",
         )}
       >
@@ -475,12 +483,20 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
 
       <div className="flex flex-wrap items-center justify-between gap-y-2">
         <div className="flex items-center gap-1">
-          <IconBtn label="Previous track" disabled={api.pending.has("previous")} onClick={api.previous}>
+          <IconBtn
+            label="Previous track"
+            tap
+            pending={api.pending.has("previous")}
+            disabled={api.pending.has("previous")}
+            onClick={api.previous}
+          >
             <SkipBack className="size-4" fill="currentColor" />
           </IconBtn>
           <IconBtn
             label={now?.playing ? "Pause" : "Play"}
             primary
+            tap
+            pending={api.pending.has("playPause")}
             disabled={api.pending.has("playPause")}
             onClick={() => {
               api.unlock();
@@ -493,7 +509,13 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
               <Play className="size-4 translate-x-px" fill="currentColor" />
             )}
           </IconBtn>
-          <IconBtn label="Next track" disabled={api.pending.has("next")} onClick={api.next}>
+          <IconBtn
+            label="Next track"
+            tap
+            pending={api.pending.has("next")}
+            disabled={api.pending.has("next")}
+            onClick={api.next}
+          >
             <SkipForward className="size-4" fill="currentColor" />
           </IconBtn>
         </div>

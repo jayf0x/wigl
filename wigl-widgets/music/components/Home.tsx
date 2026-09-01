@@ -161,7 +161,7 @@ export const Home = ({ api }: { api: MusicApi }) => {
               data-no-drag
               onClick={() => setTab(t.id)}
               className={cn(
-                "music-tag flex-1 basis-16 rounded px-2 py-1.5 transition-colors",
+                "music-tag mx-press flex-1 basis-16 rounded px-2 py-1.5 transition-colors",
                 tab === t.id
                   ? "bg-accent text-foreground"
                   : "text-muted-foreground/70 hover:bg-accent/50 hover:text-foreground",
@@ -177,7 +177,7 @@ export const Home = ({ api }: { api: MusicApi }) => {
       {tab === "browse" ? (
         <BrowseTab api={api} />
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto p-1.5" data-no-drag>
+        <div key={tab} className="mx-enter min-h-0 flex-1 overflow-y-auto p-1.5" data-no-drag>
           {tab === "queue" ? (
             <QueueList api={api} />
           ) : tab === "playlists" ? (
