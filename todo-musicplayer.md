@@ -113,89 +113,45 @@ not an `AnalyserNode`.
   widget (see COMPARISON.md "cut" rows).
 
 **Current file layout** (`wigl-widgets/music/`): `index.tsx` (root),
-`useMusic.ts` (the one hook — connect, state, all actions), `maClient.ts`
-(`/ws`), `sendspin.ts` (`/sendspin` + SDK), `serverProcess.ts` (`docker
-start`), `music.config.ts`, `types.ts`, `music.css`, `settingsSection.tsx`,
-`components/` (`NowPlaying`, `Browser`, `Equalizer`), `tests/`
-(`music.e2e.test.ts`, `audio-check.md`), `COMPARISON.md` (M0 output).
+`useMusic.ts` (the one hook — connect, state, nav reducer, all actions),
+`maClient.ts` (`/ws`), `sendspin.ts` (`/sendspin` + SDK), `serverProcess.ts`
+(`docker start`), `music.config.ts`, `types.ts`, `music.css`,
+`settingsSection.tsx`, `components/` (`NowPlaying`, `Browser`, `Row`,
+`DetailView`, `Equalizer`), `tests/` (`music.e2e.test.ts`, `audio-check.md`),
+`COMPARISON.md` (M0 output).
 
-**What's already done:** connect + reconnect (control + audio), search
-(provider-agnostic, live/debounced), now-playing with art, up-next list,
-play/pause/next/prev/clear, play-now vs add-to-queue, "start radio from this",
-inline volume, offline/empty/error states, `/` + space keys, the
-"＋ add youtube music" footer, the Settings section, `docker start` auto-recover.
+**What's already done:** connect + reconnect (control + audio); search
+(provider-agnostic, live/debounced); now-playing with art, clickable
+artist/album, a click/drag seek scrubber, repeat + shuffle toggles;
+non-destructive play-now + add-to-queue + play-next; up-next list with
+per-row remove; explicit Clear as the only queue-emptier; "start radio from
+this"; inline volume; a nav stack (browse → artist / album, back + breadcrumb,
+views replace the pane); a fold-down `⋯` action menu on every row (play
+next/add/favourite/radio/go-to-artist/go-to-album); artist view (top tracks,
+albums, similar, artist radio) and album view (track list), both `useQuery`-
+cached; offline/empty/error states; `/` + space + `←`/`→` + `n`/`p` keys; the
+"＋ add youtube music" footer; the Settings section; `docker start`
+auto-recover. First-launch size `w=7 h=11`; every view scales with the tile
+(cqw units, `.music-cq` container on the widget root).
 
 ---
 
 ## X — Infra (build these before their second consumer)
 
-### X1 — In-widget navigation (view stack)
+### X2 — `useQuery` for the reads that aren't built yet
 
-Artist/album/playlist/history/discovery views all need one shared piece: a
-`view` state (`"browse" | "artist" | "album" | "playlist" | "history"` + the
-target id/uri), a back affordance, and a header that reflects where you are.
-Views **replace** the browser pane, they don't stack on top of now-playing —
-so the tile stays usable. Plain reducer in `useMusic.ts` (or a tiny `useNav`),
-no router lib. One next step: add the reducer + a `<BrowserHeader>` with a back
-chevron + breadcrumb, wired so `browse` is the default and the existing search
-UI lives under it. Land it with I1 (the first consumer).
-
-### X2 — `useQuery` for expensive reads
-
-Artist pages, album track lists, playlist contents, browse rows — cache them
-with `@/wigl/hooks`' `useQuery` (`useSql: true` for the persist-worth ones)
-keyed by the entity uri, rather than refetching on every navigation. Not a
-separate task — adopt it as I1 / P1 / D1 get built, and note here which keys
-ended up persisted.
-
-### I2 — Row-action model (the `⋯` menu)
-
-One consistent model for result/queue/playlist rows, from COMPARISON.md's read
-of feishin + nuclear:
-
-- **left-click** = play now (non-destructive, see Q1)
-- **one `⋯` button** opens a compact menu: Play next · Add to queue · Add to
-  playlist (needs P1) · Go to artist / album (needs I1) · Favourite · Start
-  radio · Remove from queue (queue rows only) · Move to top / bottom (queue
-  rows only, needs Q2's commands)
-- right-click on the widget body stays the OS menu (`docs/widgets.md`) — the
-  trigger is the in-content `⋯` button, never a context-menu handler
-
-One next step: build a `<RowMenu>` component (a `@coss/dropdown-menu` or a
-plain popover-free fold — check what's already in `src/components/ui/`), take
-`actions: {label, icon, run, hidden?}[]`, and swap the current hover-icons in
-`Browser.tsx`'s `Row` for it. Wire only the actions whose commands exist today
-(play next, add to queue, favourite, start radio, remove); the rest light up
-as their entries land. Add its e2e assertion for `favorites/add_item`.
+The nav stack, the row-action `⋯` menu, and the artist/album views are done
+(`useMusic.ts` nav reducer, `components/Row.tsx`, `components/DetailView.tsx`).
+Artist/album reads are cached with `useQuery` keyed `artist:<uri>` /
+`album:<uri>`, **in-memory only** (`stale: hours(6)`, no `useSql`) — they're
+cheap to refetch and a stale artist page after a restart is worse than a
+200ms wait. When P4 (playlist contents) and D1 (browse rows) land, cache
+those the same way; only add `useSql: true` if a specific read turns out slow
+*and* stable. Delete this entry once P4 + D1 are both done.
 
 ---
 
 ## P — Playback controls
-
-### P1 — Repeat & shuffle toggles
-
-Missing entirely today. Two toggle icons by the transport row.
-`player_queues/repeat {queue_id, repeat_mode:"off"|"one"|"all"}` (cycle on
-click, icon reflects state), `player_queues/shuffle {queue_id, shuffle_enabled}`.
-`PlayerQueue` already returns `repeat_mode` + `shuffle_enabled` — read them into
-`now`/a new bit of state in `refreshQueue`. e2e: assert both commands' shapes.
-Independent, small — good warm-up entry.
-
-### P2 — In-track seek (click / drag the timeline)
-
-**Resolved:** `player_queues/seek {queue_id, position}` (position in seconds)
-**works** against the live Sendspin player — tested both directions
-(43s→90s and 10s→12s), and it works **even though the queue is `flow_mode:true`**
-(MA re-encodes the flow stream from the seek point; ~1s rebuffer gap on the
-jump, no track change). `player_queues/play_index {queue_id, index,
-seek_position}` also exists for jump-to-track-at-offset.
-
-One next step: make `NowPlaying.tsx`'s progress bar an interactive scrubber —
-pointer-down + drag sets a local "seeking to" position (freeze the
-`queue_time_updated` follow while dragging), pointer-up calls
-`api.seek(seconds)`. Hide it for radio (`now.isRadio`). Add `seek` to
-`useMusic.ts` and the `←`/`→` keys (I3). e2e: assert `player_queues/seek`
-accepts `{queue_id, position}` and the elapsed time moves.
 
 ### P3 — Expandable "more info" panel
 
@@ -211,26 +167,18 @@ key/value list. Independent of P2.
 
 ## Q — Queue & playlists
 
-### Q1 — Non-destructive play + explicit clear
+### Q2 — Queue reorder: drag + move-to-top/bottom
 
-Left-click a search result currently does `play_media {option:"replace"}` —
-wipes the queue. Change the default to `option:"replace_next"` (play now, keep
-the tail), and make the existing "Clear" button in the up-next header the only
-thing that empties the queue. One next step: verify `replace_next` semantics
-against `/api-docs` (does it keep items *after* current, or replace the current
-+ tail?), then rewire `play()` in `useMusic.ts` and the row click in
-`Browser.tsx`. e2e: assert the `QueueOption` value is accepted and the queue
-length grows rather than resets.
-
-### Q2 — Queue row actions: remove, move, drag-reorder
-
-Each up-next row gets: remove (`player_queues/delete_item {queue_id,
-item_id_or_index}`), and drag-to-reorder → `player_queues/move_item {queue_id,
-queue_item_id, pos_shift}` / `move_item_end`. Pointer-based drag (no dnd lib —
-small list; `Desktop.tsx` has the pointer-drag pattern). Optimistic local
-reorder, reconcile on the next `queue_items_updated`. "Move to top / bottom"
-comes free once the commands are wired — expose them in the I2 `⋯` menu.
-e2e: assert `move_item` + `delete_item` shapes.
+Remove-from-queue and the non-destructive play-now default are done
+(`useMusic.ts` `removeFromQueue`, `play()` → MA `QueueOption:"play"` which
+inserts-after-current-and-skips, keeping history + tail; only the Clear button
+empties a queue). Still missing: **reorder**. Up-next rows draggable →
+`player_queues/move_item {queue_id, queue_item_id, pos_shift}` (`pos_shift:0` =
+make next) / `move_item_end`. Pointer-based drag (no dnd lib — small list;
+`Desktop.tsx` has the pattern). Optimistic local reorder, reconcile on the next
+`queue_items_updated`. Add "Move to top" / "Move to bottom" to the row `⋯` menu
+(pass them as `extra` actions from `Browser.tsx`'s `UpNext`, same way `remove`
+is passed today). e2e: assert `move_item` + `move_item_end` shapes.
 
 ### P4 — Playlists: read path (list + view)
 
@@ -295,23 +243,14 @@ provider path.
 
 ## I — Interaction
 
-### I1 — Clickable artist / album
+### I3 — Keyboard: list navigation
 
-Artist and album names in results, the queue, and now-playing become links.
-Artist link → an `artist` view (X1): `music/artists/get` + `top_tracks` +
-`artist_albums` + a "Start artist radio" button + `similar_artists`. Album link
-→ an `album` view: `music/albums/album_tracks`. This is the **first X1
-consumer** — land the nav stack here. Unblocks the "Go to artist/album" action
-in the I2 menu. `useQuery` every fetch. e2e: assert `artists/get` +
-`artist_albums` + `album_tracks` shapes.
-
-### I3 — Keyboard
-
-Extend `/` + space with: `←`/`→` seek ±5s (needs P2), `n`/`p` next/prev,
-`↑`/`↓` move focus in the visible list, `enter` play the focused row, `a` add
-it to the queue. Scope to what fits — no global capture. One next step: extend
-the `onKey` handler in `index.tsx`, add a `focusedIndex` to the browser list.
-Do this last, after the list views exist to navigate.
+`/` + space, `←`/`→` seek ±5s, `n`/`p` next/prev are done (`index.tsx` `onKey`).
+Still missing: `↑`/`↓` move a focus ring through the visible list,
+`enter` = play the focused row, `a` = add it to the queue. One next step: add a
+`focusedIndex` to `Browser.tsx` (and the detail views), render a focus ring on
+that row, wire the keys. Scope to what fits — no global capture. Do this after
+D1/P4 so there's more than one list shape to navigate.
 
 ---
 

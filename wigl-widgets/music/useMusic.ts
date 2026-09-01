@@ -1,8 +1,10 @@
 // Data flow (docs/architecture.md → "Data flow pattern"): settings → connect
 // effect → two WebSockets (control + Sendspin audio) → useState → render. No
-// query library. One hook, owned by index.tsx.
+// query library for the queue/now-playing (event-driven); detail views
+// (artist/album/playlist) cache their reads with @/wigl/hooks' useQuery.
+// One hook, owned by index.tsx.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStorage } from "@/wigl/hooks";
 import { runCmd } from "@/wigl/utils";
 import { MaClient, type MaEndpoint } from "./maClient";
@@ -21,7 +23,17 @@ import {
 } from "./music.config";
 import { connectSendspin, type SendspinHandle } from "./sendspin";
 import { maReachable, startMaContainer } from "./serverProcess";
-import type { ConnState, MediaImage, MediaItem, NowPlaying, PlayerQueue, QueueItem, SearchResults } from "./types";
+import type {
+  ConnState,
+  MediaImage,
+  MediaItem,
+  NavView,
+  NowPlaying,
+  PlayerQueue,
+  QueueItem,
+  RepeatMode,
+  SearchResults,
+} from "./types";
 
 const EMPTY_RESULTS: SearchResults = {
   artists: [],
@@ -35,17 +47,34 @@ const EMPTY_RESULTS: SearchResults = {
 
 export type PlayOption = "play" | "next" | "add";
 
+/** MA QueueOption for each widget-level intent. `"play"` inserts after the
+ * current item and skips to it, keeping history + tail intact — the
+ * non-destructive "play now". Only the explicit Clear button empties a queue. */
+const MA_OPTION: Record<PlayOption, string> = { play: "play", next: "next", add: "add" };
+
+const REPEAT_CYCLE: RepeatMode[] = ["off", "all", "one"];
+
 export interface MusicApi {
   state: ConnState;
   error: string | null;
   now: NowPlaying | null;
+  currentItem: QueueItem | null;
   upNext: QueueItem[];
+  repeatMode: RepeatMode;
+  shuffle: boolean;
   results: SearchResults | null;
   searching: boolean;
   volume: number;
   /** Enabled MA music-provider instance ids (e.g. "radiobrowser", "ytmusic"). */
   providers: string[];
   serverUrl: string;
+  favorites: Set<string>;
+  /** Browser-pane navigation. Views replace the pane; now-playing stays pinned. */
+  nav: NavView;
+  canBack: boolean;
+  navTo: (v: NavView) => void;
+  navBack: () => void;
+  navHome: () => void;
   retry: () => void;
   search: (query: string) => void;
   clearResults: () => void;
@@ -54,13 +83,21 @@ export interface MusicApi {
   playPause: () => void;
   next: () => void;
   previous: () => void;
+  seek: (seconds: number) => void;
   clearQueue: () => void;
+  removeFromQueue: (queueItemId: string) => void;
+  cycleRepeat: () => void;
+  toggleShuffle: () => void;
+  toggleFavorite: (item: MediaItem) => void;
   setVolume: (v: number) => void;
   /** Prime the browser audio output — call from a user gesture (first play). */
   unlock: () => void;
   /** Open the Music Assistant web UI (to add a provider like YouTube Music). */
   openServer: () => void;
   imageUrl: (img?: MediaImage | null) => string | null;
+  /** Fire a control command that isn't queue-scoped (artist/album/playlist
+   * reads). Rejects if not connected — callers wrap in useQuery. */
+  request: <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
 }
 
 export const useMusic = (): MusicApi => {
@@ -74,17 +111,29 @@ export const useMusic = (): MusicApi => {
   const [state, setState] = useState<ConnState>("connecting");
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState<NowPlaying | null>(null);
+  const [currentItem, setCurrentItem] = useState<QueueItem | null>(null);
   const [upNext, setUpNext] = useState<QueueItem[]>([]);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
+  const [shuffle, setShuffle] = useState(false);
   const [results, setResults] = useState<SearchResults | null>(null);
   const [searching, setSearching] = useState(false);
   const [volume, setVolumeState] = useState(100);
   const [providers, setProviders] = useState<string[]>([]);
   const [attempt, setAttempt] = useState(0);
+  const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
+  const [navStack, setNavStack] = useState<NavView[]>([{ kind: "browse" }]);
 
   const clientRef = useRef<MaClient | null>(null);
   const sendspinRef = useRef<SendspinHandle | null>(null);
   const queueIdRef = useRef<string | null>(null);
   const httpBase = `http://${host}:${port}`;
+
+  const nav = navStack[navStack.length - 1] ?? { kind: "browse" };
+  const navTo = useCallback((v: NavView) => {
+    setNavStack((s) => (v.kind === "browse" ? [{ kind: "browse" }] : [...s, v]));
+  }, []);
+  const navBack = useCallback(() => setNavStack((s) => (s.length > 1 ? s.slice(0, -1) : s)), []);
+  const navHome = useCallback(() => setNavStack([{ kind: "browse" }]), []);
 
   const imageUrl = useCallback(
     (img?: MediaImage | null): string | null => {
@@ -95,6 +144,12 @@ export const useMusic = (): MusicApi => {
     [httpBase],
   );
 
+  const request = useCallback(<T = unknown>(command: string, args: Record<string, unknown> = {}) => {
+    const client = clientRef.current;
+    if (!client) return Promise.reject(new Error("not connected")) as Promise<T>;
+    return client.command<T>(command, args);
+  }, []);
+
   // ── snapshot the queue → now-playing + up-next ───────────────────────────
   const refreshQueue = useCallback(async () => {
     const client = clientRef.current;
@@ -103,7 +158,10 @@ export const useMusic = (): MusicApi => {
     try {
       const q = await client.command<PlayerQueue>("player_queues/get", { queue_id: queueId });
       if (!q) return;
+      setRepeatMode((q.repeat_mode as RepeatMode) ?? "off");
+      setShuffle(!!q.shuffle_enabled);
       const cur = q.current_item ?? null;
+      setCurrentItem(cur);
       const media = cur?.media_item ?? null;
       const isRadio = media?.media_type === "radio";
       setNow(
@@ -124,7 +182,7 @@ export const useMusic = (): MusicApi => {
       if (q.items > 1) {
         const items = await client.command<QueueItem[]>("player_queues/items", {
           queue_id: queueId,
-          limit: 20,
+          limit: 50,
         });
         const currentId = cur?.queue_item_id;
         const idx = items.findIndex((i) => i.queue_item_id === currentId);
@@ -287,19 +345,79 @@ export const useMusic = (): MusicApi => {
 
   const play = useCallback(
     (item: MediaItem, option: PlayOption = "play") => {
-      const maOption = option === "play" ? "replace" : option === "next" ? "next" : "add";
-      cmd("player_queues/play_media", { media: item.uri, option: maOption });
-      if (option === "play") setResults(null);
+      cmd("player_queues/play_media", { media: item.uri, option: MA_OPTION[option] });
+      if (option === "play") {
+        setResults(null);
+        setNavStack([{ kind: "browse" }]);
+      }
     },
     [cmd],
   );
 
   const startRadio = useCallback(
     (item: MediaItem) => {
-      cmd("player_queues/play_media", { media: item.uri, option: "replace", radio_mode: true });
+      cmd("player_queues/play_media", { media: item.uri, option: "play", radio_mode: true });
       setResults(null);
+      setNavStack([{ kind: "browse" }]);
     },
     [cmd],
+  );
+
+  const seek = useCallback((seconds: number) => {
+    cmd("player_queues/seek", { position: Math.max(0, Math.round(seconds)) });
+    setNow((n) => (n ? { ...n, elapsed: Math.max(0, Math.round(seconds)) } : n));
+  }, [cmd]);
+
+  const cycleRepeat = useCallback(() => {
+    const nextMode = REPEAT_CYCLE[(REPEAT_CYCLE.indexOf(repeatMode) + 1) % REPEAT_CYCLE.length];
+    setRepeatMode(nextMode);
+    cmd("player_queues/repeat", { repeat_mode: nextMode });
+  }, [cmd, repeatMode]);
+
+  const toggleShuffle = useCallback(() => {
+    setShuffle((s) => {
+      cmd("player_queues/shuffle", { shuffle_enabled: !s });
+      return !s;
+    });
+  }, [cmd]);
+
+  const removeFromQueue = useCallback(
+    (queueItemId: string) => {
+      setUpNext((list) => list.filter((i) => i.queue_item_id !== queueItemId));
+      cmd("player_queues/delete_item", { item_id_or_index: queueItemId });
+    },
+    [cmd],
+  );
+
+  const toggleFavorite = useCallback(
+    (item: MediaItem) => {
+      const client = clientRef.current;
+      if (!client) return;
+      const on = favorites.has(item.uri);
+      setFavorites((s) => {
+        const n = new Set(s);
+        if (on) n.delete(item.uri);
+        else n.add(item.uri);
+        return n;
+      });
+      if (on) {
+        client
+          .command<{ media_type?: string; item_id?: string }>("music/item_by_uri", { uri: item.uri })
+          .then((lib) => {
+            if (lib?.item_id && lib.media_type)
+              return client.command("music/favorites/remove_item", {
+                media_type: lib.media_type,
+                library_item_id: lib.item_id,
+              });
+          })
+          .catch((e) => console.warn("[music] unfavourite", e));
+      } else {
+        client
+          .command("music/favorites/add_item", { item: item.uri })
+          .catch((e) => console.warn("[music] favourite", e));
+      }
+    },
+    [favorites],
   );
 
   const setVolume = useCallback((v: number) => {
@@ -313,28 +431,51 @@ export const useMusic = (): MusicApi => {
     );
   }, [httpBase]);
 
-  return {
-    state,
-    error,
-    now,
-    upNext,
-    results,
-    searching,
-    volume,
-    providers,
-    serverUrl: httpBase,
-    retry: () => setAttempt((n) => n + 1),
-    search,
-    clearResults: () => setResults(null),
-    play,
-    startRadio,
-    playPause: () => cmd(now?.playing ? "player_queues/pause" : "player_queues/play"),
-    next: () => cmd("player_queues/next"),
-    previous: () => cmd("player_queues/previous"),
-    clearQueue: () => cmd("player_queues/clear"),
-    setVolume,
-    unlock: () => void sendspinRef.current?.unlock().catch(() => {}),
-    openServer,
-    imageUrl,
-  };
+  return useMemo(
+    () => ({
+      state,
+      error,
+      now,
+      currentItem,
+      upNext,
+      repeatMode,
+      shuffle,
+      results,
+      searching,
+      volume,
+      providers,
+      serverUrl: httpBase,
+      favorites,
+      nav,
+      canBack: navStack.length > 1,
+      navTo,
+      navBack,
+      navHome,
+      retry: () => setAttempt((n) => n + 1),
+      search,
+      clearResults: () => setResults(null),
+      play,
+      startRadio,
+      playPause: () => cmd(now?.playing ? "player_queues/pause" : "player_queues/play"),
+      next: () => cmd("player_queues/next"),
+      previous: () => cmd("player_queues/previous"),
+      seek,
+      clearQueue: () => cmd("player_queues/clear"),
+      removeFromQueue,
+      cycleRepeat,
+      toggleShuffle,
+      toggleFavorite,
+      setVolume,
+      unlock: () => void sendspinRef.current?.unlock().catch(() => {}),
+      openServer,
+      imageUrl,
+      request,
+    }),
+    [
+      state, error, now, currentItem, upNext, repeatMode, shuffle, results, searching, volume,
+      providers, httpBase, favorites, nav, navStack.length, navTo, navBack, navHome, search, play,
+      startRadio, seek, removeFromQueue, cycleRepeat, toggleShuffle, toggleFavorite, setVolume,
+      openServer, imageUrl, request, cmd,
+    ],
+  );
 };

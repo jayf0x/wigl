@@ -14,6 +14,14 @@ export interface MediaImage {
   proxy_id?: string;
 }
 
+export interface MediaArtistRef {
+  name: string;
+  /** present on tracks/albums from search + detail fetches — enough to navigate */
+  item_id?: string;
+  provider?: string;
+  uri?: string;
+}
+
 export interface MediaItem {
   item_id: string;
   provider: string;
@@ -22,11 +30,29 @@ export interface MediaItem {
   media_type: MediaType;
   version?: string;
   /** artists[] on tracks/albums, populated by MA */
-  artists?: { name: string }[];
-  album?: { name: string } | null;
+  artists?: MediaArtistRef[];
+  album?: (MediaArtistRef & { name: string }) | null;
   duration?: number;
-  metadata?: { images?: MediaImage[] | null };
+  year?: number;
+  favorite?: boolean;
+  track_number?: number;
+  metadata?: {
+    images?: MediaImage[] | null;
+    genres?: string[] | null;
+    description?: string | null;
+    links?: { name: string; url: string }[] | null;
+  };
 }
+
+export type RepeatMode = "off" | "one" | "all";
+
+/** Where the browser pane is pointed. Views replace the pane; now-playing stays. */
+export type NavView =
+  | { kind: "browse" }
+  | { kind: "artist"; item: MediaItem }
+  | { kind: "album"; item: MediaItem }
+  | { kind: "playlist"; item: MediaItem }
+  | { kind: "history" };
 
 export interface SearchResults {
   artists: MediaItem[];
@@ -44,6 +70,20 @@ export interface QueueItem {
   duration: number;
   media_item?: MediaItem | null;
   image?: MediaImage | null;
+  streamdetails?: StreamDetails | null;
+}
+
+export interface StreamDetails {
+  provider?: string;
+  audio_format?: {
+    content_type?: string;
+    codec_type?: string;
+    sample_rate?: number;
+    bit_depth?: number;
+    channels?: number;
+    bit_rate?: number;
+  };
+  loudness?: number | null;
 }
 
 export interface PlayerQueue {
@@ -54,9 +94,11 @@ export interface PlayerQueue {
   current_item?: QueueItem | null;
   next_item?: QueueItem | null;
   elapsed_time: number;
+  current_index?: number | null;
   items: number;
+  flow_mode?: boolean;
   shuffle_enabled: boolean;
-  repeat_mode: string;
+  repeat_mode: RepeatMode | string;
   radio_source?: unknown[];
 }
 

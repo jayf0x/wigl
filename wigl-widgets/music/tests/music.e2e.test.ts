@@ -13,7 +13,7 @@
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_PASSWORD, DEFAULT_USERNAME, MA_HOST, MA_PORT } from "../music.config";
 import { login, MaClient } from "../maClient";
-import type { SearchResults } from "../types";
+import type { MediaItem, PlayerQueue, SearchResults } from "../types";
 
 const endpoint = {
   host: MA_HOST,
@@ -133,6 +133,124 @@ describe("music widget ↔ Music Assistant (live)", () => {
       const track = results.tracks[0];
       expect(track.uri).toMatch(/^ytmusic_free/);
       expect((track.artists ?? []).length).toBeGreaterThan(0);
+    } finally {
+      client.close();
+    }
+  });
+
+  // ── drift regressions for the commands the player-buildout leans on ──────
+  // Each asserts the real arg/return shape against the running server so a
+  // Music Assistant upgrade that renames a field breaks CI, not the widget.
+
+  test.skipIf(!reachable)("artist + album detail commands return navigable shapes", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const res = await client.command<SearchResults>("music/search", {
+        search_query: "daft punk",
+        media_types: ["artist", "album"],
+        limit: 3,
+      });
+      const artist = res.artists[0];
+      expect(artist?.item_id).toBeTruthy();
+      expect(artist?.provider).toBeTruthy();
+
+      // top_tracks / artist_albums take {item_id, provider_instance_id_or_domain}
+      const idArgs = { item_id: artist.item_id, provider_instance_id_or_domain: artist.provider };
+      const top = await client.command<MediaItem[]>("music/artists/top_tracks", idArgs);
+      expect(Array.isArray(top)).toBe(true);
+      const albums = await client.command<MediaItem[]>("music/artists/artist_albums", idArgs);
+      expect(Array.isArray(albums)).toBe(true);
+
+      const album = res.albums[0] ?? albums[0];
+      if (album?.item_id) {
+        const tracks = await client.command<MediaItem[]>("music/albums/album_tracks", {
+          item_id: album.item_id,
+          provider_instance_id_or_domain: album.provider,
+        });
+        expect(Array.isArray(tracks)).toBe(true);
+        if (tracks.length) {
+          expect(typeof tracks[0].uri).toBe("string");
+          expect((tracks[0].artists ?? []).length).toBeGreaterThan(0);
+        }
+      }
+    } finally {
+      client.close();
+    }
+  });
+
+  test.skipIf(!reachable)("favourite add → read-back → remove round-trips", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const res = await client.command<SearchResults>("music/search", {
+        search_query: "daft punk one more time",
+        media_types: ["track"],
+        limit: 1,
+      });
+      const uri = res.tracks[0]?.uri;
+      if (!uri) return;
+
+      await client.command("music/favorites/add_item", { item: uri });
+      const lib = await client.command<{ favorite?: boolean; media_type?: string; item_id?: string }>(
+        "music/item_by_uri",
+        { uri },
+      );
+      expect(lib.favorite).toBe(true);
+      expect(lib.media_type).toBeTruthy();
+      await client.command("music/favorites/remove_item", {
+        media_type: lib.media_type,
+        library_item_id: lib.item_id,
+      });
+      const after = await client.command<{ favorite?: boolean }>("music/item_by_uri", { uri });
+      expect(after.favorite).toBe(false);
+    } finally {
+      client.close();
+    }
+  });
+
+  test.skipIf(!reachable)("recently_played_items returns replayable items", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const items = await client.command<MediaItem[]>("music/recently_played_items", { limit: 10 });
+      expect(Array.isArray(items)).toBe(true);
+      for (const it of items) {
+        expect(typeof it.uri).toBe("string");
+        expect(typeof it.media_type).toBe("string");
+      }
+    } finally {
+      client.close();
+    }
+  });
+
+  // repeat / shuffle / seek mutate a queue — run them as no-ops against
+  // whatever queue exists (set each to its current value) so the assertion is
+  // "the command + arg shape is accepted", not a playback change.
+  test.skipIf(!reachable)("repeat / shuffle / seek accept their documented args", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const queues = await client.command<PlayerQueue[]>("player_queues/all");
+      const q = (queues ?? [])[0];
+      if (!q) return; // no player registered — nothing to poke safely
+
+      expect(["off", "one", "all", "unknown"]).toContain(q.repeat_mode);
+      expect(typeof q.shuffle_enabled).toBe("boolean");
+      expect(typeof q.flow_mode === "boolean" || q.flow_mode === undefined).toBe(true);
+
+      await client.command("player_queues/repeat", {
+        queue_id: q.queue_id,
+        repeat_mode: q.repeat_mode,
+      });
+      await client.command("player_queues/shuffle", {
+        queue_id: q.queue_id,
+        shuffle_enabled: q.shuffle_enabled,
+      });
+      await client.command("player_queues/seek", {
+        queue_id: q.queue_id,
+        position: Math.max(0, Math.round(q.elapsed_time ?? 0)),
+      });
     } finally {
       client.close();
     }

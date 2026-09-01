@@ -12,6 +12,13 @@
   font-feature-settings: "ss01", "zero";
 }
 
+/* The whole widget is a size container so views can scale type/art against
+   the tile's own width (cqw) rather than the viewport — the tile is resizable
+   to anything, breakpoints don't apply. */
+.music-widget .music-cq {
+  container-type: inline-size;
+}
+
 .music-widget .music-serif {
   font-family: var(--music-serif);
   font-weight: 400;
