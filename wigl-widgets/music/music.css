@@ -25,6 +25,20 @@
   letter-spacing: 0.01em;
 }
 
+/* Icon treatment (feedback I): lucide line icons read too thin against the
+   mono type at widget scale. One consistent rule — a touch heavier stroke
+   everywhere, heavier still on the primary transport, and a hair more optical
+   weight for icons sitting inside a filled (primary) button. Presentation
+   attributes lose to CSS, so this overrides lucide's inline stroke-width=2
+   without touching every call site. Toggle-state fills (play/pause, heart)
+   stay per-instance via `fill="currentColor"`. */
+.music-widget svg {
+  stroke-width: 2.25px;
+}
+.music-widget .mx-icon-strong svg {
+  stroke-width: 2.5px;
+}
+
 /* Micro-labels: the little uppercase tags on a piece of hi-fi gear. */
 .music-widget .music-tag {
   font-size: 9px;

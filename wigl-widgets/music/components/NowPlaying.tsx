@@ -252,7 +252,7 @@ const IconBtn = ({
       tap && "mx-tap",
       pending && "mx-pending",
       primary
-        ? "size-9 bg-foreground text-background hover:bg-foreground/85"
+        ? "mx-icon-strong size-9 bg-foreground text-background hover:bg-foreground/85"
         : active
           ? "size-7 text-foreground"
           : "size-7 text-muted-foreground hover:text-foreground",
@@ -504,9 +504,9 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
             }}
           >
             {now?.playing ? (
-              <Pause className="size-4" fill="currentColor" />
+              <Pause className="size-[18px]" fill="currentColor" />
             ) : (
-              <Play className="size-4 translate-x-px" fill="currentColor" />
+              <Play className="size-[18px] translate-x-px" fill="currentColor" />
             )}
           </IconBtn>
           <IconBtn
