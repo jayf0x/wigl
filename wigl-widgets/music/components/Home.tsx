@@ -1,17 +1,19 @@
 import { useEffect, useState } from "react";
-import { History, ListMusic, Plus } from "lucide-react";
+import { Compass, History, ListMusic, Plus } from "lucide-react";
 import { useStorage } from "@/wigl/hooks";
 import { cn } from "@/wigl/utils";
 import type { MusicApi } from "../useMusic";
+import { BrowseTab } from "./BrowseTab";
 import { QueueList } from "./QueueList";
 import { Row } from "./Row";
 
-type HomeTab = "queue" | "playlists" | "recent";
+type HomeTab = "queue" | "playlists" | "recent" | "browse";
 
 const TABS: { id: HomeTab; label: string }[] = [
   { id: "queue", label: "Up next" },
   { id: "playlists", label: "Playlists" },
   { id: "recent", label: "Recent" },
+  { id: "browse", label: "Browse" },
 ];
 
 const RecentTab = ({ api }: { api: MusicApi }) => {
@@ -104,37 +106,45 @@ const PlaylistsTab = ({ api }: { api: MusicApi }) => {
 export const Home = ({ api }: { api: MusicApi }) => {
   const [tab, setTab] = useStorage<HomeTab>("home_tab", "queue");
 
+  const ICON = { playlists: ListMusic, recent: History, browse: Compass } as const;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 gap-1 px-1.5 pt-1.5">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            data-no-drag
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "music-tag flex-1 rounded px-2 py-1.5 transition-colors",
-              tab === t.id
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground/70 hover:bg-accent/50 hover:text-foreground",
-            )}
-          >
-            {t.id === "playlists" && <ListMusic className="mr-1 inline size-3 -translate-y-px" />}
-            {t.id === "recent" && <History className="mr-1 inline size-3 -translate-y-px" />}
-            {t.label}
-          </button>
-        ))}
+      <div className="flex shrink-0 flex-wrap gap-1 px-1.5 pt-1.5">
+        {TABS.map((t) => {
+          const Icon = ICON[t.id as keyof typeof ICON];
+          return (
+            <button
+              key={t.id}
+              type="button"
+              data-no-drag
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "music-tag flex-1 basis-16 rounded px-2 py-1.5 transition-colors",
+                tab === t.id
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground/70 hover:bg-accent/50 hover:text-foreground",
+              )}
+            >
+              {Icon && <Icon className="mr-1 inline size-3 -translate-y-px" />}
+              {t.label}
+            </button>
+          );
+        })}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-1.5" data-no-drag>
-        {tab === "queue" ? (
-          <QueueList api={api} />
-        ) : tab === "playlists" ? (
-          <PlaylistsTab api={api} />
-        ) : (
-          <RecentTab api={api} />
-        )}
-      </div>
+      {tab === "browse" ? (
+        <BrowseTab api={api} />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto p-1.5" data-no-drag>
+          {tab === "queue" ? (
+            <QueueList api={api} />
+          ) : tab === "playlists" ? (
+            <PlaylistsTab api={api} />
+          ) : (
+            <RecentTab api={api} />
+          )}
+        </div>
+      )}
     </div>
   );
 };

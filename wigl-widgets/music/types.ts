@@ -2,7 +2,16 @@
 // definitions live at http://127.0.0.1:8095/api-docs/commands.json on the
 // running server (see todo-musicplayer.md) — this is deliberately partial.
 
-export type MediaType = "radio" | "artist" | "album" | "track" | "playlist" | "podcast" | "audiobook";
+export type MediaType =
+  | "radio"
+  | "artist"
+  | "album"
+  | "track"
+  | "playlist"
+  | "podcast"
+  | "audiobook"
+  | "folder"
+  | "collection";
 
 export interface MediaImage {
   path: string;

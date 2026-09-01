@@ -7,6 +7,7 @@ import type { MusicApi } from "../useMusic";
 import { DetailView } from "./DetailView";
 import { Home } from "./Home";
 import { Row } from "./Row";
+import { SearchFilters } from "./SearchFilters";
 
 const HISTORY_CAP = 20;
 
@@ -36,9 +37,12 @@ export const Browser = ({
   const [q, setQ] = useState("");
   const [focused, setFocused] = useState(false);
   const [history, setHistory] = useStorage<string[]>("search_history", []);
+  const [types, setTypes] = useStorage<string[]>("search_types", []);
+  const [providers, setProviders] = useStorage<string[]>("search_providers", []);
   const historyRef = useRef(history);
   historyRef.current = history;
   const { results, nav } = api;
+  const opts = { mediaTypes: types, providers };
 
   const remember = (term: string) => {
     const t = term.trim();
@@ -47,12 +51,13 @@ export const Browser = ({
     setHistory([t, ...h.filter((x) => x.toLowerCase() !== t.toLowerCase())].slice(0, HISTORY_CAP));
   };
 
-  // Debounced live search — only while the browse view is showing.
+  // Debounced live search — only while the browse view is showing. Re-runs when
+  // the filter selection changes too.
   useEffect(() => {
     if (nav.kind !== "browse") return;
-    const t = setTimeout(() => api.search(q), 260);
+    const t = setTimeout(() => api.search(q, { mediaTypes: types, providers }), 260);
     return () => clearTimeout(t);
-  }, [q, api.search, nav.kind]);
+  }, [q, api.search, nav.kind, types, providers]);
 
   // Remember a query once typing has settled (longer debounce, so prefixes
   // like "daf" don't pile up — only the query the user stopped on is saved).
@@ -64,7 +69,7 @@ export const Browser = ({
   }, [q, nav.kind]);
   const runSearch = (term: string) => {
     setQ(term);
-    api.search(term);
+    api.search(term, opts);
     remember(term);
   };
 
@@ -139,6 +144,15 @@ export const Browser = ({
                 clear
               </button>
             </div>
+          )}
+          {(q.trim() !== "" || results) && (
+            <SearchFilters
+              api={api}
+              types={types}
+              setTypes={setTypes}
+              providers={providers}
+              setProviders={setProviders}
+            />
           )}
         </div>
       ) : (

@@ -80,7 +80,7 @@ export interface MusicApi {
   navBack: () => void;
   navHome: () => void;
   retry: () => void;
-  search: (query: string) => void;
+  search: (query: string, opts?: { mediaTypes?: string[]; providers?: string[] }) => void;
   clearResults: () => void;
   play: (item: MediaItem, option?: PlayOption) => void;
   startRadio: (item: MediaItem) => void;
@@ -356,19 +356,25 @@ export const useMusic = (): MusicApi => {
   }, []);
 
   const search = useCallback(
-    (query: string) => {
+    (query: string, opts?: { mediaTypes?: string[]; providers?: string[] }) => {
       const client = clientRef.current;
       if (!client || !query.trim()) {
         setResults(null);
         return;
       }
+      const types = opts?.mediaTypes?.length ? opts.mediaTypes : [...SEARCH_MEDIA_TYPES];
+      const provs = opts?.providers?.length
+        ? opts.providers
+        : providerFilter
+          ? [providerFilter]
+          : undefined;
       setSearching(true);
       client
         .command<SearchResults>("music/search", {
           search_query: query.trim(),
-          media_types: [...SEARCH_MEDIA_TYPES],
+          media_types: types,
           limit: SEARCH_LIMIT,
-          ...(providerFilter ? { providers: [providerFilter] } : {}),
+          ...(provs ? { providers: provs } : {}),
         })
         .then((r) => setResults({ ...EMPTY_RESULTS, ...r }))
         .catch((e) => {

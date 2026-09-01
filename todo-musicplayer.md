@@ -174,28 +174,6 @@ Low priority — delete + recreate is the workaround.
 
 ---
 
-## H — History & discovery
-
-### D1 — Search filters + discovery browse
-
-Two things, same area:
-
-- **Filter pills** above results: which `media_types` to include
-  (radio/tracks/artists/albums/playlists) and which `providers`. Both are
-  already `music/search` params — this is UI + threading them through +
-  persisting the last-used set. No server sort param; sort client-side if it's
-  worth it (probably skip).
-- **Browse home**: when the search box is empty, show a `music/browse` folder
-  navigator (root → provider → Artists/Albums/Tracks/Playlists) instead of only
-  up-next. Uses the nav stack for the folder drill-down (a `"browse-folder"` nav kind). `music/recommendations` is empty
-  on a fresh library — do **not** use it.
-
-One next step: build the filter pills first (small, self-contained), then the
-browse navigator as a second pass. e2e: assert `music/browse` root + one
-provider path.
-
----
-
 ## I — Interaction
 
 ### I3 — Keyboard: list navigation
@@ -204,8 +182,7 @@ provider path.
 Still missing: `↑`/`↓` move a focus ring through the visible list,
 `enter` = play the focused row, `a` = add it to the queue. One next step: add a
 `focusedIndex` to `Browser.tsx` (and the detail views), render a focus ring on
-that row, wire the keys. Scope to what fits — no global capture. Do this after
-D1/P4 so there's more than one list shape to navigate.
+that row, wire the keys. Scope to what fits — no global capture.
 
 ---
 

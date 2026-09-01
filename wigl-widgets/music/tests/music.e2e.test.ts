@@ -280,6 +280,52 @@ describe("music widget ↔ Music Assistant (live)", () => {
     }
   });
 
+  // D1 browse: root lists provider folders; a provider path lists sub-folders,
+  // each carrying `path` for the next hop. (recommendations is empty on a fresh
+  // library — browse is the real discover surface.)
+  test.skipIf(!reachable)("music/browse root + a provider path return folders with `path`", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const root = await client.command<{ media_type: string; name: string; path?: string }[]>(
+        "music/browse",
+        {},
+      );
+      expect(Array.isArray(root)).toBe(true);
+      const rb = root.find((f) => (f.path ?? "").startsWith("radiobrowser://"));
+      expect(rb).toBeTruthy();
+      expect(rb?.media_type).toBe("folder");
+
+      const sub = await client.command<{ media_type: string; name: string; path?: string }[]>(
+        "music/browse",
+        { path: rb!.path },
+      );
+      expect(Array.isArray(sub)).toBe(true);
+      // at least one real drill-down folder (besides the ".." entry)
+      expect(sub.some((f) => f.name !== ".." && f.media_type === "folder" && !!f.path)).toBe(true);
+    } finally {
+      client.close();
+    }
+  });
+
+  test.skipIf(!reachable)("music/search honours a media_types filter (D1 pills)", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const r = await client.command<SearchResults>("music/search", {
+        search_query: "daft punk",
+        media_types: ["artist"],
+        limit: 3,
+      });
+      expect(Array.isArray(r.artists)).toBe(true);
+      // asking for only artists → tracks/albums come back empty
+      expect(r.tracks.length).toBe(0);
+      expect(r.albums.length).toBe(0);
+    } finally {
+      client.close();
+    }
+  });
+
   // P4/P5 playlists: create → add → read positions → remove → delete round-trip.
   test.skipIf(!reachable)("playlist create / add / read / remove / delete round-trips", async () => {
     const client = new MaClient(endpoint, () => {});

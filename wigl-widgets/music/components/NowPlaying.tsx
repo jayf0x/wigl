@@ -18,16 +18,7 @@ import { useStorage } from "@/wigl/hooks";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/wigl/utils";
 import type { MusicApi } from "../useMusic";
-
-const providerLabel = (id?: string | null) => {
-  if (!id) return null;
-  const base = id.split("--")[0];
-  return (
-    { ytmusic_free: "YouTube Music", ytmusic: "YouTube Music", radiobrowser: "RadioBrowser", builtin: "Music Assistant" }[
-      base
-    ] ?? base
-  );
-};
+import { providerLabel } from "../util";
 
 /** P3 — fold-down "what am I hearing" panel. Reads the live stream details off
  * the current queue item; open state persisted. No lyrics, no visualiser —
