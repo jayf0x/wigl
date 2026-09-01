@@ -35,7 +35,7 @@ entries hang off it — build the shared piece before its second consumer.
   (try `w={7} h={11}` and adjust by eye — check it doesn't collide with other
   widgets' defaults, `wigl-widgets/*/index.tsx`), but the layout must not
   *assume* that size. Test each view narrow and wide before committing.
-- **Views replace, they don't stack.** The nav stack (X1) swaps the main pane;
+- **Views replace, they don't stack.** The nav stack (`useMusic.ts` navStack) swaps the main pane;
   now-playing stays pinned. Never add a third vertical zone.
 
 ---
@@ -161,7 +161,7 @@ by default, `useStorage`-persisted. Content, smallest useful set:
 current item), `Track.metadata` (genre, description, external links),
 `Album.year`, the source provider. One next step: add a `music/tracks/get` (or
 reuse the queue item's `streamdetails`) read behind `useQuery`, render a
-key/value list. Independent of P2.
+key/value list. Independent of the seek scrubber.
 
 ---
 
@@ -184,7 +184,7 @@ is passed today). e2e: assert `move_item` + `move_item_end` shapes.
 
 Read-only first. `music/playlists/library_items` → the user's playlists (skip
 or visually separate the non-editable `is_editable:false` smart playlists like
-"All favorited tracks"). Selecting one → a `playlist` view (X1) showing
+"All favorited tracks"). Selecting one → a `playlist` view (add `"playlist"` to the nav reducer + `DetailView.tsx`) showing
 `music/playlists/playlist_tracks {item_id, provider_instance_id_or_domain:
 "library"}`, each track a normal row (left-click plays, `⋯` menu). A "Play all"
 / "Add all to queue" header button = `play_media` with the playlist uri.
@@ -199,7 +199,7 @@ verified), `add_playlist_tracks {db_playlist_id, uris[]}` (async — show a brie
 positions_to_remove[]}` (positions are the provider playlist positions from
 `playlist_tracks`), `update {item_id, update:{name}}` for rename,
 `music/library/remove_item {media_type:"playlist", library_item_id}` for
-delete. The "Add to playlist" action in the I2 `⋯` menu (wired from search
+delete. The "Add to playlist" action in the row `⋯` menu (`Row.tsx` standardActions) (wired from search
 rows, queue rows, and now-playing) is part of *this* entry, not a separate one.
 e2e: create → add → read-back → delete round-trip (clean up after itself).
 
@@ -209,7 +209,7 @@ e2e: create → add → read-back → delete round-trip (clean up after itself).
 
 ### H1 — Recently played view
 
-A "Recent" view (X1) listing `music/recently_played_items {limit:50}` — real
+A "Recent" view (add `"history"` to the nav reducer + a `DetailView` case) listing `music/recently_played_items {limit:50}` — real
 server-side items, newest first, each one-click re-playable via its uri. No
 local log needed. Optionally filter to `media_types:["track","radio"]`. One
 next step: add the command to `useMusic.ts`, a view + a nav entry to reach it.
@@ -232,7 +232,7 @@ Two things, same area:
   worth it (probably skip).
 - **Browse home**: when the search box is empty, show a `music/browse` folder
   navigator (root → provider → Artists/Albums/Tracks/Playlists) instead of only
-  up-next. Uses X1 for the folder drill-down. `music/recommendations` is empty
+  up-next. Uses the nav stack for the folder drill-down (a `"browse-folder"` nav kind). `music/recommendations` is empty
   on a fresh library — do **not** use it.
 
 One next step: build the filter pills first (small, self-contained), then the
