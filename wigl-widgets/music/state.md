@@ -60,7 +60,7 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | `music.css` | `IBM Plex Mono` + `Instrument Serif` (serif = track titles only), the `.music-cq` container query, the `.music-eq` VU animation. |
 | `settingsSection.tsx` | Settings-modal section: host/port/login, provider filter, auto-start toggle. |
 | `components/NowPlaying.tsx` | Pinned top zone: art, title, clickable artist/album, scrubber, transport, repeat/shuffle, volume, the P3 fold-down `TrackInfo` panel. Scrubber samples `api.getProgress()` every `PROGRESS_TICK_MS` while playing for a smooth clock; transport buttons disable while their action is in `api.pending`. |
-| `components/Browser.tsx` | The switchable main pane: search field + `SearchFilters` + results, OR a detail view, OR `<Home>`. Hosts the nav breadcrumb. |
+| `components/Browser.tsx` | The switchable main pane: search field + `SearchFilters` + results, OR a detail view, OR `<Home>`. Hosts the nav breadcrumb. Shows a `SearchSkeleton` strip at the top of results while any provider search is still in flight; previous results stay rendered underneath. |
 | `components/Home.tsx` | Tabbed default pane: Up next (`QueueList`) / Playlists / Recent / Browse (`BrowseTab`). |
 | `components/QueueList.tsx` | Up-next list with pointer drag-reorder + per-row `⋯`. |
 | `components/DetailView.tsx` | `ArtistView` / `AlbumView` / `PlaylistView` — the nav-stack destinations. ~310 lines. |
@@ -80,6 +80,12 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 (`refreshQueue()` on any `queue*`/`player*` event + a `QUEUE_POLL_MS` backstop).
 `useQuery` (in-memory, keyed by entity uri, ~6h/60s stale) *is* used for the
 detail views: `artist:<uri>`, `album:<uri>`, `playlist:<id>`.
+
+**Search** (B1/B2): `search()` fans out one `music/search` per enabled provider
++ `"library"` in parallel, merging (uri-deduped) into an accumulator as each
+returns. `searchGenRef` drops responses from a superseded query. `searching`
+stays true until the last provider answers; `results` isn't cleared until the
+first new response lands, so old results never blank.
 
 **Nav**: `navStack` in `useMusic` — `NavView[]`, `{kind:"browse"}` is home;
 `navTo` pushes (or resets to browse), `navBack` pops, `navHome` clears. Views
@@ -110,7 +116,7 @@ widget currently uses:
 
 | Area | Commands |
 |------|----------|
-| Search | `music/search {search_query, media_types[], limit, providers[]?}` → `SearchResults`. **One blocking response, ~4 s for all providers** (radiobrowser ~15 ms, ytmusic_free ~1.2 s). No streaming/partial. |
+| Search | `music/search {search_query, media_types[], limit, providers[]?}` → `SearchResults`. `providers` takes an **instance id or a domain** (or `"library"`). One call blocks until that provider answers (radiobrowser ~0.5 s, ytmusic_free ~1–3 s cold, instant warm). The widget fans out one call **per enabled provider + `"library"`** in parallel and merges results as each returns (B1); `limit` is per-type-per-provider. |
 | Browse | `music/browse {path}` — root → provider folders → Artists/Albums/Tracks/Playlists |
 | Recently played | `music/recently_played_items {limit, media_types[]?}` → `ItemMapping[]` |
 | Queue read | `player_queues/get {queue_id}` (→ `PlayerQueue`: `flow_mode`, `repeat_mode`, `shuffle_enabled`, `current_index`, `elapsed_time`, `current_item`), `player_queues/items {queue_id, limit, offset}` |
@@ -143,7 +149,6 @@ widget currently uses:
 
 ## Known rough edges (see backlog-music.md for the fixes)
 
-- Search is one 4 s blocking call; old results linger, no loading state (B1/B2).
 - `⋯` menu hides actions the owner wants inline on the row (C1); now-playing
   lacks the row action set (C2).
 - Track-info panel shows a fraction of the available metadata; nothing

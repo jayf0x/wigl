@@ -34,41 +34,6 @@ history, browse, keyboard). This is the list for the next round of refinement.
 
 ---
 
-## Group B — Search UX · `[researched]`
-
-`music/search` is **one blocking response, ~4 s** for all providers
-(radiobrowser ~15 ms, ytmusic_free ~1.2 s, `builtin` is the slow one). It does
-not stream partials. Old results stay on screen with no loading signal; a
-re-search (debounce re-fire) silently swaps them and jumps the scroll.
-Touches `useMusic.ts` (`search`), `Browser.tsx`, `SearchFilters.tsx`.
-
-### B1 — Per-provider parallel search + progressive merge
-
-Instead of one `music/search` with no `providers` filter, fire one call **per
-enabled provider in parallel** (`providers:[id]`) and merge results as each
-returns. RadioBrowser fills in ~15 ms, YouTube ~1.2 s — the user sees
-*something* almost immediately instead of a 4 s blank. Merge into the existing
-`SearchResults` grouped shape, tagging each item's origin. Cancel in-flight
-calls when the query changes (track an abort generation). Verify the
-per-provider timings still hold and that `builtin` alone isn't also slow.
-
-### B2 — Loading state + result stability
-
-While any provider call is in flight: show a thin skeleton/placeholder block
-at the **top** of the results (owner's suggestion), keep the previous results
-rendered underneath (don't blank), and don't reset scroll. When all
-providers have answered (or errored), swap in the final set. A per-provider
-"still loading YouTube…" line is fine. Independent of B1 but lands cleanest
-with it.
-
-### B3 — Result cap
-
-Search currently asks `limit: 10` per media type. Confirm that's the intent
-(the owner asked "do search results have a cap?"). Decide: keep 10, raise
-with a "show more" affordance per group, or make it a setting. Small.
-
----
-
 ## Group C — Row actions & now-playing parity · `[researched + design]`
 
 Touches `Row.tsx`, `NowPlaying.tsx`, `useMusic.ts`. The `⋯` menu was M0's

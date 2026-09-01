@@ -156,6 +156,11 @@ export const useMusic = (): MusicApi => {
   nowRef.current = now;
   const upNextRef = useRef<QueueItem[]>([]);
   upNextRef.current = upNext;
+  const providersRef = useRef<string[]>([]);
+  providersRef.current = providers;
+  // Bumped on every new search() call; a slow provider response for an older
+  // generation is dropped instead of overwriting fresher results.
+  const searchGenRef = useRef(0);
   // action → timeout handle for the not-yet-confirmed transport commands.
   const pendingRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   // After a local seek the SDK's live position lags ~1s (server rebuffer);
@@ -409,33 +414,60 @@ export const useMusic = (): MusicApi => {
     client.command(command, { queue_id, ...args }).catch((e) => console.warn(`[music] ${command}`, e));
   }, []);
 
+  /** Per-provider parallel search with progressive merge (backlog B1/B2).
+   * RadioBrowser fills in ~0.5 s, YouTube ~1–3 s — the user sees results as
+   * each provider answers instead of one 4 s blank. Previous results stay on
+   * screen until the first new response lands; a re-search cancels stale
+   * in-flight responses via the generation counter. */
   const search = useCallback(
     (query: string, opts?: { mediaTypes?: string[]; providers?: string[] }) => {
       const client = clientRef.current;
-      if (!client || !query.trim()) {
+      const q = query.trim();
+      if (!client || !q) {
+        searchGenRef.current += 1;
         setResults(null);
+        setSearching(false);
         return;
       }
+      const gen = ++searchGenRef.current;
       const types = opts?.mediaTypes?.length ? opts.mediaTypes : [...SEARCH_MEDIA_TYPES];
-      const provs = opts?.providers?.length
+      const explicit = opts?.providers?.length
         ? opts.providers
         : providerFilter
           ? [providerFilter]
-          : undefined;
+          : null;
+      // Fan out over each enabled provider + the library; fall back to one
+      // all-provider call if the provider list hasn't loaded yet.
+      const targets: (string | null)[] =
+        explicit ?? (providersRef.current.length ? [...providersRef.current, "library"] : [null]);
+
       setSearching(true);
-      client
-        .command<SearchResults>("music/search", {
-          search_query: query.trim(),
-          media_types: types,
-          limit: SEARCH_LIMIT,
-          ...(provs ? { providers: provs } : {}),
-        })
-        .then((r) => setResults({ ...EMPTY_RESULTS, ...r }))
-        .catch((e) => {
-          console.warn("[music] search", e);
-          setError("Search failed.");
-        })
-        .finally(() => setSearching(false));
+      const acc: SearchResults = { ...EMPTY_RESULTS };
+      let remaining = targets.length;
+
+      for (const p of targets) {
+        client
+          .command<SearchResults>("music/search", {
+            search_query: q,
+            media_types: types,
+            limit: SEARCH_LIMIT,
+            ...(p ? { providers: [p] } : {}),
+          })
+          .then((r) => {
+            if (searchGenRef.current !== gen || !r) return;
+            for (const key of Object.keys(acc) as (keyof SearchResults)[]) {
+              const seen = new Set(acc[key].map((i) => i.uri));
+              acc[key] = [...acc[key], ...(r[key] ?? []).filter((i) => i.uri && !seen.has(i.uri))];
+            }
+            setResults({ ...acc });
+          })
+          .catch((e) => console.warn("[music] search", p, e))
+          .finally(() => {
+            if (searchGenRef.current !== gen) return;
+            remaining -= 1;
+            if (remaining <= 0) setSearching(false);
+          });
+      }
     },
     [providerFilter],
   );

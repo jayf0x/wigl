@@ -35,7 +35,11 @@ export const KEYS = {
 /** Media types the search box asks MA for, in display order. */
 export const SEARCH_MEDIA_TYPES = ["radio", "artist", "album", "track", "playlist"] as const;
 
-export const SEARCH_LIMIT = 8;
+/** `music/search` result cap, per media type **per provider** (the widget
+ * fans out one call per enabled provider — see `useMusic.ts` `search`). No
+ * "show more" affordance by design: the filter pills are how you narrow a
+ * result set in a compact tile, not pagination. */
+export const SEARCH_LIMIT = 10;
 
 /** Sendspin codec: raw PCM only. Opus needs a WebCodecs `AudioDecoder` (absent
  * in WKWebView) or the WASM `opus-encdec` fallback (flaky to load in the Tauri

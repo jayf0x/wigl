@@ -19,6 +19,16 @@ const GROUPS: { key: keyof SearchResults; label: string }[] = [
   { key: "playlists", label: "Playlists" },
 ];
 
+/** Thin placeholder strip shown at the top of the results while any provider
+ * search is still in flight — previous results stay rendered underneath. */
+const SearchSkeleton = () => (
+  <div className="mb-2 flex items-center gap-2 px-2 py-1.5 text-[10px] text-muted-foreground/70">
+    <LoaderCircle className="size-3 animate-spin" />
+    <span className="music-tag">searching…</span>
+    <span className="h-px flex-1 animate-pulse bg-border" />
+  </div>
+);
+
 const crumb = (nav: NavView): string => {
   if (nav.kind === "artist") return nav.item.name || "Artist";
   if (nav.kind === "album") return nav.item.name || "Album";
@@ -182,14 +192,16 @@ export const Browser = ({
 
       {nav.kind !== "browse" ? (
         <DetailView api={api} />
-      ) : results ? (
+      ) : results || api.searching ? (
         <ScrollArea className="min-h-0 flex-1" scrollFade>
           <div className="p-1.5">
-            {total === 0 ? (
+            {api.searching && <SearchSkeleton />}
+            {results && total === 0 && !api.searching ? (
               <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">
                 Nothing found for “{q.trim()}”.
               </p>
             ) : (
+              results &&
               GROUPS.filter((g) => results[g.key].length > 0).map((g) => (
                 <section key={g.key} className="mb-1.5">
                   <p className="music-tag px-2 pt-2 pb-1 text-muted-foreground/70">{g.label}</p>

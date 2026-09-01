@@ -326,6 +326,33 @@ describe("music widget ↔ Music Assistant (live)", () => {
     }
   });
 
+  // B1 parallel search: the widget fans out one music/search per enabled
+  // provider, passing its **instance id** (not just a domain) in `providers`.
+  // Assert MA accepts an instance id and scopes the result to that provider.
+  test.skipIf(!reachable)("music/search accepts a provider instance id and scopes to it", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const provs = await client.command<{ instance_id: string; domain: string; type: string; enabled: boolean }[]>(
+        "config/providers",
+      );
+      const rb = (provs ?? []).find((p) => p.type === "music" && p.enabled && p.domain === "radiobrowser");
+      if (!rb) return; // radiobrowser not configured on this box
+
+      const r = await client.command<SearchResults>("music/search", {
+        search_query: "jazz",
+        media_types: ["radio", "track"],
+        limit: 5,
+        providers: [rb.instance_id],
+      });
+      expect(Array.isArray(r.radio)).toBe(true);
+      // radiobrowser only surfaces radio — every result uri must be its own
+      for (const it of [...r.radio, ...r.tracks]) expect(it.uri.startsWith("radiobrowser://")).toBe(true);
+    } finally {
+      client.close();
+    }
+  });
+
   // P4/P5 playlists: create → add → read positions → remove → delete round-trip.
   test.skipIf(!reachable)("playlist create / add / read / remove / delete round-trips", async () => {
     const client = new MaClient(endpoint, () => {});
