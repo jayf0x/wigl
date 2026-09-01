@@ -31,7 +31,7 @@ export interface MediaItem {
   version?: string;
   /** artists[] on tracks/albums, populated by MA */
   artists?: MediaArtistRef[];
-  album?: (MediaArtistRef & { name: string }) | null;
+  album?: (MediaArtistRef & { name: string; year?: number }) | null;
   duration?: number;
   year?: number;
   favorite?: boolean;

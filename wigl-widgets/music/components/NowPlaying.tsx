@@ -1,6 +1,7 @@
 import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import {
   Disc3,
+  Info,
   Pause,
   Play,
   Radio,
@@ -13,9 +14,90 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
+import { useStorage } from "@/wigl/hooks";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/wigl/utils";
 import type { MusicApi } from "../useMusic";
+
+const providerLabel = (id?: string | null) => {
+  if (!id) return null;
+  const base = id.split("--")[0];
+  return (
+    { ytmusic_free: "YouTube Music", ytmusic: "YouTube Music", radiobrowser: "RadioBrowser", builtin: "Music Assistant" }[
+      base
+    ] ?? base
+  );
+};
+
+/** P3 — fold-down "what am I hearing" panel. Reads the live stream details off
+ * the current queue item; open state persisted. No lyrics, no visualiser —
+ * facts about the current track only. */
+const TrackInfo = ({ api }: { api: MusicApi }) => {
+  const it = api.currentItem;
+  const media = it?.media_item ?? null;
+  const sd = it?.streamdetails ?? null;
+  const af = sd?.audio_format ?? null;
+  const rows: [string, React.ReactNode][] = [];
+
+  const source = providerLabel(sd?.provider ?? media?.provider);
+  if (source) rows.push(["Source", source]);
+  if (af?.codec_type || af?.content_type) {
+    const parts = [
+      (af.codec_type ?? af.content_type ?? "").toUpperCase(),
+      af.sample_rate ? `${(af.sample_rate / 1000).toFixed(1).replace(/\.0$/, "")} kHz` : null,
+      af.bit_depth ? `${af.bit_depth}-bit` : null,
+      af.bit_rate ? `${Math.round(af.bit_rate)} kbps` : null,
+    ].filter(Boolean);
+    rows.push(["Format", parts.join(" · ")]);
+  }
+  if (media?.album?.name) {
+    rows.push([
+      "Album",
+      media.album.uri || media.album.item_id ? (
+        <button
+          type="button"
+          data-no-drag
+          className="truncate text-left hover:text-foreground hover:underline"
+          onClick={() =>
+            media.album &&
+            api.navTo({
+              kind: "album",
+              item: {
+                item_id: media.album.item_id ?? "",
+                provider: media.album.provider ?? media.provider,
+                name: media.album.name,
+                uri: media.album.uri ?? "",
+                media_type: "album",
+              },
+            })
+          }
+        >
+          {media.album.name}
+        </button>
+      ) : (
+        media.album.name
+      ),
+    ]);
+  }
+  const year = media?.year ?? media?.album?.year;
+  if (year) rows.push(["Year", String(year)]);
+  if (sd?.loudness != null) rows.push(["Loudness", `${sd.loudness.toFixed(1)} LUFS`]);
+  if (media?.metadata?.genres?.length) rows.push(["Genre", media.metadata.genres.slice(0, 3).join(", ")]);
+
+  if (rows.length === 0)
+    return <p className="px-1 py-2 text-[10px] text-muted-foreground">No track details available.</p>;
+
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 px-1 py-1 text-[10px]">
+      {rows.map(([k, v]) => (
+        <div key={k} className="contents">
+          <dt className="music-tag text-muted-foreground/70">{k}</dt>
+          <dd className="min-w-0 truncate text-foreground/90">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+};
 
 const fmt = (s: number) => {
   if (!s || s < 0 || !Number.isFinite(s)) return "0:00";
@@ -198,6 +280,7 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
   const media = api.currentItem?.media_item ?? null;
   const artist = media?.artists?.[0];
   const album = media?.album ?? null;
+  const [infoOpen, setInfoOpen] = useStorage<boolean>("info_open", false);
 
   return (
     <div className="flex flex-col gap-3 border-border border-b p-3">
@@ -300,9 +383,22 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
           >
             {repeatMode === "one" ? <Repeat1 className="size-3.5" /> : <Repeat className="size-3.5" />}
           </IconBtn>
+          <IconBtn
+            label={infoOpen ? "Hide track details" : "Track details"}
+            active={infoOpen}
+            onClick={() => setInfoOpen(!infoOpen)}
+          >
+            <Info className="size-3.5" />
+          </IconBtn>
           <VolumeControl api={api} />
         </div>
       </div>
+
+      {infoOpen && (
+        <div className="border-border border-t pt-1.5">
+          <TrackInfo api={api} />
+        </div>
+      )}
     </div>
   );
 };

@@ -126,6 +126,8 @@ export const useMusic = (): MusicApi => {
   const clientRef = useRef<MaClient | null>(null);
   const sendspinRef = useRef<SendspinHandle | null>(null);
   const queueIdRef = useRef<string | null>(null);
+  const nowRef = useRef<NowPlaying | null>(null);
+  nowRef.current = now;
   const httpBase = `http://${host}:${port}`;
 
   const nav = navStack[navStack.length - 1] ?? { kind: "browse" };
@@ -363,10 +365,16 @@ export const useMusic = (): MusicApi => {
     [cmd],
   );
 
-  const seek = useCallback((seconds: number) => {
-    cmd("player_queues/seek", { position: Math.max(0, Math.round(seconds)) });
-    setNow((n) => (n ? { ...n, elapsed: Math.max(0, Math.round(seconds)) } : n));
-  }, [cmd]);
+  const seek = useCallback(
+    (seconds: number) => {
+      const n = nowRef.current;
+      if (!n || n.isRadio) return; // nothing to seek in / a live stream (MA 500s on idle)
+      const pos = Math.max(0, Math.round(seconds));
+      cmd("player_queues/seek", { position: pos });
+      setNow((cur) => (cur ? { ...cur, elapsed: pos } : cur));
+    },
+    [cmd],
+  );
 
   const cycleRepeat = useCallback(() => {
     const nextMode = REPEAT_CYCLE[(REPEAT_CYCLE.indexOf(repeatMode) + 1) % REPEAT_CYCLE.length];

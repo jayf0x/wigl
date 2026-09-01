@@ -151,20 +151,6 @@ those the same way; only add `useSql: true` if a specific read turns out slow
 
 ---
 
-## P — Playback controls
-
-### P3 — Expandable "more info" panel
-
-An info icon on the now-playing bar that folds down a compact panel, collapsed
-by default, `useStorage`-persisted. Content, smallest useful set:
-`QueueItem.streamdetails` (codec, sample rate, bit rate, loudness — live on the
-current item), `Track.metadata` (genre, description, external links),
-`Album.year`, the source provider. One next step: add a `music/tracks/get` (or
-reuse the queue item's `streamdetails`) read behind `useQuery`, render a
-key/value list. Independent of the seek scrubber.
-
----
-
 ## Q — Queue & playlists
 
 ### Q2 — Queue reorder: drag + move-to-top/bottom

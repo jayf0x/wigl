@@ -241,16 +241,43 @@ describe("music widget ↔ Music Assistant (live)", () => {
 
       await client.command("player_queues/repeat", {
         queue_id: q.queue_id,
-        repeat_mode: q.repeat_mode,
+        repeat_mode: q.repeat_mode === "unknown" ? "off" : q.repeat_mode,
       });
       await client.command("player_queues/shuffle", {
         queue_id: q.queue_id,
         shuffle_enabled: q.shuffle_enabled,
       });
-      await client.command("player_queues/seek", {
-        queue_id: q.queue_id,
-        position: Math.max(0, Math.round(q.elapsed_time ?? 0)),
-      });
+      // seek only makes sense with something playing — MA 500s on an idle queue
+      if (q.state === "playing" && q.current_item) {
+        await client.command("player_queues/seek", {
+          queue_id: q.queue_id,
+          position: Math.max(0, Math.round(q.elapsed_time ?? 0)),
+        });
+      }
+    } finally {
+      client.close();
+    }
+  });
+
+  // P3 info panel reads streamdetails.audio_format off the current queue item.
+  test.skipIf(!reachable)("queue items carry the streamdetails shape the info panel reads", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const queues = await client.command<PlayerQueue[]>("player_queues/all");
+      const withItems = (queues ?? []).find((q) => q.items > 0);
+      if (!withItems) return;
+      const items = await client.command<
+        { streamdetails?: { audio_format?: Record<string, unknown>; provider?: string } | null }[]
+      >("player_queues/items", { queue_id: withItems.queue_id, limit: 1 });
+      const sd = items[0]?.streamdetails;
+      if (!sd) return; // not started playing yet — no stream negotiated
+      expect(typeof sd.provider === "string" || sd.provider === undefined).toBe(true);
+      if (sd.audio_format) {
+        // the keys TrackInfo formats — any subset may be absent, but the
+        // container must be an object, not a renamed field
+        expect(typeof sd.audio_format).toBe("object");
+      }
     } finally {
       client.close();
     }
