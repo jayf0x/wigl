@@ -40,10 +40,17 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
   — no `window.WebSocket` patching (shared realm). `player.clientId` **is**
   the MA `player_id`; MA auto-makes a queue with the same id.
 - **Audio**: `codecs:["pcm"]` (WKWebView has no usable opus/flac decoder).
-  `SENDSPIN_OUTPUT` in `music.config.ts` — `"direct"` (default; AudioContext →
-  destination) or `"media-element"` (PCM → MediaStream → hidden `<audio>`;
-  needed if a future feature wants a Web Audio tap — DSP, visualiser).
-  `SENDSPIN_CODECS` also there. Login/creds default to `test`/`testtest`.
+  Output mode is now a runtime setting (`KEYS.audioOutput`, seeded from
+  `SENDSPIN_OUTPUT` in `music.config.ts`): `"direct"` (default; AudioContext →
+  destination, lowest latency) or `"media-element"` (PCM → MediaStream →
+  hidden `<audio>`). **The Effects tab (G1: 3-band EQ + reverb + echo) needs
+  `"media-element"`** — that's the only mode with an `<audio>` element to tap
+  via `createMediaElementSource`. Switching the mode reconnects the player.
+  `audioGraph.ts` owns the Web Audio chain; `useMusic` owns its lifecycle
+  (created on connect if `audio.audioElement` exists, disposed on teardown).
+  **No playback-speed control** — a MediaStream ignores `playbackRate`; real
+  time-stretch needs a phase-vocoder AudioWorklet (parked, backlog G1).
+  `SENDSPIN_CODECS` also in config. Login/creds default to `test`/`testtest`.
 
 ## Files
 
@@ -68,7 +75,9 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | `components/Row.tsx` | The universal media row + `RowAction`. Exports `standardActions` (Play now / Play next / Add to queue / Favourite / Add-to-playlist / Merge-into (playlist rows) / Start radio / Go to artist·album), `RowActionButtons` (inline icon shortcuts for Add-to-queue / Play-next / Favourite, container-query gated via `.music-row-inline`, + the `⋯` toggle) and `RowActionPanel` (the fold-down pill menu with submenu + inline-input support) — the last two reused by `NowPlaying`. Every list uses `Row`. |
 | `components/SearchFilters.tsx` | Media-type + provider filter pills. |
 | `components/BrowseTab.tsx` | `music/browse` folder navigator with its own path stack. Root level has a "＋ add a music source" footer → opens the MA web UI (F2). |
-| `components/Equalizer.tsx` | Decorative VU bars (NOT audio DSP). Minimized-tile background + empty states. |
+| `components/EffectsTab.tsx` | G1 — the Effects Home tab. 3-band EQ + reverb + echo sliders on `api.fx`/`api.setFx`. When `!api.fxAvailable` (direct output), shows an "Enable audio effects" prompt that flips `api.setAudioOutput("media-element")`. |
+| `audioGraph.ts` | The Web Audio chain (`attachAudioFx(el)` → EQ → dry+convolver-reverb+delay-echo → destination) + `FxState` / `DEFAULT_FX` / `fxIsFlat`. Reverb IR is synthesised noise (no asset). Runs once per `<audio>` element (createMediaElementSource is one-shot). |
+| `components/Equalizer.tsx` | Decorative VU bars (NOT audio DSP — that's `audioGraph.ts`). Minimized-tile background + empty states. |
 | `tests/music.e2e.test.ts` | 15 live drift-regression tests vs `wigl-ma` (skip when down). |
 | `tests/audio-check.md` | By-ear checklist for the DAC hop. |
 | `COMPARISON.md` | M0: five real players vs this widget, capability table. |
@@ -150,8 +159,12 @@ widget currently uses:
   stack. Free YouTube via `sproft/ytmusic-free-provider`, not MA's paid one.
 - **Scope: a music player, nothing more.** Owner: "I really just want a music
   player to replace listening to YouTube via an app." No lyrics, no visualiser,
-  no library management beyond playlists + favourites. (Audio effects — EQ /
-  speed / reverb — are a *separate open question*, backlog group G, not a no.)
+  no library management beyond playlists + favourites. **Audio effects (EQ /
+  reverb / echo) are in** — the Effects tab, `media-element` output. **Speed
+  is out** (MediaStream ignores `playbackRate`; needs an AudioWorklet).
+- **No native audio path.** `codecs:["pcm"]` over localhost is already lossless
+  from MA; a Tauri audio plugin on `:8097` would only cost the Web Audio tap
+  and a Rust dependency. Sendspin stays the audio transport.
 - **Responsive at any size.** Every view lays out small→large; nothing assumes
   the 7×11 default.
 - Monochrome (ink-on-paper). Theme tokens only, no hardcoded colours.

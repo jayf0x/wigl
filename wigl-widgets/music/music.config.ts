@@ -37,6 +37,12 @@ export const KEYS = {
   /** F1: library-playlist item_ids the user pinned to the quick-access strip
    * above the Home tabs. */
   pinnedPlaylists: "pinned_playlists",
+  /** G1: Sendspin output mode — `"direct"` or `"media-element"`. The FX tab
+   * (EQ / reverb / echo) needs `"media-element"` so the widget has an
+   * `<audio>` element to tap with Web Audio. Seeded from `SENDSPIN_OUTPUT`. */
+  audioOutput: "audio_output",
+  /** G1: FX chain settings (`FxState` JSON). */
+  fx: "fx",
 } as const;
 
 /** Media types the search box asks MA for, in display order. */

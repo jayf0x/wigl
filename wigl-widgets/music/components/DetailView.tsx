@@ -59,7 +59,7 @@ const Header = ({
     )}
     <div className="relative grid size-16 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-background text-muted-foreground/30">
       {art ? (
-        <img src={art} alt="" className="size-full object-cover" draggable={false} />
+        <img src={art} alt="" loading="lazy" decoding="async" fetchPriority="low" className="size-full object-cover" draggable={false} />
       ) : item.media_type === "artist" ? (
         <User className="size-6" />
       ) : (

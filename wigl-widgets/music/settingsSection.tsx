@@ -8,6 +8,7 @@ import {
   MA_CONTAINER,
   MA_HOST,
   MA_PORT,
+  SENDSPIN_OUTPUT,
 } from "./music.config";
 
 const Field = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => (
@@ -27,6 +28,10 @@ const MusicSettings = () => {
   const [password, setPassword] = useStorage<string>(KEYS.password, DEFAULT_PASSWORD);
   const [providerFilter, setProviderFilter] = useStorage<string>(KEYS.providerFilter, "");
   const [manageServer, setManageServer] = useStorage<boolean>(KEYS.manageServer, false);
+  const [audioOutput, setAudioOutput] = useStorage<"direct" | "media-element">(
+    KEYS.audioOutput,
+    SENDSPIN_OUTPUT,
+  );
 
   return (
     <div className="flex flex-col divide-y divide-border">
@@ -78,6 +83,15 @@ const MusicSettings = () => {
       >
         <Switch checked={manageServer} onCheckedChange={setManageServer} />
       </Field>
+      <Field
+        label="Audio effects"
+        hint="Routes audio through an <audio> element so the Effects tab (EQ / reverb / echo) works. Reconnects the player. Off = lowest-latency direct output."
+      >
+        <Switch
+          checked={audioOutput === "media-element"}
+          onCheckedChange={(on) => setAudioOutput(on ? "media-element" : "direct")}
+        />
+      </Field>
     </div>
   );
 };
@@ -92,6 +106,7 @@ const settingsSection: SettingSection = {
     { id: "music-password", label: "Password", keywords: ["login", "auth"] },
     { id: "music-provider", label: "Search provider", keywords: ["radiobrowser", "youtube", "ytmusic", "filter"] },
     { id: "music-manage", label: "Auto-start server", keywords: ["docker", "container"] },
+    { id: "music-fx", label: "Audio effects", keywords: ["eq", "equalizer", "reverb", "echo", "dsp"] },
   ],
   render: () => <MusicSettings />,
 };

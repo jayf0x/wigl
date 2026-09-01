@@ -394,7 +394,7 @@ export const Row = ({
           ) : (
             <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded border border-border bg-background text-muted-foreground/30">
               {art ? (
-                <img src={art} alt="" className="size-full object-cover" draggable={false} />
+                <img src={art} alt="" loading="lazy" decoding="async" fetchPriority="low" className="size-full object-cover" draggable={false} />
               ) : (
                 iconFor(item.media_type)
               )}

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Compass, History, ListMusic, Plus } from "lucide-react";
+import { Compass, History, ListMusic, Plus, SlidersHorizontal } from "lucide-react";
 import { useStorage } from "@/wigl/hooks";
 import { cn } from "@/wigl/utils";
+import { fxIsFlat } from "../audioGraph";
 import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
 import { BrowseTab } from "./BrowseTab";
+import { EffectsTab } from "./EffectsTab";
 import { QueueList } from "./QueueList";
 import { Row } from "./Row";
 
@@ -30,7 +32,7 @@ const PinnedStrip = ({ api }: { api: MusicApi }) => {
           >
             <span className="grid size-5 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-background text-muted-foreground/40">
               {art ? (
-                <img src={art} alt="" className="size-full object-cover" draggable={false} />
+                <img src={art} alt="" loading="lazy" decoding="async" fetchPriority="low" className="size-full object-cover" draggable={false} />
               ) : (
                 <ListMusic className="size-2.5" />
               )}
@@ -43,13 +45,14 @@ const PinnedStrip = ({ api }: { api: MusicApi }) => {
   );
 };
 
-type HomeTab = "queue" | "playlists" | "recent" | "browse";
+type HomeTab = "queue" | "playlists" | "recent" | "browse" | "fx";
 
 const TABS: { id: HomeTab; label: string }[] = [
   { id: "queue", label: "Up next" },
   { id: "playlists", label: "Playlists" },
   { id: "recent", label: "Recent" },
   { id: "browse", label: "Browse" },
+  { id: "fx", label: "Effects" },
 ];
 
 const RecentTab = ({ api }: { api: MusicApi }) => {
@@ -142,7 +145,8 @@ const PlaylistsTab = ({ api }: { api: MusicApi }) => {
 export const Home = ({ api }: { api: MusicApi }) => {
   const [tab, setTab] = useStorage<HomeTab>("home_tab", "queue");
 
-  const ICON = { playlists: ListMusic, recent: History, browse: Compass } as const;
+  const ICON = { playlists: ListMusic, recent: History, browse: Compass, fx: SlidersHorizontal } as const;
+  const fxOn = api.fxAvailable && !fxIsFlat(api.fx);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -165,6 +169,7 @@ export const Home = ({ api }: { api: MusicApi }) => {
             >
               {Icon && <Icon className="mr-1 inline size-3 -translate-y-px" />}
               {t.label}
+              {t.id === "fx" && fxOn && <span className="ml-1 inline-block size-1 rounded-full bg-foreground align-middle" />}
             </button>
           );
         })}
@@ -177,6 +182,8 @@ export const Home = ({ api }: { api: MusicApi }) => {
             <QueueList api={api} />
           ) : tab === "playlists" ? (
             <PlaylistsTab api={api} />
+          ) : tab === "fx" ? (
+            <EffectsTab api={api} />
           ) : (
             <RecentTab api={api} />
           )}

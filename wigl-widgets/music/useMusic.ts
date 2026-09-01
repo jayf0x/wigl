@@ -21,7 +21,9 @@ import {
   RECONNECT_MIN_MS,
   SEARCH_LIMIT,
   SEARCH_MEDIA_TYPES,
+  SENDSPIN_OUTPUT,
 } from "./music.config";
+import { type AudioFx, attachAudioFx, DEFAULT_FX, type FxState } from "./audioGraph";
 import { connectSendspin, type SendspinHandle } from "./sendspin";
 import { maReachable, startMaContainer } from "./serverProcess";
 import type {
@@ -134,6 +136,14 @@ export interface MusicApi {
   deletePlaylist: (playlist: MediaItem) => void;
   addToPlaylist: (playlistId: string, uris: string[]) => Promise<void>;
   removePlaylistTrack: (playlistId: string, position: number) => Promise<void>;
+  /** G1 — audio effects (EQ / reverb / echo). `fxAvailable` is false in
+   * `"direct"` output mode (no `<audio>` to tap); the Effects tab then offers
+   * a switch. Changing `audioOutput` reconnects the player. */
+  fx: FxState;
+  setFx: (fx: FxState) => void;
+  fxAvailable: boolean;
+  audioOutput: "direct" | "media-element";
+  setAudioOutput: (mode: "direct" | "media-element") => void;
   /** Open the Music Assistant web UI (to add a provider like YouTube Music). */
   openServer: () => void;
   imageUrl: (img?: MediaImage | null) => string | null;
@@ -151,6 +161,11 @@ export const useMusic = (): MusicApi => {
   const [manageServer] = useStorage<boolean>(KEYS.manageServer, false);
   const [queueMode, setQueueMode] = useStorage<QueueMode>(KEYS.queueMode, "append");
   const [pinnedPlaylists, setPinnedPlaylists] = useStorage<string[]>(KEYS.pinnedPlaylists, []);
+  const [audioOutput, setAudioOutput] = useStorage<"direct" | "media-element">(
+    KEYS.audioOutput,
+    SENDSPIN_OUTPUT,
+  );
+  const [fx, setFxStored] = useStorage<FxState>(KEYS.fx, DEFAULT_FX);
 
   const [state, setState] = useState<ConnState>("connecting");
   const [error, setError] = useState<string | null>(null);
@@ -189,6 +204,10 @@ export const useMusic = (): MusicApi => {
   const seekFreezeRef = useRef<{ until: number; pos: number }>({ until: 0, pos: 0 });
   // Ignore SDK volume echoes right after a local drag so the slider never snaps.
   const volumeSetAtRef = useRef(0);
+  // G1 — the Web Audio FX graph, alive for the connection lifetime.
+  const fxRef = useRef<AudioFx | null>(null);
+  const fxValRef = useRef<FxState>(fx);
+  fxValRef.current = fx;
   const httpBase = `http://${host}:${port}`;
 
   const nav = navStack[navStack.length - 1] ?? { kind: "browse" };
@@ -319,6 +338,8 @@ export const useMusic = (): MusicApi => {
     };
 
     const teardown = () => {
+      fxRef.current?.dispose();
+      fxRef.current = null;
       sendspinRef.current?.disconnect();
       sendspinRef.current = null;
       clientRef.current?.close();
@@ -355,6 +376,7 @@ export const useMusic = (): MusicApi => {
           port,
           token: client.authToken,
           clientName: "wigl",
+          output: audioOutput,
           pair: (t) => client.command("sendspin/pair_web_player", { pairing_token: t }),
           onState: (s) => {
             if (Date.now() - volumeSetAtRef.current > 600) setVolumeState(s.volume);
@@ -369,6 +391,18 @@ export const useMusic = (): MusicApi => {
         if (cancelled) return audio.disconnect();
         sendspinRef.current = audio;
         queueIdRef.current = audio.playerId;
+
+        // G1 — in media-element mode we have an <audio> to tap. Route it
+        // through the Web Audio FX chain (EQ / reverb / echo). `direct` mode
+        // has no element, so the FX tab stays disabled.
+        if (audio.audioElement) {
+          try {
+            fxRef.current = attachAudioFx(audio.audioElement);
+            fxRef.current.apply(fxValRef.current);
+          } catch (e) {
+            console.warn("[music] audio FX unavailable", e);
+          }
+        }
 
         client.onEvent((ev) => {
           if (ev.object_id && ev.object_id !== audio.playerId) return;
@@ -417,7 +451,7 @@ export const useMusic = (): MusicApi => {
     };
   }, [
     host, port, username, password, manageServer, httpBase, attempt, refreshQueue, refreshPlaylists,
-    refreshRecent, clearAllPending,
+    refreshRecent, clearAllPending, audioOutput,
   ]);
 
   // ── backstop poll for missed events ─────────────────────────────────────
@@ -426,6 +460,15 @@ export const useMusic = (): MusicApi => {
     const id = setInterval(() => void refreshQueue(), QUEUE_POLL_MS);
     return () => clearInterval(id);
   }, [state, refreshQueue]);
+
+  // ── G1 — push FX changes onto the live graph ───────────────────────────
+  const setFx = useCallback(
+    (next: FxState) => {
+      setFxStored(next);
+      fxRef.current?.apply(next);
+    },
+    [setFxStored],
+  );
 
   // ── actions ────────────────────────────────────────────────────────────
   const cmd = useCallback((command: string, args: Record<string, unknown> = {}) => {
@@ -852,8 +895,16 @@ export const useMusic = (): MusicApi => {
       deletePlaylist,
       addToPlaylist,
       removePlaylistTrack,
+      fx,
+      setFx,
+      fxAvailable: audioOutput === "media-element",
+      audioOutput,
+      setAudioOutput,
       setVolume,
-      unlock: () => void sendspinRef.current?.unlock().catch(() => {}),
+      unlock: () => {
+        sendspinRef.current?.unlock().catch(() => {});
+        fxRef.current?.resume();
+      },
       getProgress: () => {
         const f = seekFreezeRef.current;
         if (Date.now() < f.until) {
@@ -876,6 +927,7 @@ export const useMusic = (): MusicApi => {
       seek, removeFromQueue, moveQueueItem, moveQueueItemToEnd, cycleRepeat, toggleShuffle,
       toggleFavorite, refreshPlaylists, refreshRecent, createPlaylist, saveQueueAsPlaylist,
       renamePlaylist, mergePlaylist, deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume,
+      fx, setFx, audioOutput, setAudioOutput,
       openServer, imageUrl, request, cmd,
     ],
   );

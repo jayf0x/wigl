@@ -110,56 +110,33 @@ already inside `/data`.
 
 ---
 
-## Group G — Audio engine · `[needs research]` (not session-dependent)
+## Audio engine — done / parked
 
-### G1 — Audio effects tab: reverb / speed / EQ
+- **G1 audio-effects tab — DONE.** `audioGraph.ts` + `EffectsTab.tsx`: 3-band
+  EQ + synth-IR reverb + feedback echo, live on `api.fx`. Needs `media-element`
+  output (only mode with an `<audio>` to `createMediaElementSource`) — the tab
+  prompts a one-tap switch when on `direct`. **Playback speed was cut**: the
+  SDK feeds the element a live `MediaStream` (`srcObject`) and `playbackRate`
+  is ignored on those; real time-stretch needs a phase-vocoder AudioWorklet —
+  parked below.
+- **G2 higher-quality audio — decided, not doing.** `codecs:["pcm"]` over
+  localhost is already lossless end-to-end from MA; the ceiling is the source
+  (YouTube opus ~130-160 kbps, radio varies) and no client change fixes that.
+  A native Tauri audio plugin playing the `:8097` HTTP flow stream would
+  bypass WKWebView but kill the Web Audio tap (G1) and needs a Rust plugin +
+  capability. Not worth it barring an audible defect. (Documented in `state.md`.)
+- **G3 fetch priority — DONE (minimal).** Audio is on its own `/sendspin` WS
+  and never competed with `fetch`/`<img>` in the first place; list-thumbnail
+  `<img>`s now carry `loading="lazy" decoding="async" fetchPriority="low"`,
+  now-playing art stays normal priority. Nothing else needed.
 
-Owner wants a separate tab with reverb, playback speed, and EQ (explicitly
-*no* repeat there). Reference implementation to crib from:
-`/Users/me/Documents/GitHub/audio-bonanza` (`audio-bonanza-extension/content.js`
-— a Web Audio chain: `createMediaElementSource` → low-shelf / peaking filters
-/ `ConvolverNode` reverb / `DelayNode` → destination, with A/B presets).
-**Research needed:**
-- The chain needs a Web Audio node to tap. In `SENDSPIN_OUTPUT:"direct"` the
-  SDK owns its AudioContext and connects straight to destination — no tap. In
-  `"media-element"` mode it routes through a hidden `<audio>` — the widget can
-  `createMediaElementSource(that element)` → effect chain → destination.
-  **So G1 probably forces `media-element` mode.** Confirm the SDK exposes /
-  allows this without fighting its own gain node.
-- **Playback speed** fights Sendspin's clock sync (`correctionMode`) — the
-  protocol streams at 1× and re-syncs. Changing `<audio>.playbackRate`
-  downstream may work (with `preservesPitch`) or may cause underruns.
-  Test before promising it. If speed is infeasible with Sendspin, say so.
-- Effect state must **not** desync the A2 heuristic time display (a slowed
-  track's clock must slow too).
-- Look for cleaner options than the audio-bonanza extension code (it's a
-  content-script hack) — a small reusable Web Audio graph module.
-- Presets persisted via `useStorage`.
+### Parked — playback speed (time-stretch)
 
-### G2 — Higher-quality audio path
-
-Owner: "Investigate if there's use for a different type of audio playing. We
-could use a Tauri plugin, maybe that yields higher quality? Currently sounds
-good but double-check." Research: `codecs:["pcm"]` over localhost is already
-lossless from MA's perspective (MA transcodes the source to PCM). The ceiling
-is the *source* (YouTube opus ~130-160 kbps; radio varies). A native Tauri
-audio plugin (e.g. `rodio`-backed) could play MA's `:8097` HTTP flow stream
-directly instead of Sendspin — bypassing the WKWebView audio path entirely,
-possibly lower-latency and definitely simpler, at the cost of losing the
-in-realm `<audio>`/Web Audio tap (kills G1) and needing a Rust plugin +
-capability. Weigh it. Likely verdict: not worth it unless there's an audible
-problem, but document the tradeoff.
-
-### G3 — Fetch priority: audio first, everything else last
-
-Owner: "all things that are not the sound itself — even the metadata — should
-be fetched as lowest priority compared to the audio." Investigate whether
-this is actually a problem: audio rides its own dedicated `/sendspin`
-WebSocket, unaffected by `fetch`/`/ws` traffic. Album-art `<img>` loads and
-`music/*` calls compete only with each other. The one real lever: add
-`fetchpriority="low"` + `loading="lazy"` to art `<img>`s, and debounce/queue
-metadata reads so a burst of them can't stall a `play_media`. Probably a
-15-minute change once confirmed it matters; don't over-build.
+A pitch-preserving speed control needs a phase-vocoder / WSOLA AudioWorklet in
+`audioGraph.ts` (the `<audio>` element's `playbackRate` is inert on a
+MediaStream source). It also has to feed back into A2's clock so the displayed
+time slows with the audio. Non-trivial; revisit only if the owner asks
+specifically for speed.
 
 ---
 

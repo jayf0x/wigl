@@ -90,13 +90,16 @@ export const connectSendspin = async (opts: {
   port: number;
   token: string;
   clientName: string;
+  /** Overrides `SENDSPIN_OUTPUT` — the FX tab (G1) needs `"media-element"`. */
+  output?: "direct" | "media-element";
   pair: (pairingToken: string) => Promise<unknown>;
   onState: (s: SendspinState) => void;
   onDrop: () => void;
 }): Promise<SendspinHandle> => {
+  const output = opts.output ?? SENDSPIN_OUTPUT;
   const identity = loadSendspinClientIdentity();
   const socket = await openAuthedSocket(opts.host, opts.port, opts.token, identity.clientId);
-  const audioElement = SENDSPIN_OUTPUT === "media-element" ? makeAudioElement() : null;
+  const audioElement = output === "media-element" ? makeAudioElement() : null;
 
   const player = new SendspinPlayer({
     webSocket: socket,
