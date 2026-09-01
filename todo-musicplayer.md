@@ -20,6 +20,24 @@ for the capability table and the five reference players (cloned into
 top to bottom; the **infra section (X) comes first** because most feature
 entries hang off it — build the shared piece before its second consumer.
 
+## Design rules for every entry
+
+- **The scope is a music player, nothing more.** The owner: "I really just
+  want a music player to replace listening to YouTube via an app." No lyrics,
+  no visualiser, no EQ, no library management beyond playlists + favourites.
+  If a feature isn't something the YouTube-Music app or a normal desktop
+  player has, it's probably out.
+- **Responsive at any size — do not design to a fixed tile.** The owner:
+  "just make this widget bigger. Do not rely on defaults, make it work
+  anywhere." Every view must lay out sensibly from a small tile up to a large
+  one: art scales, lists fill available height, controls wrap or collapse,
+  nothing clips or overflows the panel. Bump the first-launch default up
+  (try `w={7} h={11}` and adjust by eye — check it doesn't collide with other
+  widgets' defaults, `wigl-widgets/*/index.tsx`), but the layout must not
+  *assume* that size. Test each view narrow and wide before committing.
+- **Views replace, they don't stack.** The nav stack (X1) swaps the main pane;
+  now-playing stays pinned. Never add a third vertical zone.
+
 ---
 
 ## Reference — the knowledge not to re-derive
@@ -77,7 +95,6 @@ not an `AnalyserNode`.
 | Playlists | `music/playlists/library_items` (list), `music/playlists/playlist_tracks {item_id, provider_instance_id_or_domain:"library"}` (read), `music/playlists/create_playlist {name}` (→ editable `library://playlist/N`), `music/playlists/add_playlist_tracks {db_playlist_id, uris[]}` (async BackgroundTask), `music/playlists/remove_playlist_tracks {db_playlist_id, positions_to_remove[]}`, `music/playlists/update {item_id, update}` (rename), `music/library/remove_item {media_type:"playlist", library_item_id}` (delete — `music/playlists/remove` 500'd in testing) |
 | Favourites | `music/favorites/add_item {item:<uri or item>}`, `music/favorites/remove_item {media_type, library_item_id}`. `Track.favorite` is on the object. |
 | Artist / album | `music/artists/get`, `music/artists/top_tracks`, `music/artists/artist_albums`, `music/artists/similar_artists {item_id, provider_instance_id_or_domain}`, `music/albums/album_tracks {item_id, provider_instance_id_or_domain}` |
-| Lyrics | `metadata/get_track_lyrics {track}` — **500s on a non-library track** (needs a fully hydrated Track). Fragile — see S3. |
 | Events to subscribe | `queue_updated`, `queue_time_updated` (bare number), `queue_items_updated`, `player_updated`. History is a poll of `recently_played_items`, not an event. |
 
 **Locked decisions — do not relitigate:**
@@ -190,15 +207,6 @@ current item), `Track.metadata` (genre, description, external links),
 reuse the queue item's `streamdetails`) read behind `useQuery`, render a
 key/value list. Independent of P2.
 
-### S3 — Lyrics (parked)
-
-`metadata/get_track_lyrics {track}` returned HTTP 500 on a track built from a
-search hit — it needs a fully hydrated library Track, and a text scroll is a
-weak use of a small tile. **Do not build this** unless P3 lands with room to
-spare and the owner asks. If revisited: fetch the full track via
-`music/tracks/get` first, show lyrics inside the P3 panel, time-sync to
-`queue_time_updated` only when LRC timestamps are present.
-
 ---
 
 ## Q — Queue & playlists
@@ -307,9 +315,12 @@ Do this last, after the list views exist to navigate.
 
 ---
 
-## Out of scope (revisit only if the owner makes the case)
+## Out of scope
 
-- **Lyrics** — parked (S3), endpoint fragile.
+- **Lyrics** — **cut by the owner.** "I dont need lyrics. Only music player…
+  I really just want a music player to replace listening to YouTube via an
+  app." Don't build it, don't re-propose it. (`metadata/get_track_lyrics` is
+  also fragile — 500s on non-library tracks.)
 - **Visualiser** — seam kept (`DecodedAudioChunk`); polish, not a gap.
 - **EQ / DSP, crossfade, gapless** — MA-side config, not widget UI.
 - **Downloading / offline** — different product.

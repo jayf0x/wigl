@@ -26,7 +26,7 @@ is what came out, and `todo-musicplayer.md` was rewritten from it.
 | Volume | have | Sendspin-local (`player.setVolume`), collapsible slider. Fine — it's this widget's own player. |
 | Now-playing art + title + artist | have | Serif title, art with radio/disc fallback. |
 | Now-playing "more info" panel | missing | `QueueItem.streamdetails` (live) has codec/sample-rate/bit-rate/loudness; `Track.metadata` has genre/description/links; `Album.year`. Smallest: an info icon that folds down a compact key/value list, collapsed by default, `useStorage`-persisted. |
-| Lyrics | cut (revisit) | `metadata/get_track_lyrics {track}` returned HTTP 500 on a constructed Track — needs a fully-hydrated library track, not a search hit. Fragile, and a scroll of text is a poor use of a small tile. Park it; revisit only if the info panel lands and there's room. |
+| Lyrics | **cut** | Owner cut it outright ("I dont need lyrics. Only music player"). Also: `metadata/get_track_lyrics {track}` 500s on non-library tracks. Not building it. |
 | Queue: view up-next | have | `player_queues/items`, sliced after current. |
 | Queue: non-destructive play | partial | Left-click currently does `option:"replace"` — wipes the queue. `QueueOption` enum is `play/replace/next/replace_next/add`. Switch default to `replace_next` (play now, keep tail), keep the existing "Clear" as the only queue-emptier. |
 | Queue: remove one item | missing | `player_queues/delete_item {queue_id, item_id_or_index}`. Per-row action. |
@@ -66,8 +66,8 @@ is what came out, and `todo-musicplayer.md` was rewritten from it.
    `media_item_played` event) is unnecessary; just read the server.
 3. **Discovery is not "recommendations"** — that endpoint is empty until the
    library has content. D2 becomes a `music/browse` folder navigator.
-4. **Lyrics is downgraded to `cut` (revisit)** — the endpoint 500s on
-   non-library tracks and a text scroll is a poor tile citizen.
+4. **Lyrics is cut** — owner's call ("only music player"), and the endpoint is
+   fragile anyway.
 5. **The row-action menu (I2) is the spine** — Q3, I1, P1, favourites and
    history all hang off one `⋯` menu component. Build it before the second
    consumer, not per-feature.
@@ -76,7 +76,7 @@ is what came out, and `todo-musicplayer.md` was rewritten from it.
 7. **Accent colour**: recommend staying monochrome. It's distinctive and the
    ink-on-paper look is working. The one place an accent could earn its keep is
    the now-playing progress fill once it's a live scrubber — optional, minor.
-8. **Tile size / layout**: five sub-views (browse, artist, album, playlist,
-   history) plus a fold-down info panel will strain a 5×7 tile. The nav stack
-   replaces panes rather than stacking them, which keeps it feasible, but the
-   owner may want to bump the default height.
+8. **Tile size / layout**: owner's call — bump the first-launch default up
+   *and* make every view responsive from small to large ("make it work
+   anywhere"), don't design to a fixed size. Nav stack replaces panes rather
+   than stacking. See `todo-musicplayer.md` → "Design rules for every entry".
