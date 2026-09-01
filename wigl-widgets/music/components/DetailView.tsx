@@ -2,6 +2,7 @@ import { useState } from "react";
 import { hours, useQuery } from "@/wigl/hooks";
 import { Disc3, LoaderCircle, Radio, Trash2, User } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/wigl/utils";
 import { PLAYLIST_RENDER_CAP } from "../music.config";
 import { pickImageDataUri } from "../pickImage";
 import { playlistDisplayImage } from "../playlistImage";
@@ -77,12 +78,24 @@ const Header = ({
   </div>
 );
 
-const PillBtn = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
+const PillBtn = ({
+  onClick,
+  children,
+  tap,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+  /** fires audio — add the click ring-pulse */
+  tap?: boolean;
+}) => (
   <button
     type="button"
     data-no-drag
     onClick={onClick}
-    className="flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+    className={cn(
+      "mx-press flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+      tap && "mx-tap",
+    )}
   >
     {children}
   </button>
@@ -93,6 +106,7 @@ const PillBtn = ({ onClick, children }: { onClick: () => void; children: React.R
 const PlayPills = ({ api, item }: { api: MusicApi; item: MediaItem }) => (
   <>
     <PillBtn
+      tap
       onClick={() => {
         api.unlock();
         api.play(item);
@@ -102,6 +116,7 @@ const PlayPills = ({ api, item }: { api: MusicApi; item: MediaItem }) => (
     </PillBtn>
     {api.queueMode !== "replace" && (
       <PillBtn
+        tap
         onClick={() => {
           api.unlock();
           api.play(item, "play");
@@ -324,7 +339,7 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
                 <button
                   type="submit"
                   data-no-drag
-                  className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="mx-press rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   save
                 </button>

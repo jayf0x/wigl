@@ -72,11 +72,12 @@ export const EffectsTab = ({ api }: { api: MusicApi }) => {
     api.setFx(next);
   };
 
-  const setBand = (i: number, v: number) => {
+  const withBand = (i: number, v: number): FxState => {
     const bands = fx.bands.slice();
     bands[i] = v;
-    move({ ...fx, bands });
+    return { ...fx, bands };
   };
+  const setBand = (i: number, v: number) => move(withBand(i, v));
 
   if (!api.fxAvailable) return <Connecting />;
 
@@ -118,7 +119,7 @@ export const EffectsTab = ({ api }: { api: MusicApi }) => {
         {BAND_HZ.map((freq, i) => (
           <VFader
             key={freq}
-            label={`${hz(freq)}Hz`}
+            label={hz(freq)}
             display={dbLabel(fx.bands[i] ?? 0)}
             value={fx.bands[i] ?? 0}
             min={EQ_MIN_DB}
@@ -127,7 +128,7 @@ export const EffectsTab = ({ api }: { api: MusicApi }) => {
             detent={0}
             marks={EQ_MARKS}
             onChange={(v) => setBand(i, v)}
-            onCommit={(v) => setBand(i, v)}
+            onCommit={(v) => commit(withBand(i, v))}
           />
         ))}
         <span className="mx-1 w-px self-stretch bg-border" />
@@ -139,7 +140,7 @@ export const EffectsTab = ({ api }: { api: MusicApi }) => {
           max={100}
           step={1}
           onChange={(v) => move({ ...fx, reverb: v / 100 })}
-          onCommit={(v) => move({ ...fx, reverb: v / 100 })}
+          onCommit={(v) => commit({ ...fx, reverb: v / 100 })}
         />
       </div>
 

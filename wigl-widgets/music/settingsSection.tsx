@@ -53,7 +53,7 @@ const OpButton = ({ label, hint, run, confirm }: { label: string; hint: string; 
         type="button"
         disabled={busy}
         onClick={go}
-        className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+        className={`mx-press shrink-0 rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent disabled:opacity-50 ${busy ? "mx-pending-long" : ""}`}
       >
         {busy ? "…" : armed ? "confirm" : "run"}
       </button>
@@ -74,7 +74,9 @@ const MusicSettings = () => {
   );
 
   return (
-    <div className="flex flex-col divide-y divide-border">
+    // `music-widget` scope so the shared .mx- motion classes reach the section
+    // inside the app's settings modal; keep the modal's own type though.
+    <div className="music-widget flex flex-col divide-y divide-border" style={{ fontFamily: "inherit" }}>
       <Field label="Server host">
         <Input
           className="h-7 w-40 text-xs"

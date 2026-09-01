@@ -25,7 +25,7 @@ const Pill = ({
     data-no-drag
     onClick={onClick}
     className={cn(
-      "rounded-full border px-2 py-0.5 text-[10px] transition-colors",
+      "mx-press rounded-full border px-2 py-0.5 text-[10px] transition-colors",
       active
         ? "border-foreground/30 bg-accent text-foreground"
         : "border-border text-muted-foreground hover:text-foreground",

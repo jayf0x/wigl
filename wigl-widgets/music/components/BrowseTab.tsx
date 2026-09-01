@@ -54,7 +54,7 @@ export const BrowseTab = ({ api }: { api: MusicApi }) => {
             data-no-drag
             aria-label="Back"
             onClick={() => setStack((s) => s.slice(0, -1))}
-            className="rounded p-0.5 hover:bg-muted hover:text-foreground"
+            className="mx-press rounded p-0.5 hover:bg-muted hover:text-foreground"
           >
             <ChevronLeft className="size-3.5" />
           </button>
@@ -66,7 +66,7 @@ export const BrowseTab = ({ api }: { api: MusicApi }) => {
               type="button"
               data-no-drag
               onClick={() => setStack((s) => s.slice(0, i + 1))}
-              className="max-w-24 truncate hover:text-foreground"
+              className="mx-press max-w-24 truncate hover:text-foreground"
             >
               {c.label}
             </button>
@@ -90,7 +90,7 @@ export const BrowseTab = ({ api }: { api: MusicApi }) => {
                 data-no-drag
                 data-music-row
                 onClick={() => open(i)}
-                className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left outline-none hover:bg-accent focus-visible:bg-accent"
+                className="mx-press flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left outline-none hover:bg-accent focus-visible:bg-accent"
               >
                 <Folder className="size-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate text-[12px] text-foreground/90">
@@ -109,7 +109,7 @@ export const BrowseTab = ({ api }: { api: MusicApi }) => {
             data-no-drag
             onClick={api.openServer}
             title="Opens Music Assistant → Settings → Music — add local files, a NAS/SMB share, or a streaming account"
-            className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="mx-press mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <span className="music-tag">＋ add a music source</span>
           </button>
