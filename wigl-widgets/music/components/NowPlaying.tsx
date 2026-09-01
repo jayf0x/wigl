@@ -21,7 +21,6 @@ import {
 import { hours, useQuery, useStorage } from "@/wigl/hooks";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/wigl/utils";
-import { PROGRESS_TICK_MS } from "../music.config";
 import type { MediaArtistRef, MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
 import { providerLabel } from "../util";
@@ -270,25 +269,52 @@ const Scrubber = ({ api }: { api: MusicApi }) => {
   const [drag, setDrag] = useState<number | null>(null); // fraction 0..1 while dragging
   const duration = now?.duration ?? 0;
 
-  // Smooth clock (A2): sample the SDK's live position while playing so the
-  // label/scrubber tick every frame instead of jumping on MA's sparse
-  // `queue_time_updated`. Falls back to the event-seeded `now.elapsed`.
+  // Smooth clock (A2): an artificial rAF counter that advances `displayPos` by
+  // real elapsed time (× playback speed) every frame, so the label/scrubber
+  // tick continuously instead of stepping on MA's sparse `queue_time_updated`
+  // (~1 event / several seconds). Whenever `api.getProgress()` delivers a
+  // fresh server position we reconcile: a big delta snaps + fires an LED
+  // blink (`.mx-sync`) on the time label — the "synth" flourish; a small one
+  // (<0.35s drift) glides in silently. Radio ("live") skips all of this.
   const [live, setLive] = useState<number | null>(null);
-  const playing = !!now?.playing;
+  const [syncKey, setSyncKey] = useState(0);
+  const posRef = useRef(0);
+  const playing = !!now?.playing && !now?.isRadio;
+  const trackKey = now?.title ?? "";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset the counter on track change
+  useEffect(() => {
+    posRef.current = now?.elapsed ?? 0;
+    setLive(posRef.current);
+  }, [trackKey]);
   useEffect(() => {
     if (!playing) {
       setLive(null);
       return;
     }
-    // `api.getProgress()` already holds the seeked target for ~1.5s after a
-    // local seek (hook-side), so this never snaps backward on a scrub.
-    const read = () => {
+    let raf = 0;
+    let last = performance.now();
+    const frame = (t: number) => {
+      const dt = Math.max(0, (t - last) / 1000);
+      last = t;
+      // `api.getProgress()` already holds the seeked target for ~1.5s after a
+      // local seek (hook-side), so this never snaps backward on a scrub.
       const p = api.getProgress();
-      setLive(p && p.position > 0 ? p.position : null);
+      const rate = p?.playbackSpeed && p.playbackSpeed > 0 ? p.playbackSpeed : 1;
+      posRef.current += dt * rate;
+      if (p && p.position > 0) {
+        const diff = p.position - posRef.current;
+        if (Math.abs(diff) > 0.35) {
+          posRef.current = p.position;
+          setSyncKey((k) => k + 1); // replay .mx-sync
+        } else if (Math.abs(diff) > 0.02) {
+          posRef.current += diff * 0.12; // glide
+        }
+      }
+      setLive(posRef.current);
+      raf = requestAnimationFrame(frame);
     };
-    read();
-    const id = setInterval(read, PROGRESS_TICK_MS);
-    return () => clearInterval(id);
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
   }, [playing, api]);
   const elapsed = drag == null ? (live ?? now?.elapsed ?? 0) : now?.elapsed ?? 0;
 
@@ -324,7 +350,9 @@ const Scrubber = ({ api }: { api: MusicApi }) => {
 
   return (
     <div className="flex items-center gap-2 text-[10px] text-muted-foreground tabular-nums">
-      <span className="w-8">{now?.isRadio ? "live" : fmt(shownElapsed)}</span>
+      <span key={syncKey} className={cn("w-8", syncKey > 0 && drag == null && "mx-sync")}>
+        {now?.isRadio ? "live" : fmt(shownElapsed)}
+      </span>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: pointer-driven scrubber, keyboard seek is on the widget root */}
       <div
         ref={barRef}

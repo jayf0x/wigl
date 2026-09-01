@@ -105,12 +105,17 @@ first new response lands, so old results never blank.
 
 **Now-playing / time**: `now.elapsed` is the event-seeded value from MA's
 `queue_time_updated` (fires only ~once every several seconds). The scrubber no
-longer renders it directly — it samples `api.getProgress()` (the Sendspin SDK's
-`trackProgress`, a live clock computed from the last server sync + elapsed real
-time) every `PROGRESS_TICK_MS` while playing, falling back to `now.elapsed`
-when the SDK has no metadata yet (radio, first second). `getProgress()` also
-returns the seeked target for 1.5 s after a local `seek()` so the bar doesn't
-snap backward during the server rebuffer.
+longer renders it directly — its `Scrubber` runs a **`requestAnimationFrame`
+counter** (A2) that advances a local `posRef` by real elapsed time ×
+`getProgress().playbackSpeed` every frame while playing. Each frame it also
+reads `api.getProgress()` (the Sendspin SDK's `trackProgress`, a live clock off
+the last server sync) and reconciles: drift > 0.35 s snaps `posRef` and bumps
+`syncKey` → the time label replays `.mx-sync` (a one-shot LED blink); drift
+0.02–0.35 s glides in silently. The counter resets on track change and pauses
+(renders `now.elapsed`) when not playing. Radio (`now.isRadio`) skips the whole
+loop and shows "live". `getProgress()` still returns the seeked target for
+1.5 s after a local `seek()` so the bar doesn't snap backward during rebuffer.
+`PROGRESS_TICK_MS` in config is now unused (kept as a tuning reference).
 
 **Queue mode (D1)**: `queueMode` (`useStorage`, `"append"` default) drives what
 a plain row click / a detail-view "Play" does — append to the tail without
