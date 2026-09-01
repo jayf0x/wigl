@@ -86,6 +86,10 @@ export interface MusicApi {
   seek: (seconds: number) => void;
   clearQueue: () => void;
   removeFromQueue: (queueItemId: string) => void;
+  /** Optimistic reorder of an up-next row by `posShift` places (negative =
+   * toward the front). Reconciles on the next `queue_items_updated`. */
+  moveQueueItem: (queueItemId: string, posShift: number) => void;
+  moveQueueItemToEnd: (queueItemId: string) => void;
   cycleRepeat: () => void;
   toggleShuffle: () => void;
   toggleFavorite: (item: MediaItem) => void;
@@ -397,6 +401,39 @@ export const useMusic = (): MusicApi => {
     [cmd],
   );
 
+  const moveQueueItem = useCallback(
+    (queueItemId: string, posShift: number) => {
+      if (!posShift) return;
+      setUpNext((list) => {
+        const from = list.findIndex((i) => i.queue_item_id === queueItemId);
+        if (from < 0) return list;
+        const to = Math.max(0, Math.min(list.length - 1, from + posShift));
+        if (to === from) return list;
+        const copy = [...list];
+        const [it] = copy.splice(from, 1);
+        copy.splice(to, 0, it);
+        return copy;
+      });
+      cmd("player_queues/move_item", { queue_item_id: queueItemId, pos_shift: posShift });
+    },
+    [cmd],
+  );
+
+  const moveQueueItemToEnd = useCallback(
+    (queueItemId: string) => {
+      setUpNext((list) => {
+        const from = list.findIndex((i) => i.queue_item_id === queueItemId);
+        if (from < 0 || from === list.length - 1) return list;
+        const copy = [...list];
+        const [it] = copy.splice(from, 1);
+        copy.push(it);
+        return copy;
+      });
+      cmd("player_queues/move_item_end", { queue_item_id: queueItemId });
+    },
+    [cmd],
+  );
+
   const toggleFavorite = useCallback(
     (item: MediaItem) => {
       const client = clientRef.current;
@@ -470,6 +507,8 @@ export const useMusic = (): MusicApi => {
       seek,
       clearQueue: () => cmd("player_queues/clear"),
       removeFromQueue,
+      moveQueueItem,
+      moveQueueItemToEnd,
       cycleRepeat,
       toggleShuffle,
       toggleFavorite,
@@ -482,8 +521,8 @@ export const useMusic = (): MusicApi => {
     [
       state, error, now, currentItem, upNext, repeatMode, shuffle, results, searching, volume,
       providers, httpBase, favorites, nav, navStack.length, navTo, navBack, navHome, search, play,
-      startRadio, seek, removeFromQueue, cycleRepeat, toggleShuffle, toggleFavorite, setVolume,
-      openServer, imageUrl, request, cmd,
+      startRadio, seek, removeFromQueue, moveQueueItem, moveQueueItemToEnd, cycleRepeat,
+      toggleShuffle, toggleFavorite, setVolume, openServer, imageUrl, request, cmd,
     ],
   );
 };

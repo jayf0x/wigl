@@ -4,8 +4,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { NavView, SearchResults } from "../types";
 import type { MusicApi } from "../useMusic";
 import { DetailView } from "./DetailView";
-import { Equalizer } from "./Equalizer";
-import { Row, standardActions, Trash2 } from "./Row";
+import { QueueList } from "./QueueList";
+import { Row } from "./Row";
 
 const GROUPS: { key: keyof SearchResults; label: string }[] = [
   { key: "radio", label: "Stations" },
@@ -127,7 +127,7 @@ export const Browser = ({
                 ))
               )
             ) : (
-              <UpNext api={api} />
+              <QueueList api={api} />
             )}
           </div>
         </ScrollArea>
@@ -145,61 +145,5 @@ export const Browser = ({
         </button>
       )}
     </div>
-  );
-};
-
-const UpNext = ({ api }: { api: MusicApi }) => {
-  if (api.upNext.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-3 px-4 py-10 text-center text-muted-foreground">
-        <Equalizer bars={7} active={!!api.now?.playing} className="h-6 text-foreground/50" />
-        <p className="text-[11px]">
-          {api.now
-            ? "Queue is empty — up next shows here."
-            : "Nothing playing. Search above to start."}
-        </p>
-      </div>
-    );
-  }
-  return (
-    <>
-      <div className="flex items-center justify-between px-2 pt-2 pb-1">
-        <p className="music-tag text-muted-foreground/70">Up next · {api.upNext.length}</p>
-        <button
-          type="button"
-          data-no-drag
-          onClick={api.clearQueue}
-          className="text-[10px] text-muted-foreground hover:text-destructive"
-        >
-          Clear
-        </button>
-      </div>
-      {api.upNext.map((it, i) => {
-        const media = it.media_item ?? null;
-        const asItem = media ?? {
-          item_id: "",
-          provider: "",
-          name: it.name,
-          uri: `queue:${it.queue_item_id}`,
-          media_type: "track" as const,
-        };
-        const remove = {
-          label: "Remove from queue",
-          icon: <Trash2 className="size-3.5" />,
-          run: () => api.removeFromQueue(it.queue_item_id),
-          danger: true,
-        };
-        return (
-          <Row
-            key={it.queue_item_id}
-            item={asItem}
-            api={api}
-            index={i + 1}
-            onPlay={media ? () => api.play(media, "play") : undefined}
-            actions={media ? standardActions(api, media, [remove]) : [remove]}
-          />
-        );
-      })}
-    </>
   );
 };

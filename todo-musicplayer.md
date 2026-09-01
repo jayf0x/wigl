@@ -153,19 +153,6 @@ those the same way; only add `useSql: true` if a specific read turns out slow
 
 ## Q — Queue & playlists
 
-### Q2 — Queue reorder: drag + move-to-top/bottom
-
-Remove-from-queue and the non-destructive play-now default are done
-(`useMusic.ts` `removeFromQueue`, `play()` → MA `QueueOption:"play"` which
-inserts-after-current-and-skips, keeping history + tail; only the Clear button
-empties a queue). Still missing: **reorder**. Up-next rows draggable →
-`player_queues/move_item {queue_id, queue_item_id, pos_shift}` (`pos_shift:0` =
-make next) / `move_item_end`. Pointer-based drag (no dnd lib — small list;
-`Desktop.tsx` has the pattern). Optimistic local reorder, reconcile on the next
-`queue_items_updated`. Add "Move to top" / "Move to bottom" to the row `⋯` menu
-(pass them as `extra` actions from `Browser.tsx`'s `UpNext`, same way `remove`
-is passed today). e2e: assert `move_item` + `move_item_end` shapes.
-
 ### P4 — Playlists: read path (list + view)
 
 Read-only first. `music/playlists/library_items` → the user's playlists (skip

@@ -259,6 +259,65 @@ describe("music widget ↔ Music Assistant (live)", () => {
     }
   });
 
+  // Q2 drag-reorder: move_item pos_shift is a relative delta; move_item_end
+  // sends the item to the tail. Enqueue two throwaway tracks, reorder, clean up.
+  test.skipIf(!reachable)("move_item / move_item_end reorder the queue", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const queues = await client.command<PlayerQueue[]>("player_queues/all");
+      const q = (queues ?? [])[0];
+      if (!q) return;
+      const res = await client.command<SearchResults>("music/search", {
+        search_query: "daft punk",
+        media_types: ["track"],
+        limit: 2,
+      });
+      const uris = res.tracks.slice(0, 2).map((t) => t.uri);
+      if (uris.length < 2) return;
+
+      const before = await client.command<{ queue_item_id: string }[]>("player_queues/items", {
+        queue_id: q.queue_id,
+      });
+      const beforeIds = new Set(before.map((i) => i.queue_item_id));
+      for (const uri of uris)
+        await client.command("player_queues/play_media", { queue_id: q.queue_id, media: uri, option: "add" });
+
+      const withNew = await client.command<{ queue_item_id: string }[]>("player_queues/items", {
+        queue_id: q.queue_id,
+      });
+      const added = withNew.filter((i) => !beforeIds.has(i.queue_item_id));
+      expect(added.length).toBe(2);
+
+      // move the 2nd added item up one place → it should precede the 1st
+      await client.command("player_queues/move_item", {
+        queue_id: q.queue_id,
+        queue_item_id: added[1].queue_item_id,
+        pos_shift: -1,
+      });
+      const moved = await client.command<{ queue_item_id: string }[]>("player_queues/items", {
+        queue_id: q.queue_id,
+      });
+      const idxA = moved.findIndex((i) => i.queue_item_id === added[0].queue_item_id);
+      const idxB = moved.findIndex((i) => i.queue_item_id === added[1].queue_item_id);
+      expect(idxB).toBeLessThan(idxA);
+
+      await client.command("player_queues/move_item_end", {
+        queue_id: q.queue_id,
+        queue_item_id: added[1].queue_item_id,
+      });
+
+      // cleanup
+      for (const i of added)
+        await client.command("player_queues/delete_item", {
+          queue_id: q.queue_id,
+          item_id_or_index: i.queue_item_id,
+        });
+    } finally {
+      client.close();
+    }
+  });
+
   // P3 info panel reads streamdetails.audio_format off the current queue item.
   test.skipIf(!reachable)("queue items carry the streamdetails shape the info panel reads", async () => {
     const client = new MaClient(endpoint, () => {});

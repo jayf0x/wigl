@@ -111,6 +111,7 @@ export const Row = ({
   index,
   actions,
   onPlay,
+  dragHandle,
 }: {
   item: MediaItem;
   api: MusicApi;
@@ -120,6 +121,8 @@ export const Row = ({
   actions?: RowAction[];
   /** override the left-click; defaults to non-destructive play-now */
   onPlay?: () => void;
+  /** a drag grip rendered at the row's leading edge (queue reorder) */
+  dragHandle?: ReactNode;
 }) => {
   const [open, setOpen] = useState(false);
   const art = api.imageUrl(item.metadata?.images?.[0] ?? null);
@@ -129,6 +132,7 @@ export const Row = ({
   return (
     <div className="rounded-md">
       <div className={cn("group flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-accent", open && "bg-accent")}>
+        {dragHandle}
         <button
           type="button"
           data-no-drag
