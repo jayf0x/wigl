@@ -110,11 +110,39 @@ already inside `/data`.
 
 ---
 
-## Parked — playback speed (time-stretch) · `[deferred]`
+## Effects tab — pending test · `[needs test]`
 
-The Effects tab does EQ / reverb / echo but **no speed control**: the SDK
-feeds the `<audio>` a live `MediaStream` (`srcObject`) and `playbackRate` is
-inert on those. A pitch-preserving speed control needs a phase-vocoder /
-WSOLA AudioWorklet in `audioGraph.ts`, and it has to feed back into the
-now-playing clock (`getProgress` / A2) so the displayed time slows with the
-audio. Non-trivial; revisit only if the owner asks specifically for speed.
+The Effects tab auto-switches output to `media-element` on open, which
+reconnects the player. `useMusic` captures `nowRef.current.playing` into
+`playIntentRef` before the switch and re-asserts it ~1.2 s after the new
+player is `ready` (feedback G failsafe). Wanted: a `tests/music.e2e.test.ts`
+case (guarded on `wigl-ma` being up, like the others) — play a track, flip
+`audio_output` to `media-element`, assert the queue is still `playing`; then
+pause, flip back to `direct`, assert still `paused`. Couldn't run it this
+pass (server was down in the build env).
+
+## Parked — playback speed (time-stretch) · `[researched]`
+
+The rebuilt Effects tab ships a 4-band EQ + reverb but **no speed control**.
+Evidence gathered this pass:
+- **Server-side** `player_queues/set_playback_speed` → `"Invalid or
+  unsupported command"` for the widget's player (it's an audiobook-only
+  command).
+- **`HTMLMediaElement.playbackRate`** is defined by the HTML spec to be
+  ignored when the element's source is a `MediaStream` — and the Sendspin SDK
+  sets `audio.srcObject` to a live `MediaStream`. So the cheap path is a
+  dead end here, confirmed by spec not just by ear.
+- **What's left:** a WSOLA / phase-vocoder **AudioWorklet** spliced into
+  `audioGraph.ts`'s chain between the last EQ band and `master`.
+  `@soundtouchjs/audio-worklet` (MIT, ~30 kB) is the candidate — load its
+  worklet module as an inline `Blob` URL (no external file; CSP is disabled
+  but a bundled data/blob URL is cleanest), add an `AudioWorkletNode` with a
+  `rate` param, expose `setRate()` on the `AudioFx` handle.
+  The clock (`getProgress` / A2) must multiply by that same rate — the
+  `Scrubber` already reads `getProgress().playbackSpeed`, so wire the worklet
+  rate into that field in `useMusic.getProgress()` and the rAF counter picks
+  it up for free.
+- **UI:** a speed `VFader` (already have the component) 0.5–1.5×, `detent={1}`,
+  next to Reverb in `EffectsTab`.
+Non-trivial (worklet lifecycle across the connection, resampling artefacts to
+tune) but fully specced. Build when the owner wants speed.

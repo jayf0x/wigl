@@ -1,96 +1,153 @@
-import { RotateCcw, Sparkles } from "lucide-react";
-import { Slider } from "@/components/ui/slider";
+import { useEffect, useRef, useState } from "react";
+import { Power, RotateCcw } from "lucide-react";
 import { cn } from "@/wigl/utils";
-import { DEFAULT_FX, type FxState, fxIsFlat } from "../audioGraph";
+import {
+  BAND_HZ,
+  DEFAULT_FX,
+  EQ_MAX_DB,
+  EQ_MIN_DB,
+  type FxState,
+  fxIsFlat,
+} from "../audioGraph";
 import type { MusicApi } from "../useMusic";
+import { VFader } from "./VFader";
 
-/** G1 — the audio-effects tab. EQ (3 band) + reverb + echo, live on the
- * Sendspin output. No speed control — a MediaStream ignores `playbackRate`
- * (see audioGraph.ts). Needs "media-element" output mode. */
+/** G — the audio-effects tab: a 4-band graphic EQ + reverb, live on the
+ * Sendspin output. Opening the tab transparently switches to "media-element"
+ * output (the only mode with an <audio> to tap) — no separate enable step;
+ * `useMusic` re-asserts the play/pause state across the reconnect.
+ *
+ * Slider mechanics (the "reverb slides back" fix): a local `draft` holds the
+ * instant visual, `api.applyFx` pushes to the Web Audio graph on the next
+ * frame (ramped there with setTargetAtTime — no zipper), and `api.setFx` (the
+ * `useStorage` persist) is debounced 400ms past the last move. The faders read
+ * `draft` mid-drag and stored `api.fx` otherwise, so nothing jumps back. */
 
-type Band = { key: keyof FxState; label: string; min: number; max: number; unit: string; fmt?: (v: number) => string };
+const hz = (n: number) => (n >= 1000 ? `${n / 1000}k` : String(n));
+const dbLabel = (v: number) => `${v > 0 ? "+" : ""}${v}`;
+const EQ_MARKS = [EQ_MIN_DB, -6, 0, 6, EQ_MAX_DB];
 
-const BANDS: Band[] = [
-  { key: "low", label: "Bass", min: -12, max: 12, unit: "dB", fmt: (v) => `${v > 0 ? "+" : ""}${v}` },
-  { key: "mid", label: "Mid", min: -12, max: 12, unit: "dB", fmt: (v) => `${v > 0 ? "+" : ""}${v}` },
-  { key: "high", label: "Treble", min: -12, max: 12, unit: "dB", fmt: (v) => `${v > 0 ? "+" : ""}${v}` },
-  { key: "reverb", label: "Reverb", min: 0, max: 100, unit: "%", fmt: (v) => String(v) },
-  { key: "echo", label: "Echo", min: 0, max: 100, unit: "%", fmt: (v) => String(v) },
-];
-
-// FxState stores reverb/echo as 0..1; the sliders work in 0..100.
-const toSlider = (key: keyof FxState, v: number) => (key === "reverb" || key === "echo" ? Math.round(v * 100) : v);
-const fromSlider = (key: keyof FxState, v: number) => (key === "reverb" || key === "echo" ? v / 100 : v);
-
-const EnablePrompt = ({ api }: { api: MusicApi }) => (
-  <div className="flex flex-col items-center gap-3 px-4 py-10 text-center text-muted-foreground">
-    <Sparkles className="size-5 text-foreground/50" />
-    <p className="text-[11px]">
-      Audio effects need the media-element output path. Turning it on reconnects
-      the player (a brief gap in playback).
-    </p>
-    <button
-      type="button"
-      data-no-drag
-      onClick={() => api.setAudioOutput("media-element")}
-      className="rounded-md border border-border px-3 py-1.5 text-[11px] text-foreground transition-colors hover:bg-accent"
-    >
-      Enable audio effects
-    </button>
-  </div>
+const Connecting = () => (
+  <p className="px-4 py-10 text-center text-[11px] text-muted-foreground">
+    Routing audio through the effects chain…
+  </p>
 );
 
 export const EffectsTab = ({ api }: { api: MusicApi }) => {
-  if (!api.fxAvailable) return <EnablePrompt api={api} />;
+  // Transparently switch to the tappable output path on open.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intent is "once, when unavailable"
+  useEffect(() => {
+    if (!api.fxAvailable) api.setAudioOutput("media-element");
+  }, [api.fxAvailable]);
 
-  const { fx, setFx } = api;
-  const set = (key: keyof FxState, sliderVal: number) => setFx({ ...fx, [key]: fromSlider(key, sliderVal) });
+  const [draft, setDraft] = useState<FxState | null>(null);
+  const fx = draft ?? api.fx;
+  const rafRef = useRef(0);
+  const persistRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(rafRef.current);
+      clearTimeout(persistRef.current);
+    },
+    [],
+  );
+
+  /** continuous move: instant local + throttled graph + debounced persist */
+  const move = (next: FxState) => {
+    setDraft(next);
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => api.applyFx(next));
+    clearTimeout(persistRef.current);
+    persistRef.current = setTimeout(() => {
+      api.setFx(next);
+      setDraft(null);
+    }, 400);
+  };
+  /** discrete change (toggle / reset / release): persist now */
+  const commit = (next: FxState) => {
+    cancelAnimationFrame(rafRef.current);
+    clearTimeout(persistRef.current);
+    setDraft(null);
+    api.setFx(next);
+  };
+
+  const setBand = (i: number, v: number) => {
+    const bands = fx.bands.slice();
+    bands[i] = v;
+    move({ ...fx, bands });
+  };
+
+  if (!api.fxAvailable) return <Connecting />;
+
+  const dimmed = fx.bypass && "opacity-40";
 
   return (
     <div className="flex flex-col gap-3 px-2 py-2">
       <div className="flex items-center justify-between">
         <p className="music-tag text-muted-foreground/70">Effects</p>
-        <button
-          type="button"
-          data-no-drag
-          disabled={fxIsFlat(fx)}
-          onClick={() => setFx(DEFAULT_FX)}
-          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40"
-        >
-          <RotateCcw className="size-2.5" /> reset
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            data-no-drag
+            disabled={fxIsFlat(fx)}
+            onClick={() => commit({ ...fx, bands: [...DEFAULT_FX.bands], reverb: 0 })}
+            className="mx-press flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+          >
+            <RotateCcw className="size-2.5" /> reset
+          </button>
+          <button
+            type="button"
+            data-no-drag
+            aria-pressed={fx.bypass}
+            onClick={() => commit({ ...fx, bypass: !fx.bypass })}
+            className={cn(
+              "mx-press flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors",
+              fx.bypass
+                ? "border-border text-muted-foreground hover:text-foreground"
+                : "border-foreground bg-foreground text-background",
+            )}
+          >
+            <Power className="size-2.5" /> {fx.bypass ? "off" : "on"}
+          </button>
+        </div>
       </div>
 
-      {BANDS.map((b) => {
-        const slider = toSlider(b.key, fx[b.key]);
-        return (
-          <div key={b.key} className="flex flex-col gap-1">
-            <div className="flex items-baseline justify-between text-[10px]">
-              <span className="text-foreground/80">{b.label}</span>
-              <span className={cn("tabular-nums text-muted-foreground", slider !== 0 && "text-foreground/80")}>
-                {(b.fmt ?? String)(slider)} {b.unit}
-              </span>
-            </div>
-            <Slider
-              className="w-full"
-              value={[slider]}
-              min={b.min}
-              max={b.max}
-              step={1}
-              onValueChange={(v) => set(b.key, Array.isArray(v) ? v[0] : v)}
-            />
-          </div>
-        );
-      })}
+      {/* graphic EQ */}
+      <div className={cn("flex items-stretch justify-between gap-1", dimmed)}>
+        {BAND_HZ.map((freq, i) => (
+          <VFader
+            key={freq}
+            label={`${hz(freq)}Hz`}
+            display={dbLabel(fx.bands[i] ?? 0)}
+            value={fx.bands[i] ?? 0}
+            min={EQ_MIN_DB}
+            max={EQ_MAX_DB}
+            step={1}
+            detent={0}
+            marks={EQ_MARKS}
+            onChange={(v) => setBand(i, v)}
+            onCommit={(v) => setBand(i, v)}
+          />
+        ))}
+        <span className="mx-1 w-px self-stretch bg-border" />
+        <VFader
+          label="Reverb"
+          display={`${Math.round(fx.reverb * 100)}%`}
+          value={Math.round(fx.reverb * 100)}
+          min={0}
+          max={100}
+          step={1}
+          onChange={(v) => move({ ...fx, reverb: v / 100 })}
+          onCommit={(v) => move({ ...fx, reverb: v / 100 })}
+        />
+      </div>
 
-      <button
-        type="button"
-        data-no-drag
-        onClick={() => api.setAudioOutput("direct")}
-        className="mt-1 self-start text-[10px] text-muted-foreground/60 hover:text-foreground"
-      >
-        turn effects off (back to direct output)
-      </button>
+      <p className="text-[9px] leading-relaxed text-muted-foreground/60">
+        4-band graphic EQ (±12 dB) + room reverb. “off” bypasses the chain but
+        keeps the settings. Speed control needs a time-stretch worklet — see the
+        backlog.
+      </p>
     </div>
   );
 };

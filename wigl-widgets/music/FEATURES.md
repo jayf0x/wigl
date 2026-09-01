@@ -66,11 +66,13 @@ Some fields are blank unless Music Assistant has a metadata provider configured
 
 ## Effects
 
-The **Effects** tab: a 3-band EQ, reverb, and echo, applied live. It needs the
-media-element audio path — the tab offers a one-tap switch (playback blips
-while it reconnects). There's no speed control (a technical limit of how the
-audio is streamed). Turn everything back to zero (or hit reset) and switch the
-path back for the lowest-latency output.
+The **Effects** tab: a 4-band graphic EQ (vertical faders, ±12 dB, centre
+detent) and a reverb, applied live. Opening the tab switches the audio to the
+effects path automatically — playback blips once while it reconnects, then
+picks up where it was. **on/off** bypasses the whole chain but keeps your
+fader positions; **reset** zeroes them. The tab-bar dot lights when the chain
+is actually colouring the sound. No speed control yet (a technical limit of
+how the audio is streamed — see the backlog).
 
 ## Keyboard (when the widget has focus, not a text field)
 

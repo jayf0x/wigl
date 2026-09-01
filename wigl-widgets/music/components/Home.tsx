@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Compass, History, ListMusic, Plus, SlidersHorizontal } from "lucide-react";
 import { useStorage } from "@/wigl/hooks";
 import { cn } from "@/wigl/utils";
-import { fxIsFlat } from "../audioGraph";
+import { fxIsActive } from "../audioGraph";
 import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
 import { BrowseTab } from "./BrowseTab";
@@ -146,7 +146,7 @@ export const Home = ({ api }: { api: MusicApi }) => {
   const [tab, setTab] = useStorage<HomeTab>("home_tab", "queue");
 
   const ICON = { playlists: ListMusic, recent: History, browse: Compass, fx: SlidersHorizontal } as const;
-  const fxOn = api.fxAvailable && !fxIsFlat(api.fx);
+  const fxOn = api.fxAvailable && fxIsActive(api.fx);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

@@ -1,30 +1,66 @@
-// G1 — a small Web Audio effect chain tapped off the Sendspin hidden <audio>
+// G — a small Web Audio effect chain tapped off the Sendspin hidden <audio>
 // element (only possible in "media-element" output mode — see music.config.ts).
 // Crib from /Users/me/Documents/GitHub/audio-bonanza's content.js, trimmed to
-// what fits a compact widget: 3-band EQ + a synthesised-impulse reverb + a
-// feedback echo. No playback-speed control — the SDK feeds the element a live
-// MediaStream (`srcObject`), and `playbackRate` is ignored on a MediaStream;
-// real time-stretch needs a phase-vocoder AudioWorklet (backlog G1).
+// what fits a compact widget: a 4-band graphic EQ (peaking filters) + a
+// synthesised-impulse reverb. Echo was cut (feedback G).
+//
+// No playback-speed control here: the SDK feeds the element a live MediaStream
+// (`srcObject`), and the HTML spec has `HTMLMediaElement.playbackRate` ignored
+// for a MediaStream source. `player_queues/set_playback_speed` is audiobook-
+// only ("Invalid or unsupported command" for a normal player). Real time-
+// stretch needs a phase-vocoder AudioWorklet — parked, see backlog-music.md
+// "Playback speed".
 //
 // The graph lives for the whole connection (createMediaElementSource can only
 // run once per element and reroutes it permanently) — `useMusic` owns its
 // lifecycle; the FX tab only moves the knobs.
 
+/** Peaking-filter centre frequencies, low → high. */
+export const BAND_HZ = [80, 400, 2000, 8000] as const;
+export const BAND_COUNT = BAND_HZ.length;
+export const EQ_MIN_DB = -12;
+export const EQ_MAX_DB = 12;
+
 export interface FxState {
-  /** shelf/peak gain in dB, -12..+12 */
-  low: number;
-  mid: number;
-  high: number;
+  /** per-band peaking gain in dB, EQ_MIN_DB..EQ_MAX_DB — length BAND_COUNT */
+  bands: number[];
   /** 0..1 reverb wet mix */
   reverb: number;
-  /** 0..1 echo amount (delay wet + feedback) */
-  echo: number;
+  /** whole chain bypassed (dry passthrough) while keeping the values above */
+  bypass: boolean;
 }
 
-export const DEFAULT_FX: FxState = { low: 0, mid: 0, high: 0, reverb: 0, echo: 0 };
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-export const fxIsFlat = (fx: FxState): boolean =>
-  fx.low === 0 && fx.mid === 0 && fx.high === 0 && fx.reverb === 0 && fx.echo === 0;
+export const DEFAULT_FX: FxState = { bands: Array(BAND_COUNT).fill(0), reverb: 0, bypass: false };
+
+/** Tolerate both the current shape and the legacy `{low,mid,high,reverb,echo}`
+ * one still sitting in some users' storage blobs. */
+// biome-ignore lint/suspicious/noExplicitAny: parsing an untyped storage value
+export const normalizeFx = (v: any): FxState => {
+  if (!v || typeof v !== "object") return { ...DEFAULT_FX, bands: [...DEFAULT_FX.bands] };
+  let bands: number[];
+  if (Array.isArray(v.bands)) {
+    bands = Array.from({ length: BAND_COUNT }, (_, i) =>
+      typeof v.bands[i] === "number" ? clamp(v.bands[i], EQ_MIN_DB, EQ_MAX_DB) : 0,
+    );
+  } else {
+    // legacy low/mid/high → spread across the 4 bands (mid feeds both middles)
+    const n = (x: unknown) => (typeof x === "number" ? clamp(x, EQ_MIN_DB, EQ_MAX_DB) : 0);
+    bands = [n(v.low), n(v.mid), n(v.mid), n(v.high)];
+  }
+  return {
+    bands,
+    reverb: typeof v.reverb === "number" ? clamp(v.reverb, 0, 1) : 0,
+    bypass: !!v.bypass,
+  };
+};
+
+/** True when the EQ is flat and reverb is off (regardless of `bypass`). */
+export const fxIsFlat = (fx: FxState): boolean => fx.bands.every((b) => b === 0) && fx.reverb === 0;
+
+/** True when the chain is actually colouring the sound right now. */
+export const fxIsActive = (fx: FxState): boolean => !fx.bypass && !fxIsFlat(fx);
 
 export interface AudioFx {
   apply: (fx: FxState) => void;
@@ -44,67 +80,59 @@ const makeImpulse = (ctx: BaseAudioContext, seconds: number, decay: number): Aud
   return buf;
 };
 
-/** Route `el` through EQ → (dry + reverb + echo) → destination. Call once. */
+/** Route `el` through EQ (4 peaking bands) → (dry + reverb) → destination.
+ * Call once per element. Param changes are ramped with `setTargetAtTime` so a
+ * fast slider drag never zippers. */
 export const attachAudioFx = (el: HTMLAudioElement): AudioFx => {
   const Ctx: typeof AudioContext =
-    window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const ctx = new Ctx();
   const source = ctx.createMediaElementSource(el);
 
-  const low = ctx.createBiquadFilter();
-  low.type = "lowshelf";
-  low.frequency.value = 220;
-  const mid = ctx.createBiquadFilter();
-  mid.type = "peaking";
-  mid.frequency.value = 1200;
-  mid.Q.value = 0.8;
-  const high = ctx.createBiquadFilter();
-  high.type = "highshelf";
-  high.frequency.value = 4500;
+  const bands = BAND_HZ.map((hz) => {
+    const f = ctx.createBiquadFilter();
+    f.type = "peaking";
+    f.frequency.value = hz;
+    f.Q.value = 1;
+    f.gain.value = 0;
+    return f;
+  });
 
   const dry = ctx.createGain();
   const reverb = ctx.createConvolver();
   reverb.buffer = makeImpulse(ctx, 2.6, 2.2);
   const reverbWet = ctx.createGain();
   reverbWet.gain.value = 0;
-
-  const delay = ctx.createDelay(1);
-  delay.delayTime.value = 0.3;
-  const feedback = ctx.createGain();
-  feedback.gain.value = 0;
-  const echoWet = ctx.createGain();
-  echoWet.gain.value = 0;
-
   const master = ctx.createGain();
 
-  source.connect(low);
-  low.connect(mid);
-  mid.connect(high);
-  high.connect(dry);
+  // source → band0 → band1 → … → bandN → dry → master
+  let node: AudioNode = source;
+  for (const b of bands) {
+    node.connect(b);
+    node = b;
+  }
+  node.connect(dry);
   dry.connect(master);
-  high.connect(reverb);
+  node.connect(reverb);
   reverb.connect(reverbWet);
   reverbWet.connect(master);
-  high.connect(delay);
-  delay.connect(feedback);
-  feedback.connect(delay);
-  delay.connect(echoWet);
-  echoWet.connect(master);
   master.connect(ctx.destination);
 
-  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  // ~20ms time-constant: smooth to the ear, still tracks a drag closely.
+  const TC = 0.02;
+  const ramp = (p: AudioParam, target: number) => {
+    const t = ctx.currentTime;
+    p.setTargetAtTime(target, t, TC);
+  };
 
   return {
     apply: (fx) => {
-      low.gain.value = clamp(fx.low, -12, 12);
-      mid.gain.value = clamp(fx.mid, -12, 12);
-      high.gain.value = clamp(fx.high, -12, 12);
-      const w = clamp(fx.reverb, 0, 1);
-      reverbWet.gain.value = w;
-      dry.gain.value = 1 - 0.35 * w;
-      const e = clamp(fx.echo, 0, 1);
-      echoWet.gain.value = e * 0.5;
-      feedback.gain.value = e * 0.55;
+      const on = !fx.bypass;
+      bands.forEach((b, i) => ramp(b.gain, on ? clamp(fx.bands[i] ?? 0, EQ_MIN_DB, EQ_MAX_DB) : 0));
+      const w = on ? clamp(fx.reverb, 0, 1) : 0;
+      ramp(reverbWet.gain, w);
+      ramp(dry.gain, 1 - 0.35 * w);
     },
     resume: () => {
       if (ctx.state === "suspended") void ctx.resume();

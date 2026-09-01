@@ -23,7 +23,7 @@ import {
   SEARCH_MEDIA_TYPES,
   SENDSPIN_OUTPUT,
 } from "./music.config";
-import { type AudioFx, attachAudioFx, DEFAULT_FX, type FxState } from "./audioGraph";
+import { type AudioFx, attachAudioFx, DEFAULT_FX, type FxState, normalizeFx } from "./audioGraph";
 import { connectSendspin, type SendspinHandle } from "./sendspin";
 import { maReachable, startMaContainer } from "./serverProcess";
 import type {
@@ -136,11 +136,15 @@ export interface MusicApi {
   deletePlaylist: (playlist: MediaItem) => void;
   addToPlaylist: (playlistId: string, uris: string[]) => Promise<void>;
   removePlaylistTrack: (playlistId: string, position: number) => Promise<void>;
-  /** G1 — audio effects (EQ / reverb / echo). `fxAvailable` is false in
-   * `"direct"` output mode (no `<audio>` to tap); the Effects tab then offers
-   * a switch. Changing `audioOutput` reconnects the player. */
+  /** G — audio effects (4-band EQ + reverb + bypass). `fxAvailable` is false
+   * in `"direct"` output mode (no `<audio>` to tap); opening the Effects tab
+   * transparently switches to `"media-element"` (reconnects the player, with a
+   * play-state failsafe). */
   fx: FxState;
+  /** Persist + apply. Debounce this behind a drag. */
   setFx: (fx: FxState) => void;
+  /** Apply to the live graph only (no persist) — use on every slider move. */
+  applyFx: (fx: FxState) => void;
   fxAvailable: boolean;
   audioOutput: "direct" | "media-element";
   setAudioOutput: (mode: "direct" | "media-element") => void;
@@ -161,11 +165,25 @@ export const useMusic = (): MusicApi => {
   const [manageServer] = useStorage<boolean>(KEYS.manageServer, false);
   const [queueMode, setQueueMode] = useStorage<QueueMode>(KEYS.queueMode, "append");
   const [pinnedPlaylists, setPinnedPlaylists] = useStorage<string[]>(KEYS.pinnedPlaylists, []);
-  const [audioOutput, setAudioOutput] = useStorage<"direct" | "media-element">(
+  const [audioOutput, setAudioOutputStored] = useStorage<"direct" | "media-element">(
     KEYS.audioOutput,
     SENDSPIN_OUTPUT,
   );
-  const [fx, setFxStored] = useStorage<FxState>(KEYS.fx, DEFAULT_FX);
+  const [fxStored, setFxStored] = useStorage<FxState>(KEYS.fx, DEFAULT_FX);
+  // Storage may still hold the pre-4-band `{low,mid,high,reverb,echo}` shape —
+  // normalise on read so every consumer sees the current `FxState`.
+  const fx = useMemo(() => normalizeFx(fxStored), [fxStored]);
+  // Whether the player was playing when an output switch (→ reconnect) began,
+  // so the new player can re-assert that state (failsafe against a switch that
+  // silently pauses or resumes — feedback G).
+  const playIntentRef = useRef<boolean | null>(null);
+  const setAudioOutput = useCallback(
+    (mode: "direct" | "media-element") => {
+      if (audioOutput !== mode) playIntentRef.current = !!nowRef.current?.playing;
+      setAudioOutputStored(mode);
+    },
+    [audioOutput, setAudioOutputStored],
+  );
 
   const [state, setState] = useState<ConnState>("connecting");
   const [error, setError] = useState<string | null>(null);
@@ -422,6 +440,24 @@ export const useMusic = (): MusicApi => {
         refreshPlaylists();
         refreshRecent();
 
+        // Failsafe (feedback G): if an output switch caused this reconnect,
+        // re-assert the play/pause state the user actually had — a reconnect
+        // can silently pause (or resume) the queue.
+        if (playIntentRef.current != null) {
+          const want = playIntentRef.current;
+          playIntentRef.current = null;
+          window.setTimeout(() => {
+            if (cancelled || sendspinRef.current !== audio) return;
+            const playing = !!nowRef.current?.playing;
+            if (want && !playing) {
+              audio.unlock().catch(() => {});
+              cmd("player_queues/play");
+            } else if (!want && playing) {
+              cmd("player_queues/pause");
+            }
+          }, 1200);
+        }
+
         client
           .command<{ domain: string; instance_id: string; type: string; enabled: boolean }[]>(
             "config/providers",
@@ -461,7 +497,12 @@ export const useMusic = (): MusicApi => {
     return () => clearInterval(id);
   }, [state, refreshQueue]);
 
-  // ── G1 — push FX changes onto the live graph ───────────────────────────
+  // ── G — FX: `applyFx` hits the live graph every move (cheap, ramped in
+  // audioGraph); `setFx` also persists and should be debounced by the caller
+  // so a drag doesn't round-trip through storage and fight the slider. ──────
+  const applyFx = useCallback((next: FxState) => {
+    fxRef.current?.apply(next);
+  }, []);
   const setFx = useCallback(
     (next: FxState) => {
       setFxStored(next);
@@ -909,6 +950,7 @@ export const useMusic = (): MusicApi => {
       removePlaylistTrack,
       fx,
       setFx,
+      applyFx,
       fxAvailable: audioOutput === "media-element",
       audioOutput,
       setAudioOutput,
@@ -939,7 +981,7 @@ export const useMusic = (): MusicApi => {
       seek, removeFromQueue, moveQueueItem, moveQueueItemToEnd, cycleRepeat, toggleShuffle,
       toggleFavorite, refreshPlaylists, refreshRecent, createPlaylist, saveQueueAsPlaylist,
       renamePlaylist, mergePlaylist, deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume,
-      fx, setFx, audioOutput, setAudioOutput,
+      fx, setFx, applyFx, audioOutput, setAudioOutput,
       openServer, imageUrl, request, cmd,
     ],
   );

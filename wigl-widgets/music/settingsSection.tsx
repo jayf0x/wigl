@@ -124,7 +124,7 @@ const MusicSettings = () => {
       </Field>
       <Field
         label="Audio effects"
-        hint="Routes audio through an <audio> element so the Effects tab (EQ / reverb / echo) works. Reconnects the player. Off = lowest-latency direct output."
+        hint="Routes audio through an <audio> element so the Effects tab (4-band EQ + reverb) works. The Effects tab flips this on for you. Off = lowest-latency direct output."
       >
         <Switch
           checked={audioOutput === "media-element"}
