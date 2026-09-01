@@ -1,6 +1,6 @@
 // Live e2e against the local Music Assistant Docker container (`wigl-ma`,
-// see todo-musicplayer.md "Phase 0"). Skips — does not fail — when MA isn't
-// reachable, same convention as wigl-widgets/LocalCode/tests/*.e2e.test.ts.
+// see SETUP.md). Skips — does not fail — when MA isn't reachable, same
+// convention as wigl-widgets/LocalCode/tests/*.e2e.test.ts.
 //
 // What this covers: the widget's whole data + transport layer against the
 // real server — control-WS auth, the command/response envelope, `music/search`

@@ -1,7 +1,7 @@
 // Ship defaults for the music widget. Per-machine values (a non-default MA
 // host, the login, a provider filter) live in the widget's Settings section,
-// persisted via useStorage — not here. See todo-musicplayer.md "Phase 0" for
-// where these shapes come from.
+// persisted via useStorage — not here. Backend setup is SETUP.md; the
+// widget's current state / data flow is state.md.
 
 /** Music Assistant control API — REST + both WebSockets (`/ws`, `/sendspin`)
  * all live on this one port. */

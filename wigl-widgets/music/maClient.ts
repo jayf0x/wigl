@@ -1,7 +1,7 @@
 // Thin client over Music Assistant's control WebSocket (`/ws`). One socket,
 // message_id request/response correlation, plus an event fan-out. The exact
-// handshake and command shapes are documented in todo-musicplayer.md's
-// "Phase 0" section and, live, at `/api-docs/commands.json`.
+// handshake and command shapes are in state.md ("Runtime shape" +
+// "MA command cheatsheet") and, live, at `/api-docs/commands.json`.
 
 export interface MaEndpoint {
   host: string;

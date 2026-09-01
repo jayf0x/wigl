@@ -3,15 +3,18 @@
 The `music` widget is a player + control surface for a **local Music Assistant
 (MA) server**. It has no backend of its own; MA does search, the queue, and the
 audio (streamed to the widget over MA's Sendspin web-player protocol). This doc
-is the exact, reproducible setup. Architecture and API details are in
-`todo-musicplayer.md`.
+is the exact, reproducible setup. Widget architecture, data flow, and the MA
+command cheatsheet are in `state.md`.
 
-We run a **community MA image** — `ghcr.io/sproft/ytmusic-free-provider` — which
-is the stock MA server plus one extra provider, `ytmusic_free`, giving free
-no-account YouTube Music (search + playback via `yt-dlp`, the same technique
-NewPipe/SimpMusic use). Everything else (RadioBrowser, the queue, Sendspin) is
-stock MA and unaffected. See "About the YouTube provider" at the bottom for the
-tradeoffs.
+**The setup is: run one Docker image, onboard, add two providers.** The image
+is `ghcr.io/sproft/ytmusic-free-provider` — it *is* the stock MA server, just
+with one extra provider (`ytmusic_free`) baked in for free no-account YouTube
+Music (search + playback via `yt-dlp`, same technique as NewPipe/SimpMusic).
+There is no separate "stock MA" step to do first and no migration — this image
+is a drop-in for `ghcr.io/music-assistant/server`. RadioBrowser, the queue, and
+Sendspin are all plain MA and untouched. ("Reverting to stock" below is only
+if you ever want the YouTube provider *gone*.) Tradeoffs: "About the YouTube
+provider" at the bottom.
 
 ## Prerequisites
 
@@ -69,8 +72,10 @@ suffixes multi-instance providers). That's expected; the widget matches on the
 # providers loaded?
 curl -s -X POST http://127.0.0.1:8095/api -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $TOKEN" -d '{"command":"config/providers"}' \
-  | python3 -c 'import sys,json;print([p["instance_id"] for p in json.load(sys.stdin)["result"] if p["type"]=="music" and p["enabled"]])'
+  | python3 -c 'import sys,json;print([p["instance_id"] for p in json.load(sys.stdin) if p["type"]=="music" and p["enabled"]])'
 # → ['builtin', ..., 'radiobrowser', 'ytmusic_free--XXXXXXXX']
+# (the POST /api REST envelope returns a bare JSON value, not {"result": …} —
+#  the /ws WebSocket envelope is the one with {message_id, result}.)
 ```
 
 Then in wigl: open the music widget, search something (`daft punk`), play a

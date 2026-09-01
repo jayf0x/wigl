@@ -2,7 +2,15 @@
 
 Purpose: stop hand-writing a feature spec. Five real players were cloned into
 `.idea/refplayers/` (gitignored) and read for interaction patterns; this table
-is what came out, and `todo-musicplayer.md` was rewritten from it.
+is what came out, and `todo-musicplayer.md` (now split into
+`../../backlog-music.md` + `state.md`) was rewritten from it.
+
+> **Historical snapshot.** The Status column is M0-era. Many "missing" rows
+> are built now — current state is `state.md`. And two "cut" verdicts here
+> are back open per later owner feedback: **EQ/DSP** (see `backlog-music.md`
+> group G — an audio-effects tab is now wanted) — while **Lyrics** stays
+> firmly cut. Treat the *reasoning* in each row as still useful, the *status*
+> as stale.
 
 ## Reference players read
 
@@ -21,7 +29,7 @@ is what came out, and `todo-musicplayer.md` was rewritten from it.
 | Capability | Status | Why / smallest version that fits a tile |
 |---|---|---|
 | Play / pause / next / prev | have | `player_queues/{play,pause,next,previous}`. Done. |
-| **In-track seek (scrubber)** | **missing** | **RESOLVED: `player_queues/seek {queue_id, position}` works** against the live Sendspin player, both directions, even with `flow_mode:true` (tested — see `todo-musicplayer.md` S1). Smallest: make the existing progress bar a click/drag target; ~1s rebuffer gap on jump is acceptable. |
+| **In-track seek (scrubber)** | **missing** | **RESOLVED: `player_queues/seek {queue_id, position}` works** against the live Sendspin player, both directions, even with `flow_mode:true` (tested — see `state.md` "MA command cheatsheet"). Smallest: make the existing progress bar a click/drag target; ~1s rebuffer gap on jump is acceptable. |
 | Repeat / shuffle | **missing** | Not in the widget at all today. `player_queues/repeat {queue_id, repeat_mode}` (off/one/all), `player_queues/shuffle {queue_id, shuffle_enabled}`. `PlayerQueue` already returns `repeat_mode` + `shuffle_enabled`. Smallest: two toggle icons next to the transport row. |
 | Volume | have | Sendspin-local (`player.setVolume`), collapsible slider. Fine — it's this widget's own player. |
 | Now-playing art + title + artist | have | Serif title, art with radio/disc fallback. |
@@ -79,4 +87,4 @@ is what came out, and `todo-musicplayer.md` was rewritten from it.
 8. **Tile size / layout**: owner's call — bump the first-launch default up
    *and* make every view responsive from small to large ("make it work
    anywhere"), don't design to a fixed size. Nav stack replaces panes rather
-   than stacking. See `todo-musicplayer.md` → "Design rules for every entry".
+   than stacking. See `../../backlog-music.md` → "Design rules" and `state.md` → "Locked decisions".

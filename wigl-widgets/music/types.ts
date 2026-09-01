@@ -1,6 +1,6 @@
 // The slice of Music Assistant's API shapes this widget actually reads. Full
 // definitions live at http://127.0.0.1:8095/api-docs/commands.json on the
-// running server (see todo-musicplayer.md) — this is deliberately partial.
+// running server (see state.md) — this is deliberately partial.
 
 export type MediaType =
   | "radio"

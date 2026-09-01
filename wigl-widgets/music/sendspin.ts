@@ -1,5 +1,5 @@
 // The audio half. Music Assistant's built-in web player is Sendspin (a
-// push-PCM / Web-Audio protocol — see todo-musicplayer.md "Phase 0"), not an
+// push-PCM / Web-Audio protocol — see state.md "Runtime shape"), not an
 // `<audio>` flow stream. We bundle MA's own client SDK and feed it a
 // WebSocket we authenticated ourselves against the `/sendspin` proxy, so we
 // never have to monkey-patch `window.WebSocket` the way MA's frontend does
