@@ -192,16 +192,15 @@ export const useMusic = (): MusicApi => {
   // Storage may still hold the pre-4-band `{low,mid,high,reverb,echo}` shape —
   // normalise on read so every consumer sees the current `FxState`.
   const fx = useMemo(() => normalizeFx(fxStored), [fxStored]);
-  // Whether the player was playing when an output switch (→ reconnect) began,
-  // so the new player can re-assert that state (failsafe against a switch that
-  // silently pauses or resumes — feedback G).
+  // Whether the player was playing when the current connection was torn down,
+  // captured in the connect effect's cleanup so the fresh player can re-assert
+  // it after ANY reconnect — an output switch, a host/port/credential edit, the
+  // auto-start-server toggle, or a dropped socket (feedback G, then H). A
+  // reconnect can silently pause (or resume) the queue; this is the failsafe.
   const playIntentRef = useRef<boolean | null>(null);
   const setAudioOutput = useCallback(
-    (mode: "direct" | "media-element") => {
-      if (audioOutput !== mode) playIntentRef.current = !!nowRef.current?.playing;
-      setAudioOutputStored(mode);
-    },
-    [audioOutput, setAudioOutputStored],
+    (mode: "direct" | "media-element") => setAudioOutputStored(mode),
+    [setAudioOutputStored],
   );
 
   const [state, setState] = useState<ConnState>("connecting");
@@ -459,9 +458,10 @@ export const useMusic = (): MusicApi => {
         refreshPlaylists();
         refreshRecent();
 
-        // Failsafe (feedback G): if an output switch caused this reconnect,
-        // re-assert the play/pause state the user actually had — a reconnect
-        // can silently pause (or resume) the queue.
+        // Failsafe (feedback G, then H): re-assert the play/pause state the
+        // user actually had before this reconnect — any reconnect (output
+        // switch, settings edit, dropped socket) can silently pause or resume
+        // the queue. `playIntentRef` was set in the previous effect's cleanup.
         if (playIntentRef.current != null) {
           const want = playIntentRef.current;
           playIntentRef.current = null;
@@ -502,6 +502,10 @@ export const useMusic = (): MusicApi => {
     return () => {
       cancelled = true;
       clearTimeout(reconnectTimer);
+      // Feedback H — carry the play/pause state across the teardown so the next
+      // boot() re-asserts it once the new player is "ready". Runs before every
+      // effect re-run (settings edit or reconnect) and on unmount (harmless).
+      playIntentRef.current = nowRef.current?.playing ?? null;
       teardown();
     };
   }, [
