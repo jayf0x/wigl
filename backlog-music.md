@@ -34,52 +34,6 @@ history, browse, keyboard). This is the list for the next round of refinement.
 
 ---
 
-## Group A — Heuristic UI (make the UI lead the API) · `[researched]`
-
-The pervasive complaint: every control waits a full MA round-trip (through
-Docker) before the UI reflects it. The UI should be an optimistic model of the
-API state, reconciled when the real event lands. Touches `useMusic.ts` +
-`NowPlaying.tsx`. Do this group first — later groups build on the pattern.
-
-### A1 — Optimistic transport + reconcile
-
-`playPause / next / previous / play(row) / cycleRepeat / toggleShuffle` today
-fire the command and wait for the resulting `player_updated` / `queue_updated`
-event to move the UI (see `state.md` → "Optimism"). Change to: flip the local
-state immediately, **disable the triggering control until the confirming event
-arrives or a ~4 s timeout**, and on timeout/error re-read the real state and
-overwrite the optimistic one. Owner's preferred model is exactly this
-("pause locally, disable the button until confirmed… if it fails, overwrite
-with the API state"). Keep a small `pending: Set<action>` in the hook.
-Next step: add an `optimistic` layer in `useMusic` that wraps `cmd()` — set
-predicted state, mark pending, clear pending + reconcile on the matching event
-(match on `object_id === playerId` + event type), fall back to `refreshQueue()`
-on timeout.
-
-### A2 — Smooth playback clock
-
-`now.elapsed` comes from `queue_time_updated`, which MA fires **~once every
-several seconds** (measured: 1 event / 12 s) — hence the 01:35 → 01:42 jump.
-Fix: the Sendspin SDK exposes `SendspinPlayer.trackProgress` →
-`{positionMs, durationMs, playbackSpeed}`, a *live* position it computes from
-the last `server/state` sync point plus elapsed real time against its synced
-clock (verified in `@sendspin/sendspin-js@5.0.0` `core.js:379`). Expose a
-`getProgress()` on `SendspinHandle`, poll it on `requestAnimationFrame` (or a
-~200 ms interval) *while playing*, drive the scrubber + time label from that.
-Keep `queue_time_updated` / `queue.elapsed_time` as the seed and as a
-correction if the two drift > ~1 s. For radio (no duration) keep "live".
-Next step: add `getProgress` to `sendspin.ts`, a `useProgress` tick in
-`NowPlaying`, reconcile logic.
-
-### A3 — Optimistic seek / volume / everything else
-
-`seek` is already optimistic. Fold it into A1's layer so all of
-seek/volume/repeat/shuffle share one predict-then-reconcile path. Volume is
-Sendspin-local already (instant) — just make sure the slider never snaps back
-on an unrelated `player_updated`.
-
----
-
 ## Group B — Search UX · `[researched]`
 
 `music/search` is **one blocking response, ~4 s** for all providers

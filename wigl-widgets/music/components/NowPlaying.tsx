@@ -17,6 +17,7 @@ import {
 import { useStorage } from "@/wigl/hooks";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/wigl/utils";
+import { PROGRESS_TICK_MS } from "../music.config";
 import type { MusicApi } from "../useMusic";
 import { providerLabel } from "../util";
 
@@ -122,12 +123,14 @@ const IconBtn = ({
   label,
   primary,
   active,
+  disabled,
   children,
 }: {
   onClick: () => void;
   label: string;
   primary?: boolean;
   active?: boolean;
+  disabled?: boolean;
   children: React.ReactNode;
 }) => (
   <button
@@ -135,9 +138,10 @@ const IconBtn = ({
     data-no-drag
     aria-label={label}
     aria-pressed={active}
+    disabled={disabled}
     onClick={onClick}
     className={cn(
-      "flex items-center justify-center rounded-full transition-colors duration-150",
+      "flex items-center justify-center rounded-full transition-colors duration-150 disabled:opacity-40",
       primary
         ? "size-9 bg-foreground text-background hover:bg-foreground/85"
         : active
@@ -156,6 +160,28 @@ const Scrubber = ({ api }: { api: MusicApi }) => {
   const barRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<number | null>(null); // fraction 0..1 while dragging
   const duration = now?.duration ?? 0;
+
+  // Smooth clock (A2): sample the SDK's live position while playing so the
+  // label/scrubber tick every frame instead of jumping on MA's sparse
+  // `queue_time_updated`. Falls back to the event-seeded `now.elapsed`.
+  const [live, setLive] = useState<number | null>(null);
+  const playing = !!now?.playing;
+  useEffect(() => {
+    if (!playing) {
+      setLive(null);
+      return;
+    }
+    // `api.getProgress()` already holds the seeked target for ~1.5s after a
+    // local seek (hook-side), so this never snaps backward on a scrub.
+    const read = () => {
+      const p = api.getProgress();
+      setLive(p && p.position > 0 ? p.position : null);
+    };
+    read();
+    const id = setInterval(read, PROGRESS_TICK_MS);
+    return () => clearInterval(id);
+  }, [playing, api]);
+  const elapsed = drag == null ? (live ?? now?.elapsed ?? 0) : now?.elapsed ?? 0;
 
   const fracFromEvent = (e: ReactPointerEvent | PointerEvent) => {
     const el = barRef.current;
@@ -176,13 +202,15 @@ const Scrubber = ({ api }: { api: MusicApi }) => {
   const onUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (drag == null) return;
     e.currentTarget.releasePointerCapture(e.pointerId);
-    api.seek(drag * duration);
+    const target = drag * duration;
+    api.seek(target);
+    setLive(target);
     setDrag(null);
   };
 
-  const livePct = now && duration > 0 ? Math.min(100, (now.elapsed / duration) * 100) : 0;
+  const livePct = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
   const pct = drag != null ? drag * 100 : livePct;
-  const shownElapsed = drag != null ? drag * duration : (now?.elapsed ?? 0);
+  const shownElapsed = drag != null ? drag * duration : elapsed;
   const seekable = !!now && !now.isRadio && duration > 0;
 
   return (
@@ -337,12 +365,13 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
 
       <div className="flex flex-wrap items-center justify-between gap-y-2">
         <div className="flex items-center gap-1">
-          <IconBtn label="Previous track" onClick={api.previous}>
+          <IconBtn label="Previous track" disabled={api.pending.has("previous")} onClick={api.previous}>
             <SkipBack className="size-4" fill="currentColor" />
           </IconBtn>
           <IconBtn
             label={now?.playing ? "Pause" : "Play"}
             primary
+            disabled={api.pending.has("playPause")}
             onClick={() => {
               api.unlock();
               api.playPause();
@@ -354,7 +383,7 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
               <Play className="size-4 translate-x-px" fill="currentColor" />
             )}
           </IconBtn>
-          <IconBtn label="Next track" onClick={api.next}>
+          <IconBtn label="Next track" disabled={api.pending.has("next")} onClick={api.next}>
             <SkipForward className="size-4" fill="currentColor" />
           </IconBtn>
         </div>

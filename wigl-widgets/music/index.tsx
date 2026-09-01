@@ -51,10 +51,10 @@ const MusicWidget = () => {
         api.playPause();
       } else if (e.key === "ArrowRight" && api.now && !api.now.isRadio) {
         e.preventDefault();
-        api.seek(api.now.elapsed + 5);
+        api.seek((api.getProgress()?.position ?? api.now.elapsed) + 5);
       } else if (e.key === "ArrowLeft" && api.now && !api.now.isRadio) {
         e.preventDefault();
-        api.seek(api.now.elapsed - 5);
+        api.seek((api.getProgress()?.position ?? api.now.elapsed) - 5);
       } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         const rows = [...root.querySelectorAll<HTMLElement>("[data-music-row]")];
         if (rows.length === 0) return;

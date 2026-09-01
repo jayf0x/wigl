@@ -15,6 +15,7 @@ import {
   MA_CONTAINER,
   MA_HOST,
   MA_PORT,
+  OPTIMISTIC_TIMEOUT_MS,
   QUEUE_POLL_MS,
   RECONNECT_MAX_MS,
   RECONNECT_MIN_MS,
@@ -62,6 +63,10 @@ export interface MusicApi {
   upNext: QueueItem[];
   repeatMode: RepeatMode;
   shuffle: boolean;
+  /** Transport actions fired but not yet confirmed by a server event
+   * ("playPause" | "next" | "previous" | "play"). The triggering control
+   * disables itself while its name is in here (backlog A1). */
+  pending: Set<string>;
   results: SearchResults | null;
   searching: boolean;
   volume: number;
@@ -100,6 +105,10 @@ export interface MusicApi {
   setVolume: (v: number) => void;
   /** Prime the browser audio output — call from a user gesture (first play). */
   unlock: () => void;
+  /** The Sendspin SDK's live playback position (seconds) + duration, or null
+   * until the server has synced track metadata. Interpolates smoothly between
+   * MA's sparse `queue_time_updated` events — poll it on a tick while playing. */
+  getProgress: () => { position: number; duration: number; playbackSpeed: number } | null;
   refreshPlaylists: () => void;
   refreshRecent: () => void;
   createPlaylist: (name: string) => Promise<MediaItem | null>;
@@ -138,12 +147,22 @@ export const useMusic = (): MusicApi => {
   const [playlists, setPlaylists] = useState<MediaItem[]>([]);
   const [recentlyPlayed, setRecentlyPlayed] = useState<MediaItem[]>([]);
   const [navStack, setNavStack] = useState<NavView[]>([{ kind: "browse" }]);
+  const [pending, setPending] = useState<Set<string>>(() => new Set());
 
   const clientRef = useRef<MaClient | null>(null);
   const sendspinRef = useRef<SendspinHandle | null>(null);
   const queueIdRef = useRef<string | null>(null);
   const nowRef = useRef<NowPlaying | null>(null);
   nowRef.current = now;
+  const upNextRef = useRef<QueueItem[]>([]);
+  upNextRef.current = upNext;
+  // action → timeout handle for the not-yet-confirmed transport commands.
+  const pendingRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // After a local seek the SDK's live position lags ~1s (server rebuffer);
+  // `getProgress` returns this target until then so the scrubber holds steady.
+  const seekFreezeRef = useRef<{ until: number; pos: number }>({ until: 0, pos: 0 });
+  // Ignore SDK volume echoes right after a local drag so the slider never snaps.
+  const volumeSetAtRef = useRef(0);
   const httpBase = `http://${host}:${port}`;
 
   const nav = navStack[navStack.length - 1] ?? { kind: "browse" };
@@ -227,6 +246,38 @@ export const useMusic = (): MusicApi => {
     }
   }, [imageUrl]);
 
+  // ── optimism: predict now, reconcile on the confirming event ─────────────
+  const syncPending = useCallback(() => setPending(new Set(pendingRef.current.keys())), []);
+
+  const clearAllPending = useCallback(() => {
+    if (pendingRef.current.size === 0) return;
+    for (const t of pendingRef.current.values()) clearTimeout(t);
+    pendingRef.current.clear();
+    syncPending();
+  }, [syncPending]);
+
+  /** Disable the triggering control and, if no confirming event arrives in
+   * `OPTIMISTIC_TIMEOUT_MS`, re-read the real queue and drop the prediction. */
+  const markPending = useCallback(
+    (action: string) => {
+      const prev = pendingRef.current.get(action);
+      if (prev) clearTimeout(prev);
+      pendingRef.current.set(
+        action,
+        setTimeout(() => {
+          pendingRef.current.delete(action);
+          syncPending();
+          void refreshQueue();
+        }, OPTIMISTIC_TIMEOUT_MS),
+      );
+      syncPending();
+    },
+    [refreshQueue, syncPending],
+  );
+
+  // Component-lifetime cleanup for any in-flight optimism timers.
+  useEffect(() => () => clearAllPending(), [clearAllPending]);
+
   // ── connect: control WS + Sendspin audio WS ──────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -280,7 +331,7 @@ export const useMusic = (): MusicApi => {
           clientName: "wigl",
           pair: (t) => client.command("sendspin/pair_web_player", { pairing_token: t }),
           onState: (s) => {
-            setVolumeState(s.volume);
+            if (Date.now() - volumeSetAtRef.current > 600) setVolumeState(s.volume);
             if (s.errored) setError("The web player reported an audio error.");
           },
           onDrop: () => {
@@ -298,6 +349,9 @@ export const useMusic = (): MusicApi => {
           if (ev.event === "queue_time_updated" && typeof ev.data === "number") {
             setNow((n) => (n ? { ...n, elapsed: ev.data as number } : n));
           } else if (ev.event.startsWith("queue") || ev.event.startsWith("player")) {
+            // A real transport/queue change confirms whatever we predicted —
+            // reconcile every optimistic value from the server snapshot.
+            clearAllPending();
             void refreshQueue();
           }
         });
@@ -337,7 +391,7 @@ export const useMusic = (): MusicApi => {
     };
   }, [
     host, port, username, password, manageServer, httpBase, attempt, refreshQueue, refreshPlaylists,
-    refreshRecent,
+    refreshRecent, clearAllPending,
   ]);
 
   // ── backstop poll for missed events ─────────────────────────────────────
@@ -390,12 +444,50 @@ export const useMusic = (): MusicApi => {
     (item: MediaItem, option: PlayOption = "play") => {
       cmd("player_queues/play_media", { media: item.uri, option: MA_OPTION[option] });
       if (option === "play") {
+        markPending("play");
         setResults(null);
         setNavStack([{ kind: "browse" }]);
       }
     },
-    [cmd],
+    [cmd, markPending],
   );
+
+  const playPause = useCallback(() => {
+    const playing = !!nowRef.current?.playing;
+    setNow((n) => (n ? { ...n, playing: !playing } : n));
+    markPending("playPause");
+    cmd(playing ? "player_queues/pause" : "player_queues/play");
+  }, [cmd, markPending]);
+
+  const next = useCallback(() => {
+    markPending("next");
+    // Predict the jump from the known up-next head so the panel doesn't sit on
+    // the old track for a full Docker round-trip. Reconciled on the event.
+    const head = upNextRef.current[0];
+    if (head) {
+      const m = head.media_item ?? null;
+      const isRadio = m?.media_type === "radio";
+      setNow(() => ({
+        title: m?.name ?? head.name ?? "—",
+        subtitle: isRadio
+          ? "Live radio"
+          : (m?.artists?.map((a) => a.name).join(", ") ?? m?.album?.name ?? ""),
+        artworkUrl: imageUrl(head.image ?? m?.metadata?.images?.[0] ?? null),
+        elapsed: 0,
+        duration: head.duration ?? m?.duration ?? 0,
+        playing: true,
+        isRadio,
+      }));
+      setUpNext((list) => list.slice(1));
+    }
+    cmd("player_queues/next");
+  }, [cmd, markPending, imageUrl]);
+
+  const previous = useCallback(() => {
+    markPending("previous");
+    setNow((n) => (n ? { ...n, elapsed: 0 } : n));
+    cmd("player_queues/previous");
+  }, [cmd, markPending]);
 
   const startRadio = useCallback(
     (item: MediaItem) => {
@@ -411,6 +503,7 @@ export const useMusic = (): MusicApi => {
       const n = nowRef.current;
       if (!n || n.isRadio) return; // nothing to seek in / a live stream (MA 500s on idle)
       const pos = Math.max(0, Math.round(seconds));
+      seekFreezeRef.current = { until: Date.now() + 1500, pos };
       cmd("player_queues/seek", { position: pos });
       setNow((cur) => (cur ? { ...cur, elapsed: pos } : cur));
     },
@@ -550,6 +643,7 @@ export const useMusic = (): MusicApi => {
   }, []);
 
   const setVolume = useCallback((v: number) => {
+    volumeSetAtRef.current = Date.now();
     setVolumeState(v);
     sendspinRef.current?.setVolume(v);
   }, []);
@@ -569,6 +663,7 @@ export const useMusic = (): MusicApi => {
       upNext,
       repeatMode,
       shuffle,
+      pending,
       results,
       searching,
       volume,
@@ -587,9 +682,9 @@ export const useMusic = (): MusicApi => {
       clearResults: () => setResults(null),
       play,
       startRadio,
-      playPause: () => cmd(now?.playing ? "player_queues/pause" : "player_queues/play"),
-      next: () => cmd("player_queues/next"),
-      previous: () => cmd("player_queues/previous"),
+      playPause,
+      next,
+      previous,
       seek,
       clearQueue: () => cmd("player_queues/clear"),
       removeFromQueue,
@@ -606,17 +701,27 @@ export const useMusic = (): MusicApi => {
       removePlaylistTrack,
       setVolume,
       unlock: () => void sendspinRef.current?.unlock().catch(() => {}),
+      getProgress: () => {
+        const f = seekFreezeRef.current;
+        if (Date.now() < f.until) {
+          return { position: f.pos, duration: nowRef.current?.duration ?? 0, playbackSpeed: 1 };
+        }
+        const p = sendspinRef.current?.getProgress();
+        return p
+          ? { position: p.positionMs / 1000, duration: p.durationMs / 1000, playbackSpeed: p.playbackSpeed }
+          : null;
+      },
       openServer,
       imageUrl,
       request,
     }),
     [
-      state, error, now, currentItem, upNext, repeatMode, shuffle, results, searching, volume,
+      state, error, now, currentItem, upNext, repeatMode, shuffle, pending, results, searching, volume,
       playlists, recentlyPlayed, providers, httpBase, favorites, nav, navStack.length, navTo,
-      navBack, navHome, search, play, startRadio, seek, removeFromQueue, moveQueueItem,
-      moveQueueItemToEnd, cycleRepeat, toggleShuffle, toggleFavorite, refreshPlaylists, refreshRecent,
-      createPlaylist, deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume, openServer,
-      imageUrl, request, cmd,
+      navBack, navHome, search, play, startRadio, playPause, next, previous, seek, removeFromQueue,
+      moveQueueItem, moveQueueItemToEnd, cycleRepeat, toggleShuffle, toggleFavorite, refreshPlaylists,
+      refreshRecent, createPlaylist, deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume,
+      openServer, imageUrl, request, cmd,
     ],
   );
 };

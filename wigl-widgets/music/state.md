@@ -50,16 +50,16 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | File | Owns |
 |------|------|
 | `index.tsx` | `<Widget w=7 h=11>` root, `.music-cq` container-query wrapper, keyboard handler, offline overlay. Composes `<NowPlaying>` + `<Browser>`. |
-| `useMusic.ts` | **The one hook.** Connect/reconnect (both WS), all state, every action. ~620 lines — the widget's brain. `MusicApi` interface is the contract every component uses. |
+| `useMusic.ts` | **The one hook.** Connect/reconnect (both WS), all state, every action. ~700 lines — the widget's brain. `MusicApi` interface is the contract every component uses. Owns the optimism layer (`pending` set + `markPending`/`clearAllPending`) and `getProgress()` (SDK live clock + post-seek freeze). |
 | `maClient.ts` | `/ws` transport — login, message_id correlation, event fan-out, one reconnect-safe `connect()`. |
-| `sendspin.ts` | `/sendspin` — authed-socket handshake + `SendspinPlayer` lifecycle + `SendspinHandle` (playerId, setVolume, unlock, disconnect). |
+| `sendspin.ts` | `/sendspin` — authed-socket handshake + `SendspinPlayer` lifecycle + `SendspinHandle` (playerId, setVolume, `getProgress` → SDK `trackProgress`, unlock, disconnect). |
 | `serverProcess.ts` | `docker start wigl-ma` when unreachable + "Auto-start server" is on. Reachability check. |
 | `music.config.ts` | Ship defaults + `KEYS` (storage), `SENDSPIN_OUTPUT`, `MA_IMAGE`, `MA_CONTAINER`, timings. |
 | `types.ts` | The MA shapes actually read (partial — `/api-docs` is truth). |
 | `util.ts` | `providerLabel()` and small pure helpers. |
 | `music.css` | `IBM Plex Mono` + `Instrument Serif` (serif = track titles only), the `.music-cq` container query, the `.music-eq` VU animation. |
 | `settingsSection.tsx` | Settings-modal section: host/port/login, provider filter, auto-start toggle. |
-| `components/NowPlaying.tsx` | Pinned top zone: art, title, clickable artist/album, scrubber, transport, repeat/shuffle, volume, the P3 fold-down `TrackInfo` panel. ~395 lines. |
+| `components/NowPlaying.tsx` | Pinned top zone: art, title, clickable artist/album, scrubber, transport, repeat/shuffle, volume, the P3 fold-down `TrackInfo` panel. Scrubber samples `api.getProgress()` every `PROGRESS_TICK_MS` while playing for a smooth clock; transport buttons disable while their action is in `api.pending`. |
 | `components/Browser.tsx` | The switchable main pane: search field + `SearchFilters` + results, OR a detail view, OR `<Home>`. Hosts the nav breadcrumb. |
 | `components/Home.tsx` | Tabbed default pane: Up next (`QueueList`) / Playlists / Recent / Browse (`BrowseTab`). |
 | `components/QueueList.tsx` | Up-next list with pointer drag-reorder + per-row `⋯`. |
@@ -85,16 +85,22 @@ detail views: `artist:<uri>`, `album:<uri>`, `playlist:<id>`.
 `navTo` pushes (or resets to browse), `navBack` pops, `navHome` clears. Views
 **replace** the Browser pane; `<NowPlaying>` stays pinned. No router.
 
-**Now-playing / time**: `now.elapsed` is set from MA's `queue_time_updated`
-event — which **fires only ~once every several seconds** (measured: 1 event in
-12 s). This is why the displayed time jumps. `seek()` optimistically sets
-`elapsed`; nothing else interpolates. (Backlog A2: use
-`SendspinPlayer.trackProgress.positionMs` — a live clock the SDK computes from
-the last server sync + elapsed real time — on a rAF, or a local tick.)
+**Now-playing / time**: `now.elapsed` is the event-seeded value from MA's
+`queue_time_updated` (fires only ~once every several seconds). The scrubber no
+longer renders it directly — it samples `api.getProgress()` (the Sendspin SDK's
+`trackProgress`, a live clock computed from the last server sync + elapsed real
+time) every `PROGRESS_TICK_MS` while playing, falling back to `now.elapsed`
+when the SDK has no metadata yet (radio, first second). `getProgress()` also
+returns the seeked target for 1.5 s after a local `seek()` so the bar doesn't
+snap backward during the server rebuffer.
 
-**Optimism**: only `seek` is optimistic. `playPause`, `next`, `previous`,
-`play` (row click), `repeat`, `shuffle` all fire the command and wait for the
-resulting event to update the UI — hence the visible lag. (Backlog A1.)
+**Optimism (A1)**: `playPause` / `next` / `previous` / `play` (row click) flip
+local state immediately, add their name to `pending`, and disable their control
+until the confirming `queue*`/`player*` event lands (`clearAllPending()` +
+`refreshQueue()` reconcile everything from the server snapshot) or a
+`OPTIMISTIC_TIMEOUT_MS` timeout re-reads the queue. `next` predicts the jump
+from `upNext[0]`. `seek` is optimistic + freeze-guarded (above). `repeat` /
+`shuffle` are local-then-reconcile but not disabled (they already feel instant).
 
 ## MA command cheatsheet
 
@@ -137,8 +143,6 @@ widget currently uses:
 
 ## Known rough edges (see backlog-music.md for the fixes)
 
-- Transport/play/pause UI lags the API by a round-trip (A1).
-- Displayed track time jumps in ~5 s steps (A2).
 - Search is one 4 s blocking call; old results linger, no loading state (B1/B2).
 - `⋯` menu hides actions the owner wants inline on the row (C1); now-playing
   lacks the row action set (C2).

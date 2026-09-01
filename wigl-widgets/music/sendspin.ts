@@ -70,6 +70,11 @@ export interface SendspinHandle {
    * tests, tap-able for a future visualiser. */
   audioElement: HTMLAudioElement | null;
   setVolume: (v: number) => void;
+  /** The SDK's live playback position, computed from the last server sync
+   * point plus elapsed real time against the synced clock — updates smoothly
+   * between MA's sparse `queue_time_updated` events. `null` until the server
+   * has sent track metadata. `durationMs === 0` for live radio. */
+  getProgress: () => { positionMs: number; durationMs: number; playbackSpeed: number } | null;
   /** Resume the AudioContext + start the media element. Must be called from
    * within a user gesture, before the first `play_media`. Safe to call
    * repeatedly. */
@@ -136,6 +141,7 @@ export const connectSendspin = async (opts: {
     playerId: player.clientId,
     audioElement,
     setVolume: (v) => player.setVolume(v),
+    getProgress: () => player.trackProgress,
     unlock: async () => {
       await player.unlock();
       // media-element mode: the element itself must be playing for WebKit to

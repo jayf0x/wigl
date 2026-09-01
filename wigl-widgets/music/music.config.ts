@@ -73,3 +73,14 @@ export const RECONNECT_MAX_MS = 15_000;
 
 /** How often to re-poll the queue snapshot as a backstop for missed events. */
 export const QUEUE_POLL_MS = 10_000;
+
+/** Optimistic transport (backlog A1): after firing a transport command the UI
+ * flips locally and the triggering control is disabled until the confirming
+ * `player_updated` / `queue_updated` event lands. If none arrives within this
+ * window, re-read the real queue and overwrite the prediction. */
+export const OPTIMISTIC_TIMEOUT_MS = 4_000;
+
+/** Smooth playback clock (backlog A2): how often `NowPlaying` samples the
+ * Sendspin SDK's live `trackProgress` while playing, to interpolate between
+ * MA's sparse `queue_time_updated` events (~1 every several seconds). */
+export const PROGRESS_TICK_MS = 250;
