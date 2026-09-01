@@ -228,7 +228,14 @@ const AlbumView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
         item={item}
         art={art}
         sub={[artistSub, item.year].filter(Boolean).join(" · ")}
-        actions={<PlayPills api={api} item={item} />}
+        actions={
+          <>
+            <PlayPills api={api} item={item} />
+            <PillBtn onClick={() => api.startRadio(item)}>
+              <Radio className="size-3" /> Album radio
+            </PillBtn>
+          </>
+        }
       />
       <ScrollArea className="min-h-0 flex-1" scrollFade>
         <div className="p-1.5">
@@ -261,7 +268,10 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
         () =>
           api.request<MediaItem[]>("music/playlists/playlist_tracks", {
             item_id: item.item_id,
-            provider_instance_id_or_domain: "library",
+            // library playlists resolve under "library"; a radio_playlist://
+            // (or other provider) playlist needs its own provider.
+            provider_instance_id_or_domain:
+              item.provider && item.provider !== "library" ? item.provider : "library",
           }),
         [],
       );
@@ -271,7 +281,8 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
 
   if (loading && !data) return <Loading />;
   const tracks = data?.tracks ?? [];
-  const editable = item.is_editable !== false;
+  // Only real library playlists can be renamed / deleted / have tracks added.
+  const editable = item.is_editable !== false && (!item.provider || item.provider === "library");
   const shownName = nameOverride ?? item.name;
   const art = api.imageUrl(item.metadata?.images?.[0] ?? tracks[0]?.metadata?.images?.[0] ?? null);
 

@@ -578,4 +578,30 @@ describe("music widget ↔ Music Assistant (live)", () => {
       client.close();
     }
   });
+
+  // Group I — "radio" is the `radio_playlist` dynamic-playlist provider,
+  // addressed as `radio_playlist://playlist/<seed uri>`. startRadio navigates
+  // to it; PlaylistView reads its tracks with provider "radio_playlist".
+  test.skipIf(!reachable)("radio_playlist generates a dynamic mix from a seed", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const res = await client.command<SearchResults>("music/search", {
+        search_query: "radiohead",
+        media_types: ["artist"],
+        limit: 1,
+      });
+      const seed = res.artists[0];
+      if (!seed) return;
+      const tracks = await client.command<MediaItem[]>("music/playlists/playlist_tracks", {
+        item_id: seed.uri,
+        provider_instance_id_or_domain: "radio_playlist",
+      });
+      expect(Array.isArray(tracks)).toBe(true);
+      expect(tracks.length).toBeGreaterThan(1);
+      expect(typeof tracks[0].uri).toBe("string");
+    } finally {
+      client.close();
+    }
+  });
 });

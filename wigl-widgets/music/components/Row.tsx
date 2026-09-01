@@ -57,8 +57,22 @@ export const standardActions = (
   item: MediaItem,
   extra: RowAction[] = [],
 ): RowAction[] => {
+  // A radio = MA's `radio_playlist` dynamic mix seeded from this item. Only
+  // track/artist/album/(non-dynamic)playlist seed one — not a radio station,
+  // not an already-dynamic playlist.
   const canRadio =
-    item.media_type === "radio" || item.media_type === "artist" || item.media_type === "track";
+    item.media_type === "track" ||
+    item.media_type === "artist" ||
+    item.media_type === "album" ||
+    (item.media_type === "playlist" && !item.is_dynamic && item.provider !== "radio_playlist");
+  const radioLabel =
+    item.media_type === "artist"
+      ? "Artist radio"
+      : item.media_type === "album"
+        ? "Album radio"
+        : item.media_type === "playlist"
+          ? "Playlist radio"
+          : "Track radio";
   const firstArtist = item.artists?.[0];
   const fav = api.favorites.has(item.uri);
   return [
@@ -141,7 +155,7 @@ export const standardActions = (
       hidden: item.media_type !== "playlist" || item.is_editable === false,
     },
     {
-      label: "Start radio",
+      label: radioLabel,
       icon: <Radio className="size-3.5" />,
       run: () => api.startRadio(item),
       hidden: !canRadio,

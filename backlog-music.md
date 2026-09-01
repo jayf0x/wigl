@@ -171,21 +171,17 @@ immediately stale.
 
 ---
 
-## Group I — "Start radio" semantics · `[researched]`
+## Group I — "Start radio" — DONE
 
-Verified: `play_media {radio_mode:true}` **replaces the entire queue** with
-[the seed track + ~25 similar tracks] (e.g. seed "Pink Floyd – Time" →
-Black Sabbath, Aerosmith, Fleetwood Mac…). The seed does stay as the current
-item. `radio_source` comes back `[]` (it's the deprecated static-ish path,
-not an ongoing dynamic radio). Owner's read ("removes the queue, plays a
-different track") is *mostly* accurate — it's destructive.
-
-- **I1** — Make it respect the D1 overwrite/append toggle (append radio to the
-  current queue instead of always replacing).
-- **I2** — Rename it in the UI so the behaviour is obvious ("Start a mix from
-  this" / "Radio from…") and only offer it where it makes sense (tracks,
-  artists — not radio stations).
-- **I3** — Consider the non-deprecated path: `play_media` with a
-  `radio_playlist://` uri for a genuinely dynamic, self-extending queue.
-  Research what that uri looks like (`/api-docs`, the MA frontend).
+Reworked to MA's non-deprecated pattern (matching the MA frontend's
+`helpers/radio.ts`): a "radio" is the `radio_playlist` provider —
+`radio_playlist://playlist/<seed uri>` — a generated playlist of the seed's
+tracks + similar. `startRadio()` now **navigates to that playlist** (a
+`PlaylistView`) instead of the old destructive `play_media {radio_mode:true}`.
+From there Play respects the queue-mode toggle (I1) and "Add to queue" is one
+tap. Actions are per-type ("Track radio" / "Artist radio" / "Album radio" /
+"Playlist radio", I2) and only shown for track/artist/album/non-dynamic-
+playlist seeds — never a radio station or an already-dynamic playlist.
+`PlaylistView` now resolves tracks under `item.provider` (was hardcoded
+`"library"`) and only shows rename/delete/add for real library playlists.
 

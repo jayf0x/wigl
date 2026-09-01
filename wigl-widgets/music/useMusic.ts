@@ -591,13 +591,25 @@ export const useMusic = (): MusicApi => {
     cmd("player_queues/previous");
   }, [cmd, markPending]);
 
+  // I — "radio" is MA's `radio_playlist` provider: a dynamic playlist (seed's
+  // own tracks + similar) addressed as `radio_playlist://playlist/<seed uri>`.
+  // Navigate to it (like the MA frontend does) instead of destructively
+  // replacing the queue — the playlist view's Play then respects the queue-mode
+  // toggle, and "Add to queue" is right there.
   const startRadio = useCallback(
     (item: MediaItem) => {
-      cmd("player_queues/play_media", { media: item.uri, option: "play", radio_mode: true });
-      setResults(null);
-      setNavStack([{ kind: "browse" }]);
+      const type = item.media_type === "album" ? "Album" : item.media_type === "playlist" ? "Playlist" : item.media_type === "artist" ? "Artist" : "Track";
+      const radioItem: MediaItem = {
+        item_id: item.uri,
+        provider: "radio_playlist",
+        uri: `radio_playlist://playlist/${item.uri}`,
+        name: `${item.name} — ${type} radio`,
+        media_type: "playlist",
+        is_editable: false,
+      };
+      setNavStack((s) => [...s, { kind: "playlist", item: radioItem }]);
     },
-    [cmd],
+    [],
   );
 
   const seek = useCallback(
