@@ -184,16 +184,28 @@ export const Row = ({
 
   return (
     <div className="rounded-md">
-      <div className={cn("group flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-accent", open && "bg-accent")}>
+      <div
+        className={cn(
+          "group flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-accent focus-within:bg-accent",
+          open && "bg-accent",
+        )}
+      >
         {dragHandle}
         <button
           type="button"
           data-no-drag
+          data-music-row
           onClick={() => {
             api.unlock();
             (onPlay ?? (() => api.play(item, "play")))();
           }}
-          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+          onKeyDown={(e) => {
+            if (e.key === "a" && !item.uri.startsWith("queue:")) {
+              e.preventDefault();
+              api.play(item, "add");
+            }
+          }}
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left outline-none"
         >
           {index != null ? (
             <span className="w-5 shrink-0 text-right text-[10px] text-muted-foreground tabular-nums">

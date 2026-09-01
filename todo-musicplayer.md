@@ -115,43 +115,48 @@ not an `AnalyserNode`.
 **Current file layout** (`wigl-widgets/music/`): `index.tsx` (root),
 `useMusic.ts` (the one hook — connect, state, nav reducer, all actions),
 `maClient.ts` (`/ws`), `sendspin.ts` (`/sendspin` + SDK), `serverProcess.ts`
-(`docker start`), `music.config.ts`, `types.ts`, `music.css`,
-`settingsSection.tsx`, `components/` (`NowPlaying`, `Browser`, `Row`,
-`DetailView`, `Equalizer`), `tests/` (`music.e2e.test.ts`, `audio-check.md`),
+(`docker start`), `music.config.ts`, `types.ts`, `util.ts` (`providerLabel`),
+`music.css`, `settingsSection.tsx`, `components/` (`NowPlaying`, `Browser`,
+`Home`, `Row`, `QueueList`, `DetailView`, `BrowseTab`, `SearchFilters`,
+`Equalizer`), `tests/` (`music.e2e.test.ts`, `audio-check.md`),
 `COMPARISON.md` (M0 output).
 
-**What's already done:** connect + reconnect (control + audio); search
-(provider-agnostic, live/debounced); now-playing with art, clickable
-artist/album, a click/drag seek scrubber, repeat + shuffle toggles;
-non-destructive play-now + add-to-queue + play-next; up-next list with
-per-row remove; explicit Clear as the only queue-emptier; "start radio from
-this"; inline volume; a nav stack (browse → artist / album, back + breadcrumb,
-views replace the pane); a fold-down `⋯` action menu on every row (play
-next/add/favourite/radio/go-to-artist/go-to-album); artist view (top tracks,
-albums, similar, artist radio) and album view (track list), both `useQuery`-
-cached; offline/empty/error states; `/` + space + `←`/`→` + `n`/`p` keys; the
-"＋ add youtube music" footer; the Settings section; `docker start`
-auto-recover. First-launch size `w=7 h=11`; every view scales with the tile
-(cqw units, `.music-cq` container on the widget root).
+**What's done — this is a full mini music player now:**
+
+- **Playback:** play/pause/next/prev; click-drag seek scrubber (hidden for
+  radio); repeat (off→all→one) + shuffle toggles; inline volume; keys `/`,
+  space, `←`/`→` seek, `n`/`p`, `↑`/`↓` roving row focus, enter=play,
+  `a`=add-to-queue.
+- **Now-playing:** art (click → album), serif title, clickable artist,
+  fold-down track-details panel (codec/rate/bitrate/loudness/album/year,
+  persisted).
+- **Queue:** non-destructive play-now (MA `QueueOption:"play"`), add-to-queue,
+  play-next; up-next list with pointer drag-reorder + move-to-top/bottom +
+  remove; Clear is the only emptier.
+- **Nav:** a view stack (browse → artist / album / playlist, back +
+  breadcrumb, views replace the pane, now-playing stays pinned).
+- **Rows:** every media row has left-click play + a fold-down `⋯` menu (play
+  next, add to queue, favourite, add to playlist [submenu + inline "new"],
+  start radio, go to artist/album; queue rows also move/remove).
+- **Artist / album views:** top tracks, albums, similar artists, artist
+  radio / album track list — `useQuery`-cached (`artist:` / `album:` /
+  `playlist:` keys, in-memory).
+- **Home (search empty) is tabbed:** Up next · Playlists · Recent · Browse.
+  Playlists = list + create + delete + open; Recent =
+  `music/recently_played_items`; Browse = a `music/browse` folder navigator.
+- **Search:** live/debounced, type + source filter pills (persisted),
+  search-history chips.
+- **Playlists:** create / delete / add track / remove track (rename is P6).
+- **Favourites:** heart toggle from any row (`favorites/add_item` /
+  `item_by_uri`+`remove_item`).
+- Plus: connect/reconnect (control + audio), offline/empty/error states, the
+  "＋ add youtube music" footer, the Settings section, `docker start`
+  auto-recover. First-launch size `w=7 h=11`; every view scales with the tile
+  (cqw units, `.music-cq` container on the widget root).
 
 ---
 
-## X — Infra (build these before their second consumer)
-
-### X2 — `useQuery` for the reads that aren't built yet
-
-The nav stack, the row-action `⋯` menu, and the artist/album views are done
-(`useMusic.ts` nav reducer, `components/Row.tsx`, `components/DetailView.tsx`).
-Artist/album reads are cached with `useQuery` keyed `artist:<uri>` /
-`album:<uri>`, **in-memory only** (`stale: hours(6)`, no `useSql`) — they're
-cheap to refetch and a stale artist page after a restart is worse than a
-200ms wait. When P4 (playlist contents) and D1 (browse rows) land, cache
-those the same way; only add `useSql: true` if a specific read turns out slow
-*and* stable. Delete this entry once P4 + D1 are both done.
-
----
-
-## Q — Queue & playlists
+## Remaining
 
 ### P6 — Playlist rename
 
@@ -171,18 +176,6 @@ frontend's network tab while renaming a builtin playlist, or read
 `music-assistant/frontend` in `.idea/refplayers/` for the call it makes, then
 add `renamePlaylist` + an inline rename field to `PlaylistView`'s header.
 Low priority — delete + recreate is the workaround.
-
----
-
-## I — Interaction
-
-### I3 — Keyboard: list navigation
-
-`/` + space, `←`/`→` seek ±5s, `n`/`p` next/prev are done (`index.tsx` `onKey`).
-Still missing: `↑`/`↓` move a focus ring through the visible list,
-`enter` = play the focused row, `a` = add it to the queue. One next step: add a
-`focusedIndex` to `Browser.tsx` (and the detail views), render a focus ring on
-that row, wire the keys. Scope to what fits — no global capture.
 
 ---
 

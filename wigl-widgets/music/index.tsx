@@ -29,24 +29,23 @@ const MusicWidget = () => {
   const searchRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // Keyboard: `/` focus search, space play/pause, ←/→ seek ±5s, n/p next/prev
-  // — all suppressed while typing or with a button focused.
+  // Keyboard. `/` and space need a "not on any control" guard; the rest only
+  // need "not typing in a field" so they still work with a result row focused.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      const interactive =
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable ||
-        !!target.closest("button");
-      if (interactive) return;
-      if (e.key === "/") {
+      const typing =
+        target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+      if (typing) return;
+      const onControl = !!target.closest("button");
+
+      if (e.key === "/" && !onControl) {
         e.preventDefault();
         api.navHome();
         setTimeout(() => searchRef.current?.focus(), 0);
-      } else if (e.key === " ") {
+      } else if (e.key === " " && !onControl) {
         e.preventDefault();
         api.unlock();
         api.playPause();
@@ -56,6 +55,14 @@ const MusicWidget = () => {
       } else if (e.key === "ArrowLeft" && api.now && !api.now.isRadio) {
         e.preventDefault();
         api.seek(api.now.elapsed - 5);
+      } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        const rows = [...root.querySelectorAll<HTMLElement>("[data-music-row]")];
+        if (rows.length === 0) return;
+        e.preventDefault();
+        const cur = rows.findIndex((r) => r === document.activeElement);
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        const next = cur < 0 ? (step === 1 ? 0 : rows.length - 1) : cur + step;
+        rows[Math.max(0, Math.min(rows.length - 1, next))]?.focus();
       } else if (e.key === "n") {
         api.next();
       } else if (e.key === "p") {

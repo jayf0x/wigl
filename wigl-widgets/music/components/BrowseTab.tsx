@@ -88,8 +88,9 @@ export const BrowseTab = ({ api }: { api: MusicApi }) => {
                 key={getPath(i) ?? i.name}
                 type="button"
                 data-no-drag
+                data-music-row
                 onClick={() => open(i)}
-                className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left hover:bg-accent"
+                className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left outline-none hover:bg-accent focus-visible:bg-accent"
               >
                 <Folder className="size-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate text-[12px] text-foreground/90">
