@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStorage } from "@/wigl/hooks";
 import { runCmd } from "@/wigl/utils";
+import { arrayMove } from "./util";
 import { MaClient, type MaEndpoint } from "./maClient";
 import {
   DEFAULT_PASSWORD,
@@ -721,16 +722,13 @@ export const useMusic = (): MusicApi => {
   const moveQueueItem = useCallback(
     (queueItemId: string, posShift: number) => {
       if (!posShift) return;
-      setUpNext((list) => {
-        const from = list.findIndex((i) => i.queue_item_id === queueItemId);
-        if (from < 0) return list;
-        const to = Math.max(0, Math.min(list.length - 1, from + posShift));
-        if (to === from) return list;
-        const copy = [...list];
-        const [it] = copy.splice(from, 1);
-        copy.splice(to, 0, it);
-        return copy;
-      });
+      setUpNext((list) =>
+        arrayMove(
+          list,
+          list.findIndex((i) => i.queue_item_id === queueItemId),
+          posShift,
+        ),
+      );
       cmd("player_queues/move_item", { queue_item_id: queueItemId, pos_shift: posShift });
     },
     [cmd],

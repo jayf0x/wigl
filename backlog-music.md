@@ -40,22 +40,6 @@ owner's full spec for the speed feature.
 
 ## P0 — Broken core behaviour
 
-### P0.5 — Queue drag-reorder is broken
-
-Owner: can only drag a row *over the first item*; index 0 ↔ index 2 swaps, then
-index 2 goes greyed-out, and dragging again swaps it back. So the pointer-drag
-math (`move_item` `pos_shift`, the optimistic local reorder, the reconcile on
-`queue_items_updated`) is wrong. Also: **it commits live** — the owner wants the
-reorder to be **local-only during the gesture and pushed to MA once, on drop**
-(or even: never auto-save, all reorders local until a Save button — accepting
-that the *currently playing* track's real position may differ from the local
-view). Files: `QueueList.tsx` (the drag handling), `useMusic.ts`
-`moveQueueItem`/`moveQueueItemToEnd`. **Also:** pointer-drag inside a wigl
-widget may have its own gotchas (the widget lives in a shared realm, `data-no-drag`
-vs the desktop's own drag) — worth a `tests/manual/` repro script and/or a pure
-unit test of the reorder reducer (the array-move logic, separated from the DOM).
-See `docs/debugging.md` "cross-monitor drag" for how flaky pointer stuff is here.
-
 ### P0.6 — Disabling "Auto-start server" stops the music
 
 The connect `useEffect` deps include `manageServer`, so toggling it tears down

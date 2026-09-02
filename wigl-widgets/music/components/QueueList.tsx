@@ -85,15 +85,27 @@ const QueueHeader = ({ api, count }: { api: MusicApi; count: number }) => {
   );
 };
 
-const ROW_H = 42; // approx collapsed row height, for drag-target math
+const ROW_H_FALLBACK = 42; // used only until we measure a real row
 
-/** Up-next list with pointer drag-to-reorder. Optimistic while dragging;
- * `api.moveQueueItem` fires the MA command + keeps the optimistic order until
- * the next `queue_items_updated` reconciles it. */
+/** Up-next list with pointer drag-to-reorder (P0.5). The DOM row order never
+ * changes during a drag — the dragged row and the rows it passes are moved
+ * with CSS transforms only — so the pointer-captured handle stays put in the
+ * tree and WebKit never drops capture mid-gesture. The list is frozen to a
+ * snapshot for the duration of the drag so an incoming `refreshQueue` can't
+ * yank it. One `moveQueueItem` fires on drop; nothing commits mid-gesture. */
 export const QueueList = ({ api }: { api: MusicApi }) => {
-  const list = api.upNext;
-  const [drag, setDrag] = useState<{ id: string; from: number; to: number } | null>(null);
+  const live = api.upNext;
+  const [drag, setDrag] = useState<{
+    id: string;
+    from: number;
+    to: number;
+    dy: number;
+  } | null>(null);
   const startY = useRef(0);
+  const rowH = useRef(ROW_H_FALLBACK);
+  const frozen = useRef<typeof live>([]);
+  if (!drag) frozen.current = live;
+  const list = drag ? frozen.current : live;
 
   if (list.length === 0) {
     return (
@@ -106,40 +118,48 @@ export const QueueList = ({ api }: { api: MusicApi }) => {
     );
   }
 
-  // While dragging, show the list with the dragged row moved to `to`.
-  const view = (() => {
-    if (!drag) return list;
-    const copy = [...list];
-    const [it] = copy.splice(drag.from, 1);
-    copy.splice(drag.to, 0, it);
-    return copy;
-  })();
-
   const onDown = (id: string, from: number) => (e: ReactPointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     startY.current = e.clientY;
-    setDrag({ id, from, to: from });
+    const row = e.currentTarget.closest("[data-qrow]") as HTMLElement | null;
+    if (row?.offsetHeight) rowH.current = row.offsetHeight;
+    setDrag({ id, from, to: from, dy: 0 });
   };
   const onMove = (e: ReactPointerEvent<HTMLButtonElement>) => {
     setDrag((d) => {
       if (!d) return d;
-      const shift = Math.round((e.clientY - startY.current) / ROW_H);
+      const dy = e.clientY - startY.current;
+      const shift = Math.round(dy / rowH.current);
       const to = Math.max(0, Math.min(list.length - 1, d.from + shift));
-      return to === d.to ? d : { ...d, to };
+      return { ...d, dy, to };
     });
   };
   const onUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
-    e.currentTarget.releasePointerCapture(e.pointerId);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* capture already gone */
+    }
     setDrag((d) => {
       if (d && d.to !== d.from) api.moveQueueItem(d.id, d.to - d.from);
       return null;
     });
   };
 
+  /** Transform offset (px) for the row at DOM index `i` during a drag. */
+  const rowShift = (i: number): number => {
+    if (!drag) return 0;
+    if (i === drag.from) return drag.dy;
+    if (drag.to > drag.from && i > drag.from && i <= drag.to) return -rowH.current;
+    if (drag.to < drag.from && i < drag.from && i >= drag.to) return rowH.current;
+    return 0;
+  };
+
   return (
     <>
       <QueueHeader api={api} count={list.length} />
-      {view.map((it, i) => {
+      {list.map((it, i) => {
         const media = it.media_item ?? null;
         const asItem =
           media ?? ({ item_id: "", provider: "", name: it.name, uri: `queue:${it.queue_item_id}`, media_type: "track" as const });
@@ -154,7 +174,7 @@ export const QueueList = ({ api }: { api: MusicApi }) => {
             label: "Move to bottom",
             icon: <ArrowDownToLine className="size-3.5" />,
             run: () => api.moveQueueItemToEnd(it.queue_item_id),
-            hidden: i === view.length - 1,
+            hidden: i === list.length - 1,
           },
           {
             label: "Remove from queue",
@@ -166,7 +186,14 @@ export const QueueList = ({ api }: { api: MusicApi }) => {
         return (
           <div
             key={it.queue_item_id}
-            className={cn("transition-opacity", drag?.id === it.queue_item_id && "opacity-50")}
+            data-qrow
+            style={{
+              transform: `translateY(${rowShift(i)}px)`,
+              transition: drag?.id === it.queue_item_id ? "none" : "transform 140ms ease",
+              position: "relative",
+              zIndex: drag?.id === it.queue_item_id ? 2 : undefined,
+            }}
+            className={cn(drag?.id === it.queue_item_id && "opacity-70")}
           >
             <Row
               item={asItem}
@@ -180,8 +207,9 @@ export const QueueList = ({ api }: { api: MusicApi }) => {
                   data-no-drag
                   aria-label="Drag to reorder"
                   onPointerDown={onDown(it.queue_item_id, i)}
-                  onPointerMove={drag ? onMove : undefined}
-                  onPointerUp={drag ? onUp : undefined}
+                  onPointerMove={onMove}
+                  onPointerUp={onUp}
+                  onPointerCancel={onUp}
                   className="-ml-1 shrink-0 cursor-grab touch-none rounded p-0.5 text-muted-foreground/40 hover:text-foreground active:cursor-grabbing"
                 >
                   <GripVertical className="size-3.5" />
