@@ -40,17 +40,6 @@ owner's full spec for the speed feature.
 
 ## P0 — Broken core behaviour
 
-### P0.6 — Disabling "Auto-start server" stops the music
-
-The connect `useEffect` deps include `manageServer`, so toggling it tears down
-and rebuilds both sockets. The iteration-2 "resume if was playing" failsafe
-(`playIntentRef`, re-asserted ~1.2 s after `ready`) either isn't firing for
-this path or the timing's wrong. **The owner wants this generalised into a
-real safety net:** after *any* state change that could have disturbed
-playback (a reconnect, a settings toggle, even a playlist write one day),
-compare intended vs actual play state and re-assert. One mechanism in
-`useMusic.ts`, always on. See P1.
-
 ### P0.7 — Playlist background image doesn't display
 
 Set a background on a playlist → nothing shows (detail header, list thumb,

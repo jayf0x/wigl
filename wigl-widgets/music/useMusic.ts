@@ -173,6 +173,11 @@ export const useMusic = (): MusicApi => {
   const [password] = useStorage<string>(KEYS.password, DEFAULT_PASSWORD);
   const [providerFilter] = useStorage<string>(KEYS.providerFilter, "");
   const [manageServer] = useStorage<boolean>(KEYS.manageServer, false);
+  // Read inside boot() only — toggling it must NOT tear down a live connection
+  // (P0.6: doing so stopped playback). It just changes whether a *future*
+  // reconnect tries to auto-start the container.
+  const manageServerRef = useRef(manageServer);
+  manageServerRef.current = manageServer;
   const [queueMode, setQueueMode] = useStorage<QueueMode>(KEYS.queueMode, "append");
   const [pinnedPlaylists, setPinnedPlaylists] = useStorage<string[]>(KEYS.pinnedPlaylists, []);
   const [audioOutput, setAudioOutputStored] = useStorage<"direct" | "media-element">(
@@ -399,7 +404,7 @@ export const useMusic = (): MusicApi => {
       setState("connecting");
       try {
         if (!(await maReachable(httpBase))) {
-          if (manageServer) await startMaContainer(MA_CONTAINER);
+          if (manageServerRef.current) await startMaContainer(MA_CONTAINER);
           // give it a moment whether or not we started it
           for (let i = 0; i < 8 && !(await maReachable(httpBase)); i++) {
             await new Promise((r) => setTimeout(r, 1500));
@@ -520,7 +525,7 @@ export const useMusic = (): MusicApi => {
       teardown();
     };
   }, [
-    host, port, username, password, manageServer, httpBase, attempt, refreshQueue, refreshPlaylists,
+    host, port, username, password, httpBase, attempt, refreshQueue, refreshPlaylists,
     refreshRecent, clearAllPending, audioOutput,
   ]);
 

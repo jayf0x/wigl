@@ -44,16 +44,14 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
   `SENDSPIN_OUTPUT` in `music.config.ts`): `"direct"` (default; AudioContext →
   destination, lowest latency) or `"media-element"` (PCM → MediaStream →
   hidden `<audio>`). **The Effects tab (4-band graphic EQ + reverb) needs
-  `"media-element"`** — the only mode with an `<audio>` element to tap via
-  `createMediaElementSource`. Opening the tab now **transparently switches**
-  to `"media-element"` (no "enable" step); the switch reconnects the player,
-  and `useMusic` captures the play/pause state into `playIntentRef` beforehand
-  and re-asserts it ~1.2 s after `ready`. That failsafe is now **general**:
-  `useMusic`'s connect effect captures `nowRef.current?.playing` in its
-  *cleanup* before every teardown and `boot()` re-asserts it once ready — but
-  **iteration-3 QA found this isn't holding** for the auto-start-server toggle
-  (music stops). Being reworked into a real always-on resync net (backlog P0.6
-  / P1.2). `audioGraph.ts` owns the Web Audio chain; `useMusic` owns its
+  `"media-element"`** — the only mode with an `<audio>` element to tap.
+  Opening the tab now **transparently switches** to `"media-element"` (no
+  "enable" step); the switch reconnects the player, and `useMusic` captures the
+  play/pause state into `playIntentRef` beforehand and re-asserts it ~1.2 s
+  after `ready`. That failsafe fires on any real reconnect (output switch,
+  host/port/credential edit, dropped socket). The **auto-start-server toggle no
+  longer reconnects at all** (P0.6 — `manageServer` read via a ref, dropped
+  from the connect effect deps). A proper always-on resync net is still P1.2. `audioGraph.ts` owns the Web Audio chain; `useMusic` owns its
   lifecycle (created on connect if `audio.audioElement` exists, disposed on
   teardown). The SDK's media-element output is a `MediaStream` on
   `<audio>.srcObject`, so the chain taps it with `createMediaStreamSource`
@@ -217,7 +215,6 @@ widget currently uses:
 ## Known rough edges → backlog-music.md P0 has the fixes
 
 **Broken (iteration-3 QA):**
-- Disabling "Auto-start server" stops the music (P0.6).
 - Playlist background images don't display (P0.7).
 
 **Standing:**
