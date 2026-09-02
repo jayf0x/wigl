@@ -40,15 +40,9 @@ owner's full spec for the speed feature.
 
 ## P0 — Broken core behaviour
 
-### P0.7 — Playlist background image doesn't display
-
-Set a background on a playlist → nothing shows (detail header, list thumb,
-pinned chip). The `plbg:<id>` → `playlist_images` map migration (iteration 2)
-may have broken the read path, or the base64 upload via `pickImage.ts` +
-`sh -c` is failing/producing an unusable data URI. This is superseded by **P7**
-(a proper wigl image system) — but if P7 is a separate session, at least make
-the current base64 path actually round-trip: pick → store → `<img src>` shows,
-in all three places, verified live.
+*All clear — P0.1–P0.7 fixed (git log `music:` commits). P0.3/P0.4 need the
+owner's by-ear + live-scrub QA to fully confirm; the structural causes are
+addressed.*
 
 ---
 

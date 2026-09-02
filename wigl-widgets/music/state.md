@@ -212,10 +212,10 @@ widget currently uses:
   are the only queue-emptiers.
 - No OS media-key integration (Rust + entitlements).
 
-## Known rough edges → backlog-music.md P0 has the fixes
+## Known rough edges → backlog-music.md has the remaining work
 
-**Broken (iteration-3 QA):**
-- Playlist background images don't display (P0.7).
+All P0 iteration-3 breakage is fixed (P0.1–P0.7). P1 (optimistic-UI audit +
+resync net), P2 (server-side speed) and P3–P8 are still open.
 
 **Standing:**
 - Rich track metadata is null without an MA metadata provider on the server.

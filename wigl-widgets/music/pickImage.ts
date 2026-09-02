@@ -10,15 +10,18 @@
 import { isMacos, runCmd } from "@/wigl/utils";
 
 // macOS: `choose file` dialog → `sips` downscale to 900px long-edge JPEG → b64.
+// `mktemp -d` (a real dir) — the old `$(mktemp)/bg.jpg` treated the temp *file*
+// as a directory, so `mkdir -p` failed under `set -e` and every pick silently
+// returned null (P0.7).
 const MAC_SCRIPT = `
 set -e
 f=$(osascript -e 'POSIX path of (choose file with prompt "Choose a background image" of type {"public.image"})' 2>/dev/null) || exit 1
 [ -n "$f" ] || exit 1
-out=$(mktemp)/bg.jpg
-mkdir -p "$(dirname "$out")"
+d=$(mktemp -d)
+out="$d/bg.jpg"
 sips -s format jpeg -Z 900 "$f" --out "$out" >/dev/null 2>&1 || cp "$f" "$out"
 base64 < "$out" | tr -d '\\n'
-rm -rf "$(dirname "$out")"
+rm -rf "$d"
 `;
 
 // Linux: zenity chooser → ImageMagick downscale if present → b64.
