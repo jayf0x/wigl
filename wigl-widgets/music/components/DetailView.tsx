@@ -101,8 +101,9 @@ const PillBtn = ({
   </button>
 );
 
-/** Primary "play this collection" button — follows the D1 queue-mode toggle
- * (label reflects it), with an explicit "Play now" alongside in append mode. */
+/** Primary "play this collection" button — always starts playback now; the
+ * queue-mode toggle only decides whether the current tail survives. An explicit
+ * "Add to queue" sits alongside in append mode for the silent-append case. */
 const PlayPills = ({ api, item }: { api: MusicApi; item: MediaItem }) => (
   <>
     <PillBtn
@@ -112,17 +113,17 @@ const PlayPills = ({ api, item }: { api: MusicApi; item: MediaItem }) => (
         api.play(item);
       }}
     >
-      {api.queueMode === "replace" ? "Play" : "Add to queue"}
+      Play
     </PillBtn>
     {api.queueMode !== "replace" && (
       <PillBtn
         tap
         onClick={() => {
           api.unlock();
-          api.play(item, "play");
+          api.play(item, "add");
         }}
       >
-        Play now
+        Add to queue
       </PillBtn>
     )}
   </>

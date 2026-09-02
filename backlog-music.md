@@ -40,32 +40,6 @@ owner's full spec for the speed feature.
 
 ## P0 — Broken core behaviour
 
-### P0.1 — Clicking a search result doesn't play it
-
-**Root cause (found):** `useMusic.ts` `play()`:
-```ts
-const opt = option ?? (queueMode === "replace" || !nowRef.current ? "replace" : "add");
-```
-With the default `queueMode === "append"` **and** something already in the
-queue, a row click resolves to `"add"` — the track is silently appended, never
-played. The owner expects **a click plays the track, now**.
-
-Fix: a plain row click always **plays now, non-destructively** — MA `option:
-"play"` (insert after the current item + skip to it, queue tail intact). The
-`append`/`replace` toggle should mean "keep the tail" vs "wipe the tail" — in
-*both* cases the clicked track starts playing. Silent-append stays a distinct
-`⋯` action ("Add to queue"), never the default gesture. Files: `useMusic.ts`
-`play()`, and check every `Row`/`onPlay` caller.
-
-### P0.2 — Playing a search result jumps to the Playlists tab and clears the search
-
-Same `play()` — on the play/replace branch it does `setResults(null)` +
-`setNavStack([{kind:"browse"}])`, which drops you back to the browse pane where
-the Home tab is whatever `home_tab` `useStorage` last was (often "playlists").
-The owner: *"Expect everything to remain as is, just the track to play."*
-Fix: `play()` must not touch `results` or `navStack` at all. The results list,
-scroll position, current view — all stay put.
-
 ### P0.3 — Seek is stuck: drag to 2:30, the readout counts up from 1:20
 
 `NowPlaying.tsx` `Scrubber` runs an rAF counter; after a seek `useMusic.ts`

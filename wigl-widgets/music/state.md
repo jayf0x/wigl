@@ -131,13 +131,19 @@ loop and shows "live". `getProgress()` still returns the seeked target for
 1.5 s after a local `seek()` so the bar doesn't snap backward during rebuffer.
 `PROGRESS_TICK_MS` in config is now unused (kept as a tuning reference).
 
-**Queue mode (D1)**: `queueMode` (`useStorage`, `"append"` default) drives what
-a plain row click / a detail-view "Play" does — append to the tail without
-interrupting, or replace + play. Toggle lives next to shuffle/repeat in
-`NowPlaying`. "Play now" (`option:"play"`, insert-after-current) is always
+**Queue mode (D1)**: `queueMode` (`useStorage`, `"append"` default) drives
+whether a plain row click / detail-view "Play" keeps the existing tail
+(`"append"` → MA `"play"`) or wipes it (`"replace"`) — both start the clicked
+item immediately (P0.1). Toggle lives next to shuffle/repeat in `NowPlaying`. "Play now" (`option:"play"`, insert-after-current) is always
 available explicitly (row `⋯`, detail-view pill). `saveQueueAsPlaylist` copies
 the live queue (`player_queues/items` → uris → `create_playlist` +
 `add_playlist_tracks`) without clearing it.
+
+**Play gesture (P0.1/P0.2)**: `play(item)` with no explicit option ALWAYS
+starts the item now — `queueMode==="append"` → MA `"play"` (insert-after-current
++ skip, tail intact), `"replace"` → wipe + play, empty queue → replace. Silent
+`"add"` is an explicit `⋯` / detail-pill action only. `play()` never touches
+`results` or `navStack` — search, scroll and the current view stay put.
 
 **Optimism (A1)**: `playPause` / `next` / `previous` / `play` (row click) flip
 local state immediately, add their name to `pending`, and disable their control
@@ -206,8 +212,6 @@ widget currently uses:
 ## Known rough edges → backlog-music.md P0 has the fixes
 
 **Broken (iteration-3 QA):**
-- Clicking a search result doesn't play it (P0.1) and, when it does, it jumps
-  to the Playlists tab + clears the search (P0.2).
 - Seek is stuck — the readout counts up from the pre-seek time (P0.3).
 - The Effects chain produces no audible change (P0.4).
 - Queue drag-reorder is broken — only drags over the first item, greys the

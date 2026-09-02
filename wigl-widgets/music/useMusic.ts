@@ -600,20 +600,19 @@ export const useMusic = (): MusicApi => {
     [providerFilter],
   );
 
-  /** Plain call (no `option`) follows the D1 queue-mode toggle: `"append"` adds
-   * to the tail without interrupting, `"replace"` wipes + plays. An empty queue
-   * always replaces (nothing to append to). Explicit options: `"play"` =
-   * play-now (insert after current + skip), `"next"`, `"add"`, `"replace"`. */
+  /** A plain call (no `option`) ALWAYS starts the item playing now. The D1
+   * queue-mode toggle only decides whether the existing tail survives:
+   * `"append"` → `"play"` (insert after current + skip, tail intact),
+   * `"replace"` → wipe + play. An empty queue always replaces. Silent-append
+   * without playing is the explicit `"add"` option only (a `⋯` action), never
+   * the default gesture. `play()` never touches `results` / `navStack` — the
+   * pane, scroll position and search stay exactly as they were (P0.2). */
   const play = useCallback(
     (item: MediaItem, option?: PlayOption) => {
       const opt: PlayOption =
-        option ?? (queueMode === "replace" || !nowRef.current ? "replace" : "add");
+        option ?? (queueMode === "replace" || !nowRef.current ? "replace" : "play");
       cmd("player_queues/play_media", { media: item.uri, option: MA_OPTION[opt] });
-      if (opt === "play" || opt === "replace") {
-        markPending("play");
-        setResults(null);
-        setNavStack([{ kind: "browse" }]);
-      }
+      if (opt === "play" || opt === "replace") markPending("play");
     },
     [cmd, markPending, queueMode],
   );
