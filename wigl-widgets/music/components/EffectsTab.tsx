@@ -145,9 +145,8 @@ export const EffectsTab = ({ api }: { api: MusicApi }) => {
       </div>
 
       <p className="text-[9px] leading-relaxed text-muted-foreground/60">
-        4-band graphic EQ (±12 dB) + room reverb. “off” bypasses the chain but
-        keeps the settings. Speed control needs a time-stretch worklet — see the
-        backlog.
+        4-band graphic EQ (±12 dB) + room reverb, applied live. “off” bypasses
+        the chain but keeps the fader positions.
       </p>
     </div>
   );

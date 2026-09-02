@@ -50,16 +50,17 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
   and `useMusic` captures the play/pause state into `playIntentRef` beforehand
   and re-asserts it ~1.2 s after `ready`. That failsafe is now **general**:
   `useMusic`'s connect effect captures `nowRef.current?.playing` in its
-  *cleanup* before every teardown, and `boot()` re-asserts it once the fresh
-  player is `ready` — so a host/port/login edit, the auto-start-server toggle,
-  or a dropped socket resume playback too, not just the output switch.
-  `audioGraph.ts` owns the Web Audio chain; `useMusic` owns its lifecycle
-  (created on connect if `audio.audioElement` exists, disposed on teardown).
-  **No playback-speed control, and it's blocked** — a live `MediaStream`
-  delivers samples at realtime, so time-stretch is physically impossible
-  in-widget (`playbackRate` inert; `@soundtouchjs/audio-worklet` v2 only
-  pitch-shifts a fixed-rate input; `set_playback_speed` audiobook-only). Needs
-  an audio-transport change — see `backlog-music.md` "Blocked — playback speed".
+  *cleanup* before every teardown and `boot()` re-asserts it once ready — but
+  **iteration-3 QA found this isn't holding** for the auto-start-server toggle
+  (music stops). Being reworked into a real always-on resync net (backlog P0.6
+  / P1.2). `audioGraph.ts` owns the Web Audio chain; `useMusic` owns its
+  lifecycle (created on connect if `audio.audioElement` exists, disposed on
+  teardown) — **but the chain currently produces no audible effect** (backlog
+  P0.4: the graph's separate AudioContext is likely staying suspended).
+  **Speed control is being shipped server-side** via MA's own `atempo`
+  (unlocked with a container `sitecustomize.py` patch) — full spec in
+  `wigl-widgets/music/todo-speed.md`; the earlier "physically impossible"
+  finding is true only for the *client-side* path.
   `SENDSPIN_CODECS` also in config. Login/creds default to `test`/`testtest`.
 
 ## Files
@@ -180,30 +181,43 @@ widget currently uses:
 - **Scope: a music player, nothing more.** Owner: "I really just want a music
   player to replace listening to YouTube via an app." No lyrics, no visualiser,
   no library management beyond playlists + favourites. **Audio effects (4-band
-  EQ + reverb) are in** — the Effects tab, `media-element` output. **Speed is
-  blocked, not parked**: a live `MediaStream` can't be time-stretched
-  in-widget at all (see the audio paragraph above + `backlog-music.md`
-  "Blocked — playback speed"). Shipping it needs an audio-transport change,
-  which is itself a locked decision — so it's a real owner call, not a build.
+  EQ + reverb) are in** (Effects tab, `media-element` output). **Speed control
+  is shipping server-side** — MA's own `atempo`, unlocked via a container
+  `sitecustomize.py` patch (`todo-speed.md`); no client-side time-stretch,
+  Sendspin transport untouched.
 - **No native audio path.** `codecs:["pcm"]` over localhost is already lossless
   from MA; a Tauri audio plugin on `:8097` would only cost the Web Audio tap
   and a Rust dependency. Sendspin stays the audio transport.
+- **The UI is optimistic** — every control predicts its result and reconciles
+  from the server event; the server (through Docker) is slow and the UI must
+  never wait on it. This is being made rigorous (backlog P1); treat it as a
+  rule for new controls.
 - **Responsive at any size.** Every view lays out small→large; nothing assumes
   the 7×11 default.
 - Monochrome (ink-on-paper). Theme tokens only, no hardcoded colours.
 - `IBM Plex Mono` + `Instrument Serif`.
-- Queue-mode default is **append** (D1) — "a queue is fragile"; a plain click
-  never wipes it. Replace + Clear are the only queue-emptiers, both deliberate.
+- **Never leak dev-context into user-visible strings** ("see the backlog",
+  "TODO", internal ticket ids). Happened once in the Effects tab.
+- Queue-mode default is **append** — but a plain row click still **plays the
+  track** (insert-and-skip, tail intact), never silent-append. Replace + Clear
+  are the only queue-emptiers.
 - No OS media-key integration (Rust + entitlements).
 
-## Known rough edges (see backlog-music.md for the fixes)
+## Known rough edges → backlog-music.md P0 has the fixes
 
-- Rich track metadata (performers/label/review) is null without an MA metadata
-  provider on the server (backlog "Rich track metadata…").
-- Playlist background images (E3) are base64 data URIs in one `playlist_images`
-  kv map — fine for a handful of small images, not a media library.
-- The `.mx-` motion layer is applied widely now (Row, Home, Browser,
-  DetailView, EffectsTab, QueueList, SearchFilters, BrowseTab, settingsSection
-  + the earlier NowPlaying pass). `settingsSection` opts into the
-  `.music-widget` scope (with `fontFamily: inherit`) so the shared classes
-  reach it inside the app's Settings modal.
+**Broken (iteration-3 QA):**
+- Clicking a search result doesn't play it (P0.1) and, when it does, it jumps
+  to the Playlists tab + clears the search (P0.2).
+- Seek is stuck — the readout counts up from the pre-seek time (P0.3).
+- The Effects chain produces no audible change (P0.4).
+- Queue drag-reorder is broken — only drags over the first item, greys the
+  wrong row, swaps back; and it commits live instead of on drop (P0.5).
+- Disabling "Auto-start server" stops the music (P0.6).
+- Playlist background images don't display (P0.7).
+
+**Standing:**
+- Rich track metadata is null without an MA metadata provider on the server.
+- Playlist background images are base64 in one `playlist_images` kv map —
+  being replaced by a proper wigl image system (backlog P7).
+- The `.mx-` motion layer is applied widely (Row, Home, Browser, DetailView,
+  EffectsTab, QueueList, SearchFilters, BrowseTab, settingsSection + NowPlaying).

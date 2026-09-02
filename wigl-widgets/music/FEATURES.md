@@ -79,9 +79,7 @@ detent) and a reverb, applied live. Opening the tab switches the audio to the
 effects path automatically — playback blips once while it reconnects, then
 picks up where it was. **on/off** bypasses the whole chain but keeps your
 fader positions; **reset** zeroes them. The tab-bar dot lights when the chain
-is actually colouring the sound. **No speed control** — the audio is a live
-stream, which can't be sped up or slowed without changing how playback works;
-see the backlog for the options.
+is actually colouring the sound.
 
 ## Keyboard (when the widget has focus, not a text field)
 
