@@ -40,27 +40,6 @@ owner's full spec for the speed feature.
 
 ## P0 — Broken core behaviour
 
-### P0.4 — The Effects chain produces no audible change
-
-Owner enabled/disabled and moved every slider — no reverb, no EQ, nothing
-(or far too subtle). `audioGraph.ts` looks structurally right (source → 4
-peaking filters → dry + convolver-reverb → master → `ctx.destination`), so
-suspects, in order:
-1. **The graph's `AudioContext` starts suspended and is never resumed.** It's a
-   *separate* context from the SDK's; only `unlock()` calls `fxRef.current?.resume()`,
-   and only if `fxRef` exists at that moment. Opening the Effects tab + dragging
-   a slider without hitting play again leaves it suspended → the `<audio>`
-   element (now routed through `createMediaElementSource` into the suspended
-   graph) outputs **silence**. Resume the graph context on tab open and on
-   every play, and surface its `.state` somewhere while debugging.
-2. **`createMediaElementSource` didn't attach** (throws if called twice on one
-   element; or the element isn't the SDK's actual sink). Log it.
-3. **Reverb too subtle** — `reverbWet.gain` maxes at 1.0 with a 2.6 s synth IR;
-   at 100% it should be obvious. If (1)/(2) are ruled out, make a stronger IR
-   and a wider wet range.
-Needs webview devtools. Once fixed, add a note to `FEATURES.md` and verify by
-ear at reverb 100% + a big EQ cut.
-
 ### P0.5 — Queue drag-reorder is broken
 
 Owner: can only drag a row *over the first item*; index 0 ↔ index 2 swaps, then

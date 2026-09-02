@@ -11,9 +11,16 @@
 // stretch needs a phase-vocoder AudioWorklet — parked, see backlog-music.md
 // "Playback speed".
 //
-// The graph lives for the whole connection (createMediaElementSource can only
-// run once per element and reroutes it permanently) — `useMusic` owns its
-// lifecycle; the FX tab only moves the knobs.
+// The graph lives for the whole connection — `useMusic` owns its lifecycle;
+// the FX tab only moves the knobs.
+//
+// P0.4 — the Sendspin SDK's "media-element" output is a MediaStream assigned to
+// `<audio>.srcObject` (scheduler.js: gain → createMediaStreamDestination →
+// el.srcObject), NOT a `src=` URL. On WebKit `createMediaElementSource` on a
+// srcObject-backed element produces silence; the working tap is
+// `createMediaStreamSource(el.srcObject)`. The element is then muted so the
+// processed graph is the only audible path. `srcObject` is set lazily by the
+// SDK (first stream), so we hook the source up once it appears.
 
 /** Peaking-filter centre frequencies, low → high. */
 export const BAND_HZ = [80, 400, 2000, 8000] as const;
@@ -80,15 +87,14 @@ const makeImpulse = (ctx: BaseAudioContext, seconds: number, decay: number): Aud
   return buf;
 };
 
-/** Route `el` through EQ (4 peaking bands) → (dry + reverb) → destination.
- * Call once per element. Param changes are ramped with `setTargetAtTime` so a
- * fast slider drag never zippers. */
+/** Route `el`'s audio through EQ (4 peaking bands) → (dry + reverb) →
+ * destination. Call once per element. Param changes are ramped with
+ * `setTargetAtTime` so a fast slider drag never zippers. */
 export const attachAudioFx = (el: HTMLAudioElement): AudioFx => {
   const Ctx: typeof AudioContext =
     window.AudioContext ??
     (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const ctx = new Ctx();
-  const source = ctx.createMediaElementSource(el);
 
   const bands = BAND_HZ.map((hz) => {
     const f = ctx.createBiquadFilter();
@@ -101,23 +107,48 @@ export const attachAudioFx = (el: HTMLAudioElement): AudioFx => {
 
   const dry = ctx.createGain();
   const reverb = ctx.createConvolver();
-  reverb.buffer = makeImpulse(ctx, 2.6, 2.2);
+  reverb.buffer = makeImpulse(ctx, 2.8, 2.0);
   const reverbWet = ctx.createGain();
   reverbWet.gain.value = 0;
   const master = ctx.createGain();
 
-  // source → band0 → band1 → … → bandN → dry → master
-  let node: AudioNode = source;
-  for (const b of bands) {
-    node.connect(b);
-    node = b;
-  }
-  node.connect(dry);
+  // (source) → band0 → … → bandN → dry → master → destination
+  //                              └→ reverb → reverbWet ┘
+  for (let i = 0; i < bands.length - 1; i++) bands[i].connect(bands[i + 1]);
+  const tail = bands[bands.length - 1];
+  tail.connect(dry);
   dry.connect(master);
-  node.connect(reverb);
+  tail.connect(reverb);
   reverb.connect(reverbWet);
   reverbWet.connect(master);
   master.connect(ctx.destination);
+
+  // Hook the source in once the SDK has assigned a MediaStream to el.srcObject.
+  // WebKit needs createMediaStreamSource here, not createMediaElementSource.
+  let source: AudioNode | null = null;
+  let poll: ReturnType<typeof setInterval> | undefined;
+  const connectSource = () => {
+    if (source) return;
+    const stream = (el as HTMLMediaElement).srcObject;
+    try {
+      if (stream instanceof MediaStream && stream.getAudioTracks().length) {
+        source = ctx.createMediaStreamSource(stream);
+        el.muted = true; // graph is the only audible path now
+      } else if (!stream && el.currentSrc) {
+        source = ctx.createMediaElementSource(el);
+      } else {
+        return;
+      }
+    } catch (e) {
+      console.warn("[music] FX source tap failed", e);
+      return;
+    }
+    source.connect(bands[0]);
+    if (poll) clearInterval(poll);
+    void ctx.resume();
+  };
+  connectSource();
+  if (!source) poll = setInterval(connectSource, 250);
 
   // ~20ms time-constant: smooth to the ear, still tracks a drag closely.
   const TC = 0.02;
@@ -128,18 +159,24 @@ export const attachAudioFx = (el: HTMLAudioElement): AudioFx => {
 
   return {
     apply: (fx) => {
+      if (ctx.state === "suspended") void ctx.resume();
+      connectSource(); // no-op once tapped; catches a late srcObject on first knob move
       const on = !fx.bypass;
       bands.forEach((b, i) => ramp(b.gain, on ? clamp(fx.bands[i] ?? 0, EQ_MIN_DB, EQ_MAX_DB) : 0));
       const w = on ? clamp(fx.reverb, 0, 1) : 0;
-      ramp(reverbWet.gain, w);
-      ramp(dry.gain, 1 - 0.35 * w);
+      // Makeup on the wet path + a deeper dry cut so 100% is unmistakably wet.
+      ramp(reverbWet.gain, w * 1.8);
+      ramp(dry.gain, 1 - 0.5 * w);
     },
     resume: () => {
       if (ctx.state === "suspended") void ctx.resume();
+      connectSource();
     },
     dispose: () => {
+      if (poll) clearInterval(poll);
       try {
-        source.disconnect();
+        el.muted = false;
+        source?.disconnect();
         master.disconnect();
       } catch {
         /* already torn down */

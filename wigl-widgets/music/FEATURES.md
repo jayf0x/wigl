@@ -75,9 +75,9 @@ Some fields are blank unless Music Assistant has a metadata provider configured
 ## Effects
 
 The **Effects** tab: a 4-band graphic EQ (vertical faders, ±12 dB, centre
-detent) and a reverb, applied live. Opening the tab switches the audio to the
-effects path automatically — playback blips once while it reconnects, then
-picks up where it was. **on/off** bypasses the whole chain but keeps your
+detent) and a reverb, applied live on the audio. Opening the tab switches the
+audio to the effects path automatically — playback blips once while it
+reconnects, then picks up where it was. Reverb is obvious by 60–70%. **on/off** bypasses the whole chain but keeps your
 fader positions; **reset** zeroes them. The tab-bar dot lights when the chain
 is actually colouring the sound.
 

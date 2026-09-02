@@ -55,8 +55,11 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
   (music stops). Being reworked into a real always-on resync net (backlog P0.6
   / P1.2). `audioGraph.ts` owns the Web Audio chain; `useMusic` owns its
   lifecycle (created on connect if `audio.audioElement` exists, disposed on
-  teardown) — **but the chain currently produces no audible effect** (backlog
-  P0.4: the graph's separate AudioContext is likely staying suspended).
+  teardown). The SDK's media-element output is a `MediaStream` on
+  `<audio>.srcObject`, so the chain taps it with `createMediaStreamSource`
+  (WebKit gives silence for `createMediaElementSource` on a srcObject element),
+  mutes the element, and resumes its `AudioContext` on tab-open / knob-move /
+  unlock (P0.4). Verify by ear — `tests/audio-check.md`.
   **Speed control is being shipped server-side** via MA's own `atempo`
   (unlocked with a container `sitecustomize.py` patch) — full spec in
   `wigl-widgets/music/todo-speed.md`; the earlier "physically impossible"
@@ -214,7 +217,6 @@ widget currently uses:
 ## Known rough edges → backlog-music.md P0 has the fixes
 
 **Broken (iteration-3 QA):**
-- The Effects chain produces no audible change (P0.4).
 - Queue drag-reorder is broken — only drags over the first item, greys the
   wrong row, swaps back; and it commits live instead of on drop (P0.5).
 - Disabling "Auto-start server" stops the music (P0.6).
