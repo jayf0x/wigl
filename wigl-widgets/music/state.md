@@ -127,8 +127,10 @@ the last server sync) and reconciles: drift > 0.35 s snaps `posRef` and bumps
 `syncKey` → the time label replays `.mx-sync` (a one-shot LED blink); drift
 0.02–0.35 s glides in silently. The counter resets on track change and pauses
 (renders `now.elapsed`) when not playing. Radio (`now.isRadio`) skips the whole
-loop and shows "live". `getProgress()` still returns the seeked target for
-1.5 s after a local `seek()` so the bar doesn't snap backward during rebuffer.
+loop and shows "live". After a local `seek()` `getProgress()` returns a
+playhead *projected forward* from the seek target and only hands back to the
+SDK clock once that clock converges (`SEEK_CONVERGE_S`) or `SEEK_FREEZE_MAX_MS`
+elapses — so the bar never snaps backward through a long rebuffer (P0.3).
 `PROGRESS_TICK_MS` in config is now unused (kept as a tuning reference).
 
 **Queue mode (D1)**: `queueMode` (`useStorage`, `"append"` default) drives
@@ -212,7 +214,6 @@ widget currently uses:
 ## Known rough edges → backlog-music.md P0 has the fixes
 
 **Broken (iteration-3 QA):**
-- Seek is stuck — the readout counts up from the pre-seek time (P0.3).
 - The Effects chain produces no audible change (P0.4).
 - Queue drag-reorder is broken — only drags over the first item, greys the
   wrong row, swaps back; and it commits live instead of on drop (P0.5).

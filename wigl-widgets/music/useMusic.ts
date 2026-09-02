@@ -64,6 +64,11 @@ const MA_OPTION: Record<PlayOption, string> = {
 
 const REPEAT_CYCLE: RepeatMode[] = ["off", "all", "one"];
 
+// P0.3 — post-seek playhead projection. Hold the projected position until the
+// SDK clock lands within this many seconds of it, or this long has passed.
+const SEEK_CONVERGE_S = 1.5;
+const SEEK_FREEZE_MAX_MS = 10_000;
+
 export interface MusicApi {
   state: ConnState;
   error: string | null;
@@ -235,9 +240,14 @@ export const useMusic = (): MusicApi => {
   const searchGenRef = useRef(0);
   // action → timeout handle for the not-yet-confirmed transport commands.
   const pendingRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  // After a local seek the SDK's live position lags ~1s (server rebuffer);
-  // `getProgress` returns this target until then so the scrubber holds steady.
-  const seekFreezeRef = useRef<{ until: number; pos: number }>({ until: 0, pos: 0 });
+  // After a local seek the SDK's live clock (`trackProgress`) keeps reporting
+  // the pre-seek position for a second or more while the server rebuffers and
+  // pushes a fresh sync frame (P0.3 — a fixed 1.5 s freeze expired mid-rebuffer
+  // and the scrubber snapped back to the old time). Instead: hold a projected
+  // playhead (target + real time elapsed since the seek) and only hand back to
+  // the SDK clock once it has actually caught up to within `SEEK_CONVERGE_S`,
+  // or after `SEEK_FREEZE_MAX_MS` as a hard stop for a stalled rebuffer.
+  const seekFreezeRef = useRef<{ target: number; at: number; maxUntil: number } | null>(null);
   // Ignore SDK volume echoes right after a local drag so the slider never snaps.
   const volumeSetAtRef = useRef(0);
   // G1 — the Web Audio FX graph, alive for the connection lifetime.
@@ -680,7 +690,7 @@ export const useMusic = (): MusicApi => {
       const n = nowRef.current;
       if (!n || n.isRadio) return; // nothing to seek in / a live stream (MA 500s on idle)
       const pos = Math.max(0, Math.round(seconds));
-      seekFreezeRef.current = { until: Date.now() + 1500, pos };
+      seekFreezeRef.current = { target: pos, at: Date.now(), maxUntil: Date.now() + SEEK_FREEZE_MAX_MS };
       cmd("player_queues/seek", { position: pos });
       setNow((cur) => (cur ? { ...cur, elapsed: pos } : cur));
     },
@@ -984,14 +994,28 @@ export const useMusic = (): MusicApi => {
         fxRef.current?.resume();
       },
       getProgress: () => {
-        const f = seekFreezeRef.current;
-        if (Date.now() < f.until) {
-          return { position: f.pos, duration: nowRef.current?.duration ?? 0, playbackSpeed: 1 };
-        }
         const p = sendspinRef.current?.getProgress();
-        return p
+        const live = p
           ? { position: p.positionMs / 1000, duration: p.durationMs / 1000, playbackSpeed: p.playbackSpeed }
           : null;
+        const f = seekFreezeRef.current;
+        if (f) {
+          const t = Date.now();
+          const speed = live?.playbackSpeed || 1;
+          const projected =
+            f.target + ((t - f.at) / 1000) * (nowRef.current?.playing ? speed : 0);
+          const converged = live && Math.abs(live.position - projected) < SEEK_CONVERGE_S;
+          if (t > f.maxUntil || converged) {
+            seekFreezeRef.current = null;
+          } else {
+            return {
+              position: projected,
+              duration: live?.duration || nowRef.current?.duration || 0,
+              playbackSpeed: speed,
+            };
+          }
+        }
+        return live;
       },
       openServer,
       imageUrl,

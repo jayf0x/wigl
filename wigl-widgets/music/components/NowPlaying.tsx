@@ -309,8 +309,9 @@ const Scrubber = ({ api }: { api: MusicApi }) => {
     const frame = (t: number) => {
       const dt = Math.max(0, (t - last) / 1000);
       last = t;
-      // `api.getProgress()` already holds the seeked target for ~1.5s after a
-      // local seek (hook-side), so this never snaps backward on a scrub.
+      // `api.getProgress()` projects the playhead forward from the seek target
+      // (hook-side) until the SDK clock catches up, so this never snaps
+      // backward on a scrub even through a long rebuffer (P0.3).
       const p = api.getProgress();
       const rate = p?.playbackSpeed && p.playbackSpeed > 0 ? p.playbackSpeed : 1;
       posRef.current += dt * rate;

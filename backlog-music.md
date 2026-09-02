@@ -40,24 +40,6 @@ owner's full spec for the speed feature.
 
 ## P0 — Broken core behaviour
 
-### P0.3 — Seek is stuck: drag to 2:30, the readout counts up from 1:20
-
-`NowPlaying.tsx` `Scrubber` runs an rAF counter; after a seek `useMusic.ts`
-`seekFreezeRef` holds the target for **1500 ms**, then the loop reconciles
-against `api.getProgress()` (the Sendspin SDK's `trackProgress`). For a
-flow-mode Sendspin player the seek rebuffers ~1 s **and the SDK's reported
-position lags further** while the server's `server/state` metadata catches up —
-so when the 1500 ms freeze expires, `getProgress()` still returns ~1:20 and the
-counter snaps back. Pausing works because `refreshQueue` reads the server-truth
-`q.elapsed_time`; replaying reverts because `trackProgress` is still stale.
-Fix options (verify which against a live seek): (a) extend/make-adaptive the
-freeze until `getProgress().position` actually lands near the target; (b) after
-a seek, prefer the server's `queue_time_updated` / `elapsed_time` over the SDK
-`trackProgress` for a few seconds; (c) confirm the SDK even updates
-`trackProgress` after a Sendspin `player_queues/seek` — if it doesn't, the
-freeze has to hold until the next `queue_time_updated`. Needs live webview
-debugging (log `getProgress()` vs the seek target each frame).
-
 ### P0.4 — The Effects chain produces no audible change
 
 Owner enabled/disabled and moved every slider — no reverb, no EQ, nothing
