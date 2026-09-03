@@ -99,6 +99,7 @@ export interface QueueItem {
   media_item?: MediaItem | null;
   image?: MediaImage | null;
   streamdetails?: StreamDetails | null;
+  extra_attributes?: { playback_speed?: number } & Record<string, unknown>;
 }
 
 export interface StreamDetails {
@@ -128,6 +129,8 @@ export interface PlayerQueue {
   shuffle_enabled: boolean;
   repeat_mode: RepeatMode | string;
   radio_source?: unknown[];
+  /** atempo multiplier, 0.5–3.0; absent or 1 = normal (SETUP.md "Playback speed"). */
+  playback_speed?: number;
 }
 
 /** Merged now-playing view the UI renders. */

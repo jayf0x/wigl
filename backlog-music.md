@@ -46,60 +46,25 @@ addressed.*
 
 ---
 
-## P1 — Optimistic UI everywhere · partly `[wigl core]`
+## P1 — Optimistic UI everywhere
 
-The owner wants this to be **the widget's defining quality**: *the UI always
-reflects the optimistic state; the server catches up.* Local playback through
-Docker has real latency (play/pause takes ~3 s to confirm) and every control
-should hide that.
-
-### P1.1 — Audit and fix the optimistic layer
-
-`useMusic.ts` already has `markPending` / `api.pending` and optimistic
-`setNow` for play/pause/next/seek — but the owner still waits ~3 s for the
-pause button to toggle, so it's not working end to end. Go through every
-control:
-- **Predict** the new state locally and render it immediately.
-- **Disable** the triggering control until the confirming event lands (or a
-  timeout).
-- **Reconcile** from the server event; on timeout, re-read and correct.
-- Covers: play/pause, next/prev, seek, repeat, shuffle, volume, queue add/
-  remove/reorder, favourite, playlist create/add/remove, the queue-mode toggle.
-Apply the `.mx-pending` shimmer while a control is unconfirmed and `.mx-flash`
-on the confirming reconcile.
-
-### P1.2 — A state-resync safety net
-
-One always-on mechanism in `useMusic.ts`: snapshot `{playing, elapsed, repeat,
-shuffle, volume, queueId}` before any teardown / major action, and after the
-next `ready` (or a short debounce after any command) diff it against the fresh
-server snapshot and re-assert anything that drifted. The owner's framing: *"if
-one day creating a playlist would also stop the music, it at least restarts."*
-
-### P1.3 — `docs/` guidance on optimistic UI · `[wigl core]`
-
-Write a short section (extend `docs/architecture.md` "Data flow pattern", or a
-new `docs/optimistic-ui.md` if it earns its own file — check `AGENTS.md`'s doc
-table first) on the predict → disable → reconcile → correct pattern for wigl
-widgets talking to a laggy backend, with the music widget as the worked
-example. Keep it to the pattern + one example, per the repo's "docs are
-intent-only" rule.
+*Done (commit `bdcc8e9`). `optimisticRef` holds each predicted field until
+`player_queues/get` agrees; `resyncRef` re-asserts drift after any reconnect;
+`docs/architecture.md` has the pattern. `.mx-flash` on the confirming
+reconcile was left out — the hold-until-confirmed behaviour already removes
+the visible lag; revisit only if the owner wants the extra ack.*
 
 ---
 
 ## P2 — Speed control (server-side `atempo`)
 
-**Full spec: `wigl-widgets/music/todo-speed.md`** (owner-written). Summary: MA
-already time-stretches via ffmpeg `atempo`, gated to audiobooks by one line;
-unlock it with a `sitecustomize.py` `PYTHONPATH` mount on the `wigl-ma`
-container (no image rebuild), then a small widget control
-(`player_queues/set_playback_speed {queue_id, speed}`, model on
-`repeatMode`/`cycleRepeat`). The SDK's `trackProgress` already compensates for
-`playback_speed`, so the scrubber needs no clock change. Verification checklist,
-doc updates, and a client-side slow-down-only fallback are all in that file.
-Delete `todo-speed.md` and the (now removed) "blocked" note once shipped.
-`/frontend-design` for the control's look — a speed badge on the scrubber row,
-visible only at ≠ 1×.
+*Done (commit see git log). `SETUP-files/sitecustomize.py` wraps
+`set_playback_speed` to lift the audiobook gate; `useMusic` has
+`playbackSpeed`/`setPlaybackSpeed` (optimistic, reverts on refusal,
+re-asserted on reconnect); `NowPlaying` has the `Gauge` fold-out slider + a
+tap-to-reset badge on the scrubber, hidden for radio. e2e covers the command
+shape. **The container patch + by-ear verification is pending Docker being
+back up** — `docker exec wigl-ma python -c "…"` per SETUP.md "Playback speed".*
 
 ---
 

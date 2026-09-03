@@ -2,6 +2,7 @@ import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useR
 import {
   Disc3,
   Ellipsis,
+  Gauge,
   Heart,
   Info,
   ListPlus,
@@ -392,6 +393,74 @@ const Scrubber = ({ api }: { api: MusicApi }) => {
         </span>
       </div>
       <span className="w-8 text-right">{seekable ? fmt(duration) : ""}</span>
+      {api.playbackSpeed !== 1 && !now?.isRadio && (
+        <button
+          type="button"
+          data-no-drag
+          aria-label={`Playback speed ${fmtSpeed(api.playbackSpeed)} — tap to reset`}
+          onClick={() => api.setPlaybackSpeed(1)}
+          className="mx-tap mx-press shrink-0 rounded border border-border px-1 leading-none text-foreground tabular-nums"
+        >
+          {fmtSpeed(api.playbackSpeed)}
+        </button>
+      )}
+    </div>
+  );
+};
+
+/** "1×" / "1.25×" — trailing zeros trimmed. */
+const fmtSpeed = (s: number) => `${Number(s.toFixed(2)).toString()}×`;
+
+/** P2 — server-side atempo. Mirrors VolumeControl: an icon button that folds
+ * out a compact slider. `active` and a badge on the scrubber row surface a
+ * non-1× rate; hidden entirely for radio (a live stream can't be stretched). */
+const SpeedControl = ({ api }: { api: MusicApi }) => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const close = (e: Event) => {
+      if (!el.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", close, true);
+    return () => document.removeEventListener("pointerdown", close, true);
+  }, [open]);
+
+  const off = api.playbackSpeed === 1;
+
+  return (
+    <div ref={wrapRef} className="flex items-center gap-2" data-no-drag>
+      {open && (
+        <>
+          <Slider
+            className="w-20"
+            value={[api.playbackSpeed]}
+            min={0.5}
+            max={2}
+            step={0.05}
+            onValueChange={(v) => api.setPlaybackSpeed(Array.isArray(v) ? v[0] : v)}
+          />
+          <button
+            type="button"
+            data-no-drag
+            aria-label="Reset speed to normal"
+            onClick={() => api.setPlaybackSpeed(1)}
+            className="mx-press w-9 text-right text-[10px] text-muted-foreground tabular-nums hover:text-foreground"
+          >
+            {fmtSpeed(api.playbackSpeed)}
+          </button>
+        </>
+      )}
+      <IconBtn
+        label={off ? "Playback speed" : `Playback speed ${fmtSpeed(api.playbackSpeed)}`}
+        active={!off}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Gauge className="size-3.5" />
+      </IconBtn>
     </div>
   );
 };
@@ -615,6 +684,7 @@ export const NowPlaying = ({ api }: { api: MusicApi }) => {
               </IconBtn>
             </>
           )}
+          {now && !now.isRadio && <SpeedControl api={api} />}
           <VolumeControl api={api} />
         </div>
       </div>

@@ -57,11 +57,21 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
   (WebKit gives silence for `createMediaElementSource` on a srcObject element),
   mutes the element, and resumes its `AudioContext` on tab-open / knob-move /
   unlock (P0.4). Verify by ear — `tests/audio-check.md`.
-  **Speed control is being shipped server-side** via MA's own `atempo`
-  (unlocked with a container `sitecustomize.py` patch) — full spec in
-  `wigl-widgets/music/todo-speed.md`; the earlier "physically impossible"
-  finding is true only for the *client-side* path.
-  `SENDSPIN_CODECS` also in config. Login/creds default to `test`/`testtest`.
+  **Playback speed is server-side** (P2): the widget sends
+  `player_queues/set_playback_speed {queue_id, speed}`; MA time-stretches with
+  `atempo` (pitch-preserving, wired through flow mode + elapsed-time
+  correction). MA gates that command to audiobooks by one `media_type` check —
+  `SETUP-files/sitecustomize.py` (mounted read-only via `PYTHONPATH`) wraps the
+  method to lift it. Client-side time-stretch stays impossible (MediaStream
+  source); the Sendspin transport is untouched, nothing runs at 1×. The SDK's
+  `trackProgress` already scales position by `playback_speed`, so the scrubber
+  needs no clock change. `useMusic` reads it back in `refreshQueue` (queue
+  level, falling back to `current_item.extra_attributes.playback_speed`),
+  re-asserts it after a reconnect (it's per-item + in-memory), and reverts
+  optimistically if the server refuses. UI: a `Gauge` fold-out slider in
+  `NowPlaying` + a tap-to-reset badge on the scrubber row, both hidden for
+  radio. `SENDSPIN_CODECS` also in config. Login/creds default to
+  `test`/`testtest`.
 
 ## Files
 
@@ -80,7 +90,7 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | `music.css` | `IBM Plex Mono` + `Instrument Serif` (serif = track titles only), the `.music-cq` container query, the `.music-eq` VU animation, and the **`.mx-` motion layer** — a documented set of mechanical-feel interaction classes (`.mx-press` key-depress, `.mx-tap` async-click ring pulse, `.mx-pending`/`.mx-pending-long` in-flight shimmer, `.mx-flash` done-ack, `.mx-sync` LED blink, `.mx-enter` view transition) + standardised `--mx-*` duration/easing tokens on `.music-widget`. All `prefers-reduced-motion`-aware, theme-token driven. Applied so far in `NowPlaying` (transport/volume/ⓘ) + the Home tab bar + panel; app-wide application is a later pass. Also the **icon treatment** (feedback I): `.music-widget svg { stroke-width: 2.25px }` globally + `.mx-icon-strong` (2.5px) on the primary transport button, whose glyphs are also bumped to 18px. Line-toggle icons (repeat/shuffle) stay stroke-only — filling those glyphs blobs them. |
 | `settingsSection.tsx` | Settings-modal section: host/port/login, provider filter, auto-start toggle, audio-effects path toggle, and the H1 "Backend" `OpButton`s (Restart / Clear cache / Update server). Password field uses the shared `@/components/ui/password-input` (eye toggle). |
 | `FEATURES.md` | User-facing "what the non-obvious features do" (queue model, ⋯ menu, radio, playlists, search, effects, keys). Keep it current when UX changes. |
-| `components/NowPlaying.tsx` | Pinned top zone: art, title, clickable artist/album, scrubber, transport, repeat/shuffle, favourite + `⋯` (reuses `RowActionPanel` — C2), volume, the fold-down `TrackInfo` panel. Transport buttons carry a hover tooltip (`@/components/ui/tooltip`, a new host
+| `components/NowPlaying.tsx` | Pinned top zone: art, title, clickable artist/album, scrubber (+ P2 speed badge), transport, repeat/shuffle, favourite + `⋯` (reuses `RowActionPanel` — C2), `SpeedControl` + `VolumeControl` fold-out sliders, the fold-down `TrackInfo` panel. Transport buttons carry a hover tooltip (`@/components/ui/tooltip`, a new host
 module). Scrubber samples `api.getProgress()` every `PROGRESS_TICK_MS` while playing for a smooth clock; transport buttons disable while their action is in `api.pending`. `TrackInfo` fetches the full `music/tracks/get` via `useQuery` (`track:<uri>`) and renders clickable artist/credit chips (C3). |
 | `components/Browser.tsx` | The switchable main pane: search field + `SearchFilters` + results, OR a detail view, OR `<Home>`. Hosts the nav breadcrumb. Shows a `SearchSkeleton` strip at the top of results while any provider search is still in flight; previous results stay rendered underneath. |
 | `components/Home.tsx` | Tabbed default pane: Up next (`QueueList`) / Playlists / Recent / Browse (`BrowseTab`). `PinnedStrip` above the tabs = horizontal quick-access chips for `api.pinnedPlaylists` (F1). |
@@ -96,7 +106,8 @@ module). Scrubber samples `api.getProgress()` every `PROGRESS_TICK_MS` while pla
 | `tests/music.e2e.test.ts` | 15 live drift-regression tests vs `wigl-ma` (skip when down). |
 | `tests/audio-check.md` | By-ear checklist for the DAC hop. |
 | `COMPARISON.md` | M0: five real players vs this widget, capability table. |
-| `SETUP.md` | Reproducible backend (Docker image, onboarding, providers, revert). |
+| `SETUP.md` | Reproducible backend (Docker image, onboarding, providers, revert, the playback-speed shim mount). |
+| `SETUP-files/sitecustomize.py` | P2 — mounted read-only into the container via `PYTHONPATH`; wraps `PlayerQueuesController.set_playback_speed` to lift MA's audiobook-only gate so music tracks can be sped up. Re-check after `docker pull`. |
 
 ## Data flow
 
@@ -202,17 +213,18 @@ widget currently uses:
 - **Scope: a music player, nothing more.** Owner: "I really just want a music
   player to replace listening to YouTube via an app." No lyrics, no visualiser,
   no library management beyond playlists + favourites. **Audio effects (4-band
-  EQ + reverb) are in** (Effects tab, `media-element` output). **Speed control
-  is shipping server-side** — MA's own `atempo`, unlocked via a container
-  `sitecustomize.py` patch (`todo-speed.md`); no client-side time-stretch,
-  Sendspin transport untouched.
+  EQ + reverb) are in** (Effects tab, `media-element` output). **Playback speed
+  is in** — server-side MA `atempo`, unlocked via a container
+  `sitecustomize.py` patch (`SETUP.md` "Playback speed"); no client-side
+  time-stretch, Sendspin transport untouched.
 - **No native audio path.** `codecs:["pcm"]` over localhost is already lossless
   from MA; a Tauri audio plugin on `:8097` would only cost the Web Audio tap
   and a Rust dependency. Sendspin stays the audio transport.
-- **The UI is optimistic** — every control predicts its result and reconciles
-  from the server event; the server (through Docker) is slow and the UI must
-  never wait on it. This is being made rigorous (backlog P1); treat it as a
-  rule for new controls.
+- **The UI is optimistic** — every control predicts its result and holds it
+  until the server's snapshot agrees (P1.1); the server (through Docker) is
+  slow and the UI must
+  never wait on it. Treat it as a rule for new controls — see
+  `docs/architecture.md` "Optimistic UI for a laggy backend".
 - **Responsive at any size.** Every view lays out small→large; nothing assumes
   the 7×11 default.
 - Monochrome (ink-on-paper). Theme tokens only, no hardcoded colours.

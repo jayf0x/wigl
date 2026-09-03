@@ -6,13 +6,14 @@ stuff that isn't obvious.
 
 ## The queue is not fragile
 
-A plain click on a track **adds it to the end of the queue** and doesn't touch
-what's already there — one misclick can't wipe your queue. To change that:
+A plain click on a track **plays it right now** — but in the default **Append**
+mode the rest of your queue stays intact (the track is inserted after the
+current one and skipped to). One misclick can't wipe your queue.
 
 - The small **⇄ toggle** next to shuffle/repeat switches between **Append**
-  (default) and **Replace** (a click clears the queue and plays).
-- Every track's **⋯ menu** always has **Play now** (jump to it, keep the rest)
-  and **Play next** regardless of the toggle.
+  (default — keep the tail) and **Replace** (a click clears the queue first).
+- **Add to queue** (a track's **⋯** menu, or the detail-view button in Append
+  mode) is the silent "queue it for later, don't interrupt" action.
 - **Clear** (in the Up-next tab) is the only button that empties the queue,
   and it asks twice.
 
@@ -71,6 +72,14 @@ format (codec / sample rate / bitrate / loudness), album, year, genre,
 performers/credits. Artist and credit names are clickable — they run a search.
 Some fields are blank unless Music Assistant has a metadata provider configured
 (MusicBrainz etc.).
+
+## Playback speed
+
+The **gauge** button on the now-playing bar folds out a speed slider
+(0.5×–2×, pitch preserved). At anything other than 1× a small `1.25×` badge
+shows on the timeline row — tap it to snap back to normal. Music Assistant
+does the stretch server-side, so it survives skips and reconnects. Not
+available for live radio.
 
 ## Effects
 

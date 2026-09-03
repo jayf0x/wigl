@@ -30,10 +30,15 @@ docker pull ghcr.io/sproft/ytmusic-free-provider:latest
 
 # 2. Create + start the container. The data volume can live anywhere;
 #    this repo uses .idea/ma-data (gitignored). MA-in-Docker sees it as /data.
+#    The PYTHONPATH mount adds one shim (sitecustomize.py) that unlocks
+#    variable playback speed for music tracks — see "Playback speed" below.
+WIGL=$(git rev-parse --show-toplevel)
 docker run -d --name wigl-ma \
   --restart unless-stopped \
   -p 8095:8095 -p 8097:8097 \
-  -v "$(git rev-parse --show-toplevel)/.idea/ma-data:/data" \
+  -v "$WIGL/.idea/ma-data:/data" \
+  -e PYTHONPATH=/wigl-patch \
+  -v "$WIGL/wigl-widgets/music/SETUP-files:/wigl-patch:ro" \
   ghcr.io/sproft/ytmusic-free-provider:latest
 
 # 3. Wait ~15s for first boot (it downloads a torch checkpoint once), then
@@ -94,7 +99,7 @@ down.
 | Stop MA | `docker stop wigl-ma` |
 | Start MA | `docker start wigl-ma` (also automatic when Docker starts, via `--restart`) |
 | Logs | `docker logs -f wigl-ma` |
-| Update MA + provider | `docker pull ghcr.io/sproft/ytmusic-free-provider:latest && docker rm -f wigl-ma && <the `docker run` above>` — the `/data` volume keeps your onboarding + providers |
+| Update MA + provider | `docker pull ghcr.io/sproft/ytmusic-free-provider:latest && docker rm -f wigl-ma && <the `docker run` above>` — the `/data` volume keeps your onboarding + providers. **After a pull, re-check `SETUP-files/sitecustomize.py`** against the new MA source (it wraps `PlayerQueuesController.set_playback_speed`). |
 | Provider version | `docker logs wigl-ma 2>&1 \| grep 'provider version'` |
 
 Most of this table is also in the widget's **Settings → Music → Backend**
@@ -103,6 +108,26 @@ image/proxy cache + old logs, keeps library/playlists/login), and **Update
 server** (pull + recreate; a few minutes, playback drops). Plus an
 **"Auto-start server"** toggle that runs `docker start wigl-ma` when MA is
 unreachable. The CLI here is the fallback, not the primary path.
+
+## Playback speed
+
+The speed control in the widget calls `player_queues/set_playback_speed`, which
+MA normally allows only for audiobooks/podcasts. `SETUP-files/sitecustomize.py`
+— mounted read-only at `/wigl-patch` with `PYTHONPATH` in the `docker run`
+above — removes that one gate; the `atempo` time-stretch underneath is already
+general and pitch-preserving. Nothing runs at 1×, and the Sendspin transport is
+untouched.
+
+Confirm it took:
+
+```bash
+docker exec wigl-ma python -c "from music_assistant.controllers.player_queues.controller import PlayerQueuesController as C; print(C.set_playback_speed.__name__)"
+# → _set_playback_speed   (the shim)   — plain MA prints "set_playback_speed"
+```
+
+If a `docker pull` ever makes the shim stale, playback speed just falls back to
+the "audiobooks only" error and the rest of the widget is unaffected — re-check
+the file against the new MA source and recreate the container.
 
 ## Reverting to stock Music Assistant
 

@@ -78,6 +78,10 @@ export interface MusicApi {
   upNext: QueueItem[];
   repeatMode: RepeatMode;
   shuffle: boolean;
+  /** P2 — atempo multiplier, 0.5–2 (1 = normal). Server-side; the scrubber
+   * clock already compensates via the SDK's `trackProgress`. */
+  playbackSpeed: number;
+  setPlaybackSpeed: (speed: number) => void;
   /** D1 — what a plain left-click on a track does (persisted). */
   queueMode: QueueMode;
   setQueueMode: (m: QueueMode) => void;
@@ -215,6 +219,7 @@ export const useMusic = (): MusicApi => {
     repeat: RepeatMode;
     shuffle: boolean;
     volume: number;
+    speed: number;
   } | null>(null);
   const setAudioOutput = useCallback(
     (mode: "direct" | "media-element") => setAudioOutputStored(mode),
@@ -228,6 +233,7 @@ export const useMusic = (): MusicApi => {
   const [upNext, setUpNext] = useState<QueueItem[]>([]);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
   const [shuffle, setShuffle] = useState(false);
+  const [playbackSpeed, setPlaybackSpeedState] = useState(1);
   const [results, setResults] = useState<SearchResults | null>(null);
   const [searching, setSearching] = useState(false);
   const [volume, setVolumeState] = useState(100);
@@ -250,6 +256,11 @@ export const useMusic = (): MusicApi => {
   shuffleRef.current = shuffle;
   const volumeRef = useRef(volume);
   volumeRef.current = volume;
+  const playbackSpeedRef = useRef(playbackSpeed);
+  playbackSpeedRef.current = playbackSpeed;
+  // Ignore the server's playback_speed echo right after a local change (same
+  // pattern as volume) so the badge/slider never snap mid-interaction.
+  const speedSetAtRef = useRef(0);
   const upNextRef = useRef<QueueItem[]>([]);
   upNextRef.current = upNext;
   // P1.1 — fields the UI has already predicted. `refreshQueue` keeps each
@@ -377,6 +388,12 @@ export const useMusic = (): MusicApi => {
       setShuffle(shuffle);
 
       const cur = q.current_item ?? null;
+      if (Date.now() - speedSetAtRef.current > 1500) {
+        setPlaybackSpeedState(
+          Number(q.playback_speed ?? cur?.extra_attributes?.playback_speed) || 1,
+        );
+      }
+
       const media = cur?.media_item ?? null;
 
       // track-change prediction (next / previous / row-play). Keep the predicted
@@ -609,6 +626,12 @@ export const useMusic = (): MusicApi => {
               cmd("player_queues/repeat", { repeat_mode: want.repeat });
             if (want.shuffle !== !!q.shuffle_enabled)
               cmd("player_queues/shuffle", { shuffle_enabled: want.shuffle });
+            // atempo lives in the queue item's in-memory extra_attributes — a
+            // reconnect or track change drops it. Re-assert if it was non-1×.
+            if (want.speed !== 1 && (Number(q.playback_speed) || 1) === 1) {
+              speedSetAtRef.current = Date.now();
+              cmd("player_queues/set_playback_speed", { speed: want.speed });
+            }
             // The fresh player defaults its own volume; restore the user's.
             audio.setVolume(want.volume);
           }, 1200);
@@ -648,6 +671,7 @@ export const useMusic = (): MusicApi => {
             repeat: repeatRef.current,
             shuffle: shuffleRef.current,
             volume: volumeRef.current,
+            speed: playbackSpeedRef.current,
           }
         : null;
       teardown();
@@ -869,6 +893,27 @@ export const useMusic = (): MusicApi => {
     markPending("shuffle");
     cmd("player_queues/shuffle", { shuffle_enabled: nextOn });
   }, [cmd, markPending, shuffle]);
+
+  /** P2 — server-side atempo. UI-capped at 0.5–2× (the musically useful range;
+   * MA's own hard max is 3×). Optimistic; reverts if the server refuses (the
+   * SETUP.md shim not applied, or a radio/unknown-duration item). */
+  const setPlaybackSpeed = useCallback((speed: number) => {
+    const s = Math.min(2, Math.max(0.5, Math.round(speed * 20) / 20));
+    const prev = playbackSpeedRef.current;
+    if (s === prev) return;
+    speedSetAtRef.current = Date.now();
+    setPlaybackSpeedState(s);
+    const client = clientRef.current;
+    const queue_id = queueIdRef.current;
+    if (!client || !queue_id) return;
+    client
+      .command("player_queues/set_playback_speed", { queue_id, speed: s })
+      .catch((e) => {
+        console.warn("[music] set_playback_speed", e);
+        speedSetAtRef.current = 0;
+        setPlaybackSpeedState(prev);
+      });
+  }, []);
 
   /** Any queue edit (remove / reorder) — hold the optimistic `upNext` until the
    * `queue_items_updated` reconcile so it doesn't flicker back mid-command. */
@@ -1104,6 +1149,8 @@ export const useMusic = (): MusicApi => {
       upNext,
       repeatMode,
       shuffle,
+      playbackSpeed,
+      setPlaybackSpeed,
       queueMode,
       setQueueMode,
       pinnedPlaylists,
@@ -1189,7 +1236,8 @@ export const useMusic = (): MusicApi => {
       request,
     }),
     [
-      state, error, now, currentItem, upNext, repeatMode, shuffle, queueMode, setQueueMode,
+      state, error, now, currentItem, upNext, repeatMode, shuffle, playbackSpeed, setPlaybackSpeed,
+      queueMode, setQueueMode,
       pinnedPlaylists, togglePinPlaylist, pending,
       results, searching, volume, playlists, recentlyPlayed, providers, httpBase, favorites, nav,
       navStack.length, navTo, navBack, navHome, search, play, startRadio, playPause, next, previous,

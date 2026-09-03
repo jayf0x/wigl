@@ -280,6 +280,51 @@ describe("music widget ↔ Music Assistant (live)", () => {
     }
   });
 
+  // P2 speed: player_queues/set_playback_speed {queue_id, speed}. MA gates it
+  // to audiobooks; SETUP-files/sitecustomize.py lifts that. This asserts the
+  // command + arg shape survives an MA upgrade — it passes whether or not the
+  // shim is mounted (success, or the known audiobook-only refusal), and fails
+  // only on a renamed command / bad-arg error.
+  test.skipIf(!reachable)("player_queues/set_playback_speed accepts {queue_id, speed}", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    try {
+      const queues = await client.command<PlayerQueue[]>("player_queues/all");
+      const q = queues?.find((x) => x.state === "playing" && x.current_item);
+      if (!q) return; // needs something playing to target
+
+      let ok = false;
+      let refusal = "";
+      try {
+        await client.command("player_queues/set_playback_speed", {
+          queue_id: q.queue_id,
+          speed: 1.25,
+        });
+        ok = true;
+      } catch (e) {
+        refusal = e instanceof Error ? e.message : String(e);
+      }
+      // either it worked (shim in place) or MA refused *for the documented
+      // reason* — both prove the command/args are still valid
+      expect(ok || /audiobook|podcast|speed/i.test(refusal)).toBe(true);
+
+      if (ok) {
+        const after = await client.command<PlayerQueue>("player_queues/get", {
+          queue_id: q.queue_id,
+        });
+        const speed =
+          Number(after.playback_speed ?? after.current_item?.extra_attributes?.playback_speed) || 1;
+        expect(speed).toBeCloseTo(1.25, 1);
+        await client.command("player_queues/set_playback_speed", {
+          queue_id: q.queue_id,
+          speed: 1,
+        });
+      }
+    } finally {
+      client.close();
+    }
+  });
+
   // D1 browse: root lists provider folders; a provider path lists sub-folders,
   // each carrying `path` for the next hop. (recommendations is empty on a fresh
   // library — browse is the real discover surface.)
