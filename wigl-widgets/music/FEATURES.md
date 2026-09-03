@@ -48,9 +48,10 @@ right there. Radio stations and already-generated mixes don't have this.
 
 - **Create** from the Playlists tab, or from any track's ⋯ → Add to playlist →
   New playlist.
-- Open a playlist to **rename** it, set a **background image** (a local file —
-  it also becomes the playlist's cover in the list and the pinned strip),
-  **pin** it to the strip above the tabs, or **delete** it (two-tap).
+- Open a playlist to **rename** it (click the title), set a **background
+  image** (hover the cover → add/remove — a local file, it also becomes the
+  playlist's cover in the list and the pinned strip), **pin** it to the strip
+  above the tabs, or **delete** it (two-tap).
 - **Reorder** tracks in your own playlists by dragging the grip handle —
   saved when you drop.
 - **Merge**: a playlist's ⋯ menu → "Merge into…" appends all its tracks to

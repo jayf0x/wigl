@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { hours, useQuery } from "@/wigl/hooks";
-import { Disc3, GripVertical, LoaderCircle, Radio, Trash2, User } from "lucide-react";
+import { Disc3, GripVertical, ImagePlus, LoaderCircle, Radio, Trash2, User, X } from "lucide-react";
+import { InlineEdit } from "@/components/ui/inline-edit";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/wigl/utils";
 import { PLAYLIST_RENDER_CAP } from "../music.config";
@@ -40,7 +41,9 @@ const Header = ({
   sub,
   actions,
   title,
+  titleNode,
   bgImage,
+  cover,
 }: {
   item: MediaItem;
   art: string | null;
@@ -48,8 +51,12 @@ const Header = ({
   actions: React.ReactNode;
   /** overrides `item.name` (used for a live rename before the nav item updates) */
   title?: string;
+  /** replaces the title <p> entirely — e.g. an `<InlineEdit>` (P6.3) */
+  titleNode?: React.ReactNode;
   /** E3 — a data-URI background for the playlist header, dimmed for legibility */
   bgImage?: string | null;
+  /** P6.4 — hover controls overlaid on the cover thumbnail (edit / remove) */
+  cover?: React.ReactNode;
 }) => (
   <div className="relative flex gap-3 overflow-hidden border-border border-b p-3">
     {bgImage && (
@@ -61,7 +68,7 @@ const Header = ({
         <div className="absolute inset-0 bg-background/80" />
       </>
     )}
-    <div className="relative grid size-16 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-background text-muted-foreground/30">
+    <div className="group/cover relative grid size-16 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-background text-muted-foreground/30">
       {art ? (
         <img src={art} alt="" loading="lazy" decoding="async" fetchPriority="low" className="size-full object-cover" draggable={false} />
       ) : item.media_type === "artist" ? (
@@ -69,11 +76,14 @@ const Header = ({
       ) : (
         <Disc3 className="size-6" />
       )}
+      {cover}
     </div>
     <div className="relative flex min-w-0 flex-1 flex-col justify-center gap-1">
-      <p className="music-serif line-clamp-2 text-[17px] leading-tight text-foreground">
-        {title ?? item.name ?? "—"}
-      </p>
+      {titleNode ?? (
+        <p className="music-serif line-clamp-2 text-[17px] leading-tight text-foreground">
+          {title ?? item.name ?? "—"}
+        </p>
+      )}
       <p className="line-clamp-1 text-[10px] text-muted-foreground">{sub}</p>
       <div className="mt-1 flex flex-wrap gap-1">{actions}</div>
     </div>
@@ -275,10 +285,17 @@ const AlbumView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
 
 const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
   const [confirmDel, setConfirmDel] = useState(false);
-  const [renaming, setRenaming] = useState(false);
+  // Optimistic name until the nav item / playlist list picks up the rename.
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const bg = api.playlistImages[item.item_id] ?? null;
+
+  const pickBackground = async () => {
+    setPicking(true);
+    const uri = await pickImageDataUri();
+    if (uri) api.setPlaylistImage(item.item_id, uri);
+    setPicking(false);
+  };
   const [data, loading, { refresh }] = useQuery<{ tracks: MediaItem[] }>({
     key: `playlist:${item.item_id}`,
     stale: 60_000,
@@ -335,62 +352,61 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
         art={art}
         title={shownName}
         bgImage={bg}
+        titleNode={
+          editable ? (
+            <InlineEdit
+              value={shownName}
+              onSave={(v) => {
+                setNameOverride(v);
+                void api.renamePlaylist(item, v);
+              }}
+              className="music-serif line-clamp-2 text-[17px] leading-tight text-foreground"
+              inputClassName="text-[15px]"
+            />
+          ) : undefined
+        }
+        cover={
+          editable ? (
+            <div className="absolute inset-0 flex items-center justify-center gap-1 bg-background/70 opacity-0 transition-opacity group-hover/cover:opacity-100 focus-within:opacity-100">
+              {picking ? (
+                <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    data-no-drag
+                    aria-label={bg ? "Change background image" : "Add background image"}
+                    onClick={pickBackground}
+                    className="mx-press grid size-6 place-items-center rounded text-foreground hover:bg-muted"
+                  >
+                    <ImagePlus className="size-3.5" />
+                  </button>
+                  {bg && (
+                    <button
+                      type="button"
+                      data-no-drag
+                      aria-label="Remove background image"
+                      onClick={() => api.setPlaylistImage(item.item_id, null)}
+                      className="mx-press grid size-6 place-items-center rounded text-foreground hover:bg-muted"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          ) : undefined
+        }
         sub={`${tracks.length} track${tracks.length === 1 ? "" : "s"}${item.owner ? ` · ${item.owner}` : ""}`}
         actions={
           <>
             <PlayPills api={api} item={item} />
-            {editable && renaming ? (
-              <form
-                className="flex items-center gap-1"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const v = (nameOverride ?? item.name).trim();
-                  if (v) void api.renamePlaylist(item, v);
-                  setRenaming(false);
-                }}
-              >
-                {/* biome-ignore lint/a11y/noAutofocus: opened by an explicit click */}
-                <input
-                  data-no-drag
-                  autoFocus
-                  value={shownName}
-                  onChange={(e) => setNameOverride(e.target.value)}
-                  className="w-32 rounded border border-border bg-input/40 px-2 py-1 text-[10px] text-foreground outline-none"
-                />
-                <button
-                  type="submit"
-                  data-no-drag
-                  className="mx-press rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  save
-                </button>
-              </form>
-            ) : (
-              editable && <PillBtn onClick={() => setRenaming(true)}>Rename</PillBtn>
-            )}
-            {editable && !renaming && (
+            {editable && (
               <PillBtn onClick={() => api.togglePinPlaylist(item.item_id)}>
                 {api.pinnedPlaylists.includes(item.item_id) ? "Unpin" : "Pin to top"}
               </PillBtn>
             )}
-            {editable && !renaming && (
-              <PillBtn
-                onClick={async () => {
-                  if (bg) {
-                    api.setPlaylistImage(item.item_id, null);
-                    return;
-                  }
-                  setPicking(true);
-                  const uri = await pickImageDataUri();
-                  if (uri) api.setPlaylistImage(item.item_id, uri);
-                  setPicking(false);
-                }}
-              >
-                {picking ? "choosing…" : bg ? "Remove image" : "Background image"}
-              </PillBtn>
-            )}
             {editable &&
-              !renaming &&
               (confirmDel ? (
                 <PillBtn
                   onClick={() => {

@@ -88,22 +88,15 @@ tracks, so nothing is server-only if the re-add fails. The drag itself is the
 shared `useDragReorder` hook (also now backs the Queue tab). Capped at
 `PLAYLIST_RENDER_CAP`.*
 
-### P6.3 — Rename playlist by double-clicking the name · needs `[wigl core]` `InlineEdit`
+*P6.3 done — `src/components/ui/inline-edit.tsx` (`<InlineEdit value onSave
+className inputClassName />`, owned code, registered as a host module). The
+playlist title in `PlaylistView`'s header is now an `InlineEdit` (click →
+input + check button); the "Rename" pill is gone. Available to any widget for
+an editable label.*
 
-Drop the "Rename" pill. Double-click the playlist title in `PlaylistView`'s
-header → it becomes an input with a save affordance (button at its
-centre-right). The owner: *"sounds like a Wigl component too — content that is
-editable with a save button and a passable callback."* Build
-`src/components/ui/inline-edit.tsx` (`<InlineEdit value onSave />`, owned code,
-`className` passthrough), register it, use it for the playlist name. Also a
-candidate for the queue-saved-as-playlist name and anywhere else a label is
-user-editable.
-
-### P6.4 — Edit the background image *on the cover*
-
-Move the background-image affordance off a pill and onto the cover thumbnail in
-`PlaylistView`'s header: hover the image → edit / remove controls overlay it.
-Ties into P7.
+*P6.4 done — the background-image affordance moved off a pill and onto the
+cover thumbnail: hover (or focus) the cover → add/change + remove buttons
+overlay it, spinner while the file picker is open. Still the base64 path (P7).*
 
 ---
 

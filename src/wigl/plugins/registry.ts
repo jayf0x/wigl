@@ -8,6 +8,7 @@ import * as ReactJsxRuntime from "react/jsx-runtime";
 import * as Badge from "@/components/ui/badge";
 import * as Button from "@/components/ui/button";
 import * as Checkbox from "@/components/ui/checkbox";
+import * as InlineEdit from "@/components/ui/inline-edit";
 import * as Input from "@/components/ui/input";
 import * as PasswordInput from "@/components/ui/password-input";
 import * as Popover from "@/components/ui/popover";
@@ -89,6 +90,7 @@ const HOST_MODULES: Record<HostModuleId, HostModule> = {
   "@/components/ui/badge": { value: Badge },
   "@/components/ui/button": { value: Button },
   "@/components/ui/checkbox": { value: Checkbox },
+  "@/components/ui/inline-edit": { value: InlineEdit },
   "@/components/ui/input": { value: Input },
   "@/components/ui/password-input": { value: PasswordInput },
   "@/components/ui/popover": { value: Popover },

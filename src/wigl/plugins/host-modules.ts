@@ -23,6 +23,7 @@ export const HOST_MODULE_IDS = [
   "@/components/ui/badge",
   "@/components/ui/button",
   "@/components/ui/checkbox",
+  "@/components/ui/inline-edit",
   "@/components/ui/input",
   "@/components/ui/password-input",
   "@/components/ui/popover",
