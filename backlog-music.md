@@ -75,19 +75,6 @@ shortcuts + `⋯` panel icons); `NowPlaying`'s `IconBtn` shows its label as a
 tooltip by default (opt out with `tip={false}`), so every transport /
 queue-mode / effects / speed / volume control has one.*
 
-### P5.3 — Simplify `src/components/ui/tooltip.tsx` · `[wigl core]`
-
-The owner left a research block **inside the file** (`/* TODO RESEARCH … */`)
-proposing a ~30-line pure-CSS Tailwind tooltip (`group-hover/tt`, no Portal, no
-Base UI, `left-0`/`right-0` edge-pin instead of centred/collision-flipped) with
-honest caveats (an `overflow-hidden` ancestor still clips; `aria-label` on the
-trigger instead of `aria-describedby`). Read it, implement it, run the full
-build + every consumer (music widget uses it in `Row.tsx` + `NowPlaying.tsx`;
-grep for other `@/components/ui/tooltip` importers), then **delete the research
-comment**. This is a good standalone research→cleanup subagent task.
-
----
-
 ## P6 — Queue & playlist ordering + editing
 
 ### P6.1 — Rename "Up next" → "Queue"
@@ -144,17 +131,9 @@ on the current base64 path until it lands.
 
 ## P8 — Small
 
-### P8.1 — Search: 3-character minimum
-
-Don't fire `music/search` under 3 chars (currently 1). Trim the debounce path
-in `Browser.tsx`. Keep the search-history chips working.
-
-### P8.2 — Settings: "Disable previews / artwork"
-
-An optional toggle to skip fetching album art / previews entirely (render the
-icon fallbacks). Owner is unsure it's a real problem — measure whether art
-fetches ever actually matter (they're `<img loading=lazy fetchpriority=low>` on
-their own already) before building; if not, drop this.
+*P8.1 done (live search waits for 3+ chars in `Browser.tsx`; empty clears,
+explicit submit / history chips unaffected). P8.2 rejected — no measured
+art-fetch cost; recorded in `state.md` "Locked decisions".*
 
 ---
 

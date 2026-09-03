@@ -18,7 +18,7 @@ const QueueHeader = ({ api, count }: { api: MusicApi; count: number }) => {
 
   return (
     <div className="flex items-center justify-between gap-2 px-2 pt-2 pb-1">
-      <p className="music-tag shrink-0 text-muted-foreground/70">Up next · {count}</p>
+      <p className="music-tag shrink-0 text-muted-foreground/70">Queue · {count}</p>
       {saved !== null ? (
         <span
           key="saved"
@@ -87,7 +87,8 @@ const QueueHeader = ({ api, count }: { api: MusicApi; count: number }) => {
 
 const ROW_H_FALLBACK = 42; // used only until we measure a real row
 
-/** Up-next list with pointer drag-to-reorder (P0.5). The DOM row order never
+/** The Queue tab list (the items after the current one) with pointer
+ * drag-to-reorder (P0.5). The DOM row order never
  * changes during a drag — the dragged row and the rows it passes are moved
  * with CSS transforms only — so the pointer-captured handle stays put in the
  * tree and WebKit never drops capture mid-gesture. The list is frozen to a
@@ -112,7 +113,9 @@ export const QueueList = ({ api }: { api: MusicApi }) => {
       <div className="flex flex-col items-center gap-3 px-4 py-10 text-center text-muted-foreground">
         <Equalizer bars={7} active={!!api.now?.playing} className="h-6 text-foreground/50" />
         <p className="text-[11px]">
-          {api.now ? "Queue is empty — up next shows here." : "Nothing playing. Search above to start."}
+          {api.now
+            ? "Queue is empty — tracks you play or add show up here."
+            : "Nothing playing. Search above to start."}
         </p>
       </div>
     );

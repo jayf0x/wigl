@@ -63,9 +63,14 @@ export const Browser = ({
   };
 
   // Debounced live search — only while the browse view is showing. Re-runs when
-  // the filter selection changes too.
+  // the filter selection changes too. Live search waits for 3+ characters
+  // (P8.1 — 1–2 chars are almost all noise and a cold provider round-trip); an
+  // empty field still fires, to clear results. An explicit submit or a history
+  // chip runs regardless of length.
   useEffect(() => {
     if (nav.kind !== "browse") return;
+    const term = q.trim();
+    if (term.length > 0 && term.length < 3) return;
     const t = setTimeout(() => api.search(q, { mediaTypes: types, providers }), 220);
     return () => clearTimeout(t);
   }, [q, api.search, nav.kind, types, providers]);

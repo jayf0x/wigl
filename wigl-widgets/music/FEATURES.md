@@ -14,10 +14,10 @@ current one and skipped to). One misclick can't wipe your queue.
   (default — keep the tail) and **Replace** (a click clears the queue first).
 - **Add to queue** (a track's **⋯** menu, or the detail-view button in Append
   mode) is the silent "queue it for later, don't interrupt" action.
-- **Clear** (in the Up-next tab) is the only button that empties the queue,
+- **Clear** (in the Queue tab) is the only button that empties the queue,
   and it asks twice.
 
-**Save a queue** you like: the **Save** button in the Up-next tab copies it to
+**Save a queue** you like: the **Save** button in the Queue tab copies it to
 a new playlist (named `queue - …`, rename it after) and confirms with a
 "saved as …" flash. The queue keeps playing.
 

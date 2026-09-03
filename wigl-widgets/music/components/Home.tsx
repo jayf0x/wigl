@@ -49,7 +49,7 @@ const PinnedStrip = ({ api }: { api: MusicApi }) => {
 type HomeTab = "queue" | "playlists" | "recent" | "browse" | "fx";
 
 const TABS: { id: HomeTab; label: string }[] = [
-  { id: "queue", label: "Up next" },
+  { id: "queue", label: "Queue" },
   { id: "playlists", label: "Playlists" },
   { id: "recent", label: "Recent" },
   { id: "browse", label: "Browse" },
