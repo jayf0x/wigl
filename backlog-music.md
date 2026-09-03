@@ -68,24 +68,6 @@ back up** — `docker exec wigl-ma python -c "…"` per SETUP.md "Playback speed
 
 ---
 
-## P3 — Effects tab polish
-
-### P3.1 — Fader alignment
-
-The 4 EQ faders + reverb are `justify-between` across the full pane width →
-oceans of dead space on a wide tile. Group them (fixed fader width, centred
-cluster, a small gap; the reverb fader set off by the existing divider), so it
-reads as one piece of gear, not sliders flung to the edges.
-
-### P3.2 — Sliders select text while dragging
-
-Dragging a `VFader` (and check the volume `Slider`, the seek bar) selects
-surrounding text. Add `user-select: none` + `touch-action: none` on the fader
-track/handle, `e.preventDefault()` on `pointerdown`, and consider a
-`.mx-nodrag-select` utility in `music.css` if it recurs.
-
----
-
 ## P4 — "Server not running" needs a real UI
 
 When `wigl-ma` / Docker is down the widget just shows the small

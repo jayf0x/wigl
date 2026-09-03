@@ -114,25 +114,30 @@ export const EffectsTab = ({ api }: { api: MusicApi }) => {
         </div>
       </div>
 
-      {/* graphic EQ */}
-      <div className={cn("flex items-stretch justify-between gap-1", dimmed)}>
-        {BAND_HZ.map((freq, i) => (
-          <VFader
-            key={freq}
-            label={hz(freq)}
-            display={dbLabel(fx.bands[i] ?? 0)}
-            value={fx.bands[i] ?? 0}
-            min={EQ_MIN_DB}
-            max={EQ_MAX_DB}
-            step={1}
-            detent={0}
-            marks={EQ_MARKS}
-            onChange={(v) => setBand(i, v)}
-            onCommit={(v) => commit(withBand(i, v))}
-          />
-        ))}
-        <span className="mx-1 w-px self-stretch bg-border" />
+      {/* graphic EQ — a centred cluster, fixed fader width, so it reads as one
+          piece of gear instead of sliders flung to the pane edges (P3.1) */}
+      <div className={cn("flex items-stretch justify-center gap-2", dimmed)}>
+        <div className="flex items-stretch gap-1.5">
+          {BAND_HZ.map((freq, i) => (
+            <VFader
+              key={freq}
+              className="w-11"
+              label={hz(freq)}
+              display={dbLabel(fx.bands[i] ?? 0)}
+              value={fx.bands[i] ?? 0}
+              min={EQ_MIN_DB}
+              max={EQ_MAX_DB}
+              step={1}
+              detent={0}
+              marks={EQ_MARKS}
+              onChange={(v) => setBand(i, v)}
+              onCommit={(v) => commit(withBand(i, v))}
+            />
+          ))}
+        </div>
+        <span className="w-px self-stretch bg-border" />
         <VFader
+          className="w-11"
           label="Reverb"
           display={`${Math.round(fx.reverb * 100)}%`}
           value={Math.round(fx.reverb * 100)}

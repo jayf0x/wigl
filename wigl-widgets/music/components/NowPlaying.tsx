@@ -342,6 +342,7 @@ const Scrubber = ({ api }: { api: MusicApi }) => {
 
   const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!now || now.isRadio || duration <= 0) return;
+    e.preventDefault(); // P3.2 — no text selection on a scrub
     e.currentTarget.setPointerCapture(e.pointerId);
     setDrag(fracFromEvent(e));
   };
@@ -364,7 +365,7 @@ const Scrubber = ({ api }: { api: MusicApi }) => {
   const seekable = !!now && !now.isRadio && duration > 0;
 
   return (
-    <div className="flex items-center gap-2 text-[10px] text-muted-foreground tabular-nums">
+    <div className="mx-nodrag-select flex items-center gap-2 text-[10px] text-muted-foreground tabular-nums">
       <span key={syncKey} className={cn("w-8", syncKey > 0 && drag == null && "mx-sync")}>
         {now?.isRadio ? "live" : fmt(shownElapsed)}
       </span>

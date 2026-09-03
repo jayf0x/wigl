@@ -50,6 +50,7 @@ export const VFader = ({
   };
 
   const onDown = (e: ReactPointerEvent) => {
+    e.preventDefault(); // P3.2 — don't start a text selection on the drag
     e.currentTarget.setPointerCapture(e.pointerId);
     dragging.current = true;
     onChange(valueFromEvent(e.clientY));
@@ -74,7 +75,7 @@ export const VFader = ({
   };
 
   return (
-    <div className={cn("flex min-w-0 flex-col items-center gap-1", className)}>
+    <div className={cn("mx-nodrag-select flex min-w-0 flex-col items-center gap-1", className)}>
       <span className="tabular-nums text-[9px] text-foreground/80">{display}</span>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: role=slider is on this element */}
       <div
@@ -91,7 +92,7 @@ export const VFader = ({
         onPointerMove={onMove}
         onPointerUp={onUp}
         onKeyDown={onKey}
-        className="relative min-h-14 w-6 flex-1 cursor-ns-resize rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="relative min-h-14 w-6 flex-1 cursor-ns-resize touch-none select-none rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         {/* rail */}
         <span className="absolute inset-y-1 left-1/2 w-px -translate-x-1/2 bg-border" />

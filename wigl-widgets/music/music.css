@@ -127,6 +127,9 @@
                       re-sync — the "synth" flourish.
      .mx-enter        subtle fade + few-px slide for view/tab/panel swaps
                       (~150ms ease-out).
+     .mx-nodrag-select  kills text-selection + touch-scroll on a pointer-driven
+                      control and its labels (faders, the seek bar) so a drag
+                      never highlights surrounding text (P3.2).
    =========================================================================== */
 
 .music-widget {
@@ -137,6 +140,14 @@
   /* mechanical: near-linear attack, eased release. No cubic overshoot. */
   --mx-ease: cubic-bezier(0.2, 0, 0.1, 1);
   --mx-ease-out: cubic-bezier(0.16, 0.84, 0.44, 1);
+}
+
+/* --- .mx-nodrag-select : no text selection while dragging a control ------ */
+.music-widget .mx-nodrag-select,
+.music-widget .mx-nodrag-select * {
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
 
 /* --- .mx-press : key-depress feedback ------------------------------------- */
