@@ -6,3 +6,4 @@ export { type PtyExit, type PtyOptions, type UsePtyResult, usePty } from "./useP
 export { useRelativeTime } from "./useRelativeTime";
 export type { SettingField, SettingSection } from "../settings/types";
 export { useStorage } from "./useStorage";
+export { useUploader } from "./useUploader";

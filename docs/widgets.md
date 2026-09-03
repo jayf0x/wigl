@@ -107,8 +107,8 @@ The shape, in dependency order (any widget in `wigl-widgets/` with a hook is the
 Everything shared lives behind exactly three barrels — widgets never deep-import past them:
 
 - **`@/wigl`** — visual/layout primitives: `Widget`, `Desktop`, `TILING`.
-- **`@/wigl/hooks`** — stateful/React helpers: `useStorage`, `useQuery`, `useRelativeTime`, `useRegisterGlobalAction`.
-- **`@/wigl/utils`** — plain non-React helpers: `cn`, `runCmd`, `isMacos`, `relativeTime`.
+- **`@/wigl/hooks`** — stateful/React helpers: `useStorage`, `useQuery`, `useRelativeTime`, `useRegisterGlobalAction`, `useUploader`.
+- **`@/wigl/utils`** — plain non-React helpers: `cn`, `runCmd`, `isMacos`, `relativeTime`, `pickAndProcessImage`.
 
 **Read each barrel's `index.ts` for the current list**; each module carries its own doc comment. The two you'll always use from `@/wigl`:
 
@@ -124,6 +124,8 @@ Everything shared lives behind exactly three barrels — widgets never deep-impo
 ```
 
 Before writing a utility inside your widget folder, skim the barrels — the helper you need (e.g. live relative-time labels, persisted state) may already exist. Conversely, don't add to `src/wigl/` for a single widget's needs; the promotion threshold is in `docs/architecture.md`.
+
+**Letting the user pick a picture**: `useUploader({ key })` (or the lower-level `pickAndProcessImage()`) opens the system file chooser, downscales + re-encodes the file to a small JPEG `data:` URI via Python/Pillow, and stores it under that key — render it with a plain `<img src>`. Base64 in the kv table; fine for a handful of small images (a cover, an avatar), not a gallery. Needs Pillow on the host (`global-deps.md`); without it the pick returns `null` and the feature degrades rather than breaking.
 
 ## The desktop's right-click menu (`useRegisterGlobalAction`)
 

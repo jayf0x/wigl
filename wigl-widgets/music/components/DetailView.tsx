@@ -3,9 +3,8 @@ import { hours, useQuery } from "@/wigl/hooks";
 import { Disc3, GripVertical, ImagePlus, LoaderCircle, Radio, Trash2, User, X } from "lucide-react";
 import { InlineEdit } from "@/components/ui/inline-edit";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/wigl/utils";
+import { cn, pickAndProcessImage } from "@/wigl/utils";
 import { PLAYLIST_RENDER_CAP } from "../music.config";
-import { pickImageDataUri } from "../pickImage";
 import { playlistDisplayImage } from "../playlistImage";
 import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
@@ -292,7 +291,7 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
 
   const pickBackground = async () => {
     setPicking(true);
-    const uri = await pickImageDataUri();
+    const uri = await pickAndProcessImage();
     if (uri) api.setPlaylistImage(item.item_id, uri);
     setPicking(false);
   };

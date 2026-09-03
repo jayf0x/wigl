@@ -102,23 +102,19 @@ overlay it, spinner while the file picker is open. Still the base64 path (P7).*
 
 ## P7 — `[wigl core]` A wigl image upload / retrieval system
 
-The owner's vision (sketches, not a spec):
-- `useImage("music:playlist-cover:<id>")` — a hook that returns a displayable
-  URL for a stored image by key.
-- `const onUpload = useUploadImage({ compress: true, target: "PNG" })` — upload
-  a picked file into local storage, converted/compressed to a web-friendly
-  format by default.
-- `useUploader({ path })` — the full wrapper: file-pick + upload + retrieve.
-- A **small Python helper** for the image conversion/compression (reliable
-  format, small size, React-friendly) — shelled out to, like the rest of wigl's
-  "real CLI over Rust" approach. (`Pillow` is the obvious choice; add to
-  `global-deps.md`.)
-Storage: the wigl kv table (base64) is fine for a handful of small covers; a
-large-image story would want the Tauri asset protocol + `convertFileSrc` (~15
-LOC core) — decide based on expected sizes. The music widget's playlist covers
-(P0.7 / P6.4) are the first consumer; design the API against that use, keep it
-general. **This is its own session** — big, core, and the widget can limp along
-on the current base64 path until it lands.
+*Core version done. `src/wigl/utils/pickImage.ts` → `pickAndProcessImage()`
+(system file chooser + Python/Pillow resize + JPEG re-encode + base64, one
+`sh -c`), and `src/wigl/hooks/useUploader.ts` → `useUploader({ key, maxEdge })`
+→ `{ url, busy, pick, clear }` binding a storage key to the result. Both
+exported from the barrels; `docs/widgets.md` + `global-deps.md` (Pillow)
+updated; a `bun:test` guards the Python hop. The music widget's fragile
+`pickImage.ts` (`sips`/ImageMagick) is deleted — `DetailView` calls
+`pickAndProcessImage` directly (it keeps its own many-covers map rather than
+one `useUploader` per playlist).*
+
+**Still deferred** (owner's call — needs the "how big do images get" answer):
+the Tauri asset-protocol + `convertFileSrc` path for large images, and an
+`useImage(key)` read-only hook. Base64-in-kv covers the current need.
 
 ---
 

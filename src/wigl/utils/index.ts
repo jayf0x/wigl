@@ -94,3 +94,7 @@ export const relativeTime = (epochSeconds: number, present = Date.now()) => {
   if (diff < 604800) return `${Math.floor(diff / 86400)}d`;
   return `${Math.floor(diff / 604800)}w`;
 };
+
+// P7 — local image → small web-friendly data URI. Non-React; the React wrapper
+// that also stores + retrieves the result is `useUploader` in `@/wigl/hooks`.
+export { pickAndProcessImage } from "./pickImage";

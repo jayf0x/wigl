@@ -86,8 +86,7 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | `music.config.ts` | Ship defaults + `KEYS` (storage), `SENDSPIN_OUTPUT`, `MA_IMAGE`, `MA_CONTAINER`, timings. |
 | `types.ts` | The MA shapes actually read (partial — `/api-docs` is truth). |
 | `util.ts` | `providerLabel()` and small pure helpers. |
-| `pickImage.ts` | E3 — `pickImageDataUri()`: system file chooser (`osascript` / `zenity`) + `sips`/ImageMagick downscale + base64 through one `sh -c`, returns a self-contained data URI. No dialog plugin, no asset protocol; `command` permission only. |
-| `playlistImage.ts` | `playlistDisplayImage(api, playlist, fallbackArt?)` — the single source of truth for a playlist's image: custom background (`api.playlistImages[id]`, E3) > MA art > first-track art (caller-supplied) > null. Used by the detail header, the Playlists-list rows, and the pinned strip so they never disagree (feedback E). |
+| `playlistImage.ts` | `playlistDisplayImage(api, playlist, fallbackArt?)` — the single source of truth for a playlist's image: custom background (`api.playlistImages[id]`, E3) > MA art > first-track art (caller-supplied) > null. Used by the detail header, the Playlists-list rows, and the pinned strip so they never disagree (feedback E). The pick itself is now core: `pickAndProcessImage()` from `@/wigl/utils` (P7 — Pillow resize/encode, replaced the widget's own `sips`/ImageMagick `pickImage.ts`). |
 | `music.css` | `IBM Plex Mono` + `Instrument Serif` (serif = track titles only), the `.music-cq` container query, the `.music-eq` VU animation, and the **`.mx-` motion layer** — a documented set of mechanical-feel interaction classes (`.mx-press` key-depress, `.mx-tap` async-click ring pulse, `.mx-pending`/`.mx-pending-long` in-flight shimmer, `.mx-flash` done-ack, `.mx-sync` LED blink, `.mx-enter` view transition, `.mx-nodrag-select` no-text-select-on-drag) + standardised `--mx-*` duration/easing tokens on `.music-widget`. All `prefers-reduced-motion`-aware, theme-token driven. Applied so far in `NowPlaying` (transport/volume/ⓘ) + the Home tab bar + panel; app-wide application is a later pass. Also the **icon treatment** (feedback I): `.music-widget svg { stroke-width: 2.25px }` globally + `.mx-icon-strong` (2.5px) on the primary transport button, whose glyphs are also bumped to 18px. Line-toggle icons (repeat/shuffle) stay stroke-only — filling those glyphs blobs them. |
 | `settingsSection.tsx` | Settings-modal section: host/port/login, provider filter, auto-start toggle, audio-effects path toggle, and the H1 "Backend" `OpButton`s (Restart / Clear cache / Update server). Password field uses the shared `@/components/ui/password-input` (eye toggle). |
 | `FEATURES.md` | User-facing "what the non-obvious features do" (queue model, ⋯ menu, radio, playlists, search, effects, keys). Keep it current when UX changes. |
@@ -251,7 +250,9 @@ resync net), P2 (server-side speed) and P3–P8 are still open.
 
 **Standing:**
 - Rich track metadata is null without an MA metadata provider on the server.
-- Playlist background images are base64 in one `playlist_images` kv map —
-  being replaced by a proper wigl image system (backlog P7).
+- Playlist background images are base64 in one `playlist_images` kv map (the
+  widget keeps its own map since it has many covers; the *pick + compress* is
+  the shared `useUploader` / `pickAndProcessImage`, P7). A large-image /
+  asset-protocol story is still deferred.
 - The `.mx-` motion layer is applied widely (Row, Home, Browser, DetailView,
   EffectsTab, QueueList, SearchFilters, BrowseTab, settingsSection + NowPlaying).

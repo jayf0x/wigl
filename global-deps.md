@@ -20,6 +20,13 @@ Delete the line when nothing here depends on it anymore.
   Desktop (`/usr/local/bin/docker` here). Remove entirely: `docker rm -f
   wigl-ma && docker rmi ghcr.io/sproft/ytmusic-free-provider
   ghcr.io/music-assistant/server` and delete `.idea/ma-data/`.
+- **Pillow** (Python) — `pip install Pillow` (or the OS package, e.g.
+  `python3-pil`). Used by `src/wigl/utils/pickImage.ts` (`pickAndProcessImage`
+  / the `useUploader` hook, P7) via a one-line `python3 -c` hop to resize +
+  re-encode a picked image to a small JPEG data URI. First consumer:
+  `wigl-widgets/music` playlist covers. Check: `python3 -c "import PIL"`.
+  Without it, image pick silently returns null (the feature degrades, nothing
+  breaks). Verified present on this machine (12.1.1).
 - **opencode** — installed globally via `bun` (binary resolves to
   `~/.bun/bin/opencode` on the machine this was set up on — see
   `wigl-widgets/LocalCode/serverProcess.ts`'s `OPENCODE_CANDIDATES` for the
