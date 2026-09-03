@@ -1,48 +1,49 @@
 # music widget — backlog (post-iteration-3 feedback)
 
-The widget is feature-complete on paper — search, queue, playlists, radio,
-artist/album views, favourites, history, browse, keyboard, an effects tab, a
-motion layer, backend controls. **But iteration-3 QA surfaced real breakage in
-core paths** (playing a search result, seeking, the effects chain, queue drag,
-playback surviving a settings toggle) plus a clear direction: *the whole widget
-should feel optimistic — the UI leads, the server catches up.*
+**Iteration-4 pass complete** — every item below (P0–P8) is done and committed
+(see `git log`, the run of `music:` / `music + core:` / `core:` commits after
+`d72510d`). What's left is **owner QA**, not code:
 
-This file is the plan for the next working session. Read
-`wigl-widgets/music/state.md` first (runtime shape, files, MA cheatsheet,
-known-issues). `SETUP.md` = backend, `FEATURES.md` = user-facing, `COMPARISON.md`
-= the M0 reference-player study, `wigl-widgets/music/todo-speed.md` = the
-owner's full spec for the speed feature.
+- **P0.3 (seek)** — needs a live scrub in the running widget to confirm the
+  bar no longer snaps back through a rebuffer.
+- **P0.4 (effects)** — needs a by-ear check (`tests/audio-check.md`): reverb
+  obvious by ~60–70%, a big EQ cut audible.
+- **P2 (playback speed)** — the container `sitecustomize.py` patch needs
+  Docker up + the container recreated with the new mount (`SETUP.md`
+  "Playback speed"), then `docker exec wigl-ma python -c …` to confirm the
+  shim registered. Docker was down for this whole session so this couldn't
+  be exercised live.
+- The **live e2e suite** (`tests/music.e2e.test.ts`) skipped all session
+  (Docker down); run `bun run wigl test widgets` once `wigl-ma` is back.
 
-## How to work this list
+Read `wigl-widgets/music/state.md` first for the current runtime shape, files
+and MA cheatsheet. `SETUP.md` = backend, `FEATURES.md` = user-facing,
+`COMPARISON.md` = the M0 reference-player study.
 
-- **P0 first** — those are broken core behaviours, and several are regressions
-  from the polish passes. Nothing else matters until a search result plays on
-  click and playback survives a settings change.
-- Then P1 (optimistic UI — the owner wants this to be *the* theme), then the
-  rest roughly in order. Items tagged **`[wigl core]`** touch `src/` and the
-  host-module registry — they're bigger than the widget and could be their own
-  sessions.
-- Per item: reproduce the bug / confirm the shape against the running server
-  (`http://127.0.0.1:8095/api-docs/commands.json` is truth), fix the smallest
-  thing, verify (`bun run typecheck` + `typecheck:widgets` + `widget:verify
-  wigl-widgets/music` + `wigl test widgets`; `bun run verify` + `bun run build`
-  for `src/` changes), grow `tests/music.e2e.test.ts` for any new MA command,
-  **commit** (`~/.claude/skills/git-meow/scripts/commit.sh`), update `state.md`,
-  delete the finished entry here.
-- **Design rules** (non-negotiable, from `state.md`): music player and nothing
-  more; responsive at any tile size — actually resize-test; monochrome, theme
-  tokens only; views replace the pane, never a third vertical zone; **never put
-  dev-context text ("see the backlog", "TODO", "A1") into user-visible strings**
-  — a shipped string that references the backlog is a bug (this happened in the
-  Effects tab; fixed, don't repeat it).
+## How the items were worked
+
+Per item: reproduced the bug / confirmed the shape against MA source or
+`/api-docs`, fixed the smallest thing, verified (`typecheck` + `typecheck:widgets`
++ `widget:verify wigl-widgets/music` + `wigl test widgets`; `bun run verify` for
+`src/` changes), grew `tests/music.e2e.test.ts` for new MA commands, committed
+via `git-meow`, updated `state.md`. **Design rules** (from `state.md`): music
+player and nothing more; responsive at any tile size; monochrome, theme tokens
+only; views replace the pane; never leak dev-context text into UI strings.
 
 ---
 
-## P0 — Broken core behaviour
+## P0 — Broken core behaviour  ·  done
 
-*All clear — P0.1–P0.7 fixed (git log `music:` commits). P0.3/P0.4 need the
-owner's by-ear + live-scrub QA to fully confirm; the structural causes are
-addressed.*
+- **P0.1/P0.2** `afdedc8` — a plain `play()` always starts the track now and
+  never touches the view.
+- **P0.3** `0d7edef` — post-seek playhead is projected forward until the SDK
+  clock converges (needs a live scrub to fully confirm).
+- **P0.4** `6cbed6d` — effects tap the Sendspin MediaStream
+  (`createMediaStreamSource`), resume the AudioContext (needs a by-ear check).
+- **P0.5** `0bceeda` — queue drag reorders without dropping pointer capture.
+- **P0.6** `96cc6e4` — the auto-start-server toggle no longer reconnects.
+- **P0.7** `265fa54` — the macOS background-image picker `mktemp -d` fix
+  (later superseded by P7's Pillow path).
 
 ---
 
