@@ -232,20 +232,22 @@ export const RowActionButtons = ({
     {inline.length > 0 && (
       <div className="music-row-inline shrink-0 items-center gap-0.5">
         {inline.map((a) => (
-          <button
-            key={a.label}
-            type="button"
-            data-no-drag
-            aria-label={a.label}
-            title={a.label}
-            onClick={() => a.run?.()}
-            className={cn(
-              "mx-press mx-tap rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:opacity-100",
-              open ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-            )}
-          >
-            {a.icon}
-          </button>
+          <Tooltip key={a.label} content={a.label}>
+            <button
+              type="button"
+              data-no-drag
+              aria-label={a.label}
+              onClick={() => a.run?.()}
+              className={cn(
+                "mx-press mx-tap rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:opacity-100",
+                open
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+              )}
+            >
+              {a.icon}
+            </button>
+          </Tooltip>
         ))}
       </div>
     )}
@@ -337,10 +339,11 @@ export const RowActionPanel = ({
         pills.map((a) => {
           const branch = !!(a.submenu || a.input);
           // Top-level plain actions collapse to an icon + hover/focus tooltip
-          // (feedback C/I); submenu contents (playlist names, radio seeds) and
-          // any branch keep their text label — an icon alone wouldn't name them.
+          // on the whole button (P5.1); submenu contents (playlist names, radio
+          // seeds) and any branch keep their text label — an icon alone
+          // wouldn't name them.
           const iconOnly = !sub && !branch;
-          return (
+          const btn = (
             <button
               key={a.label}
               type="button"
@@ -362,18 +365,21 @@ export const RowActionPanel = ({
                 a.run && !branch && "mx-tap",
               )}
             >
-              {iconOnly ? (
-                <Tooltip content={a.label}>
-                  <span className="flex">{a.icon}</span>
-                </Tooltip>
-              ) : (
+              {a.icon}
+              {!iconOnly && (
                 <>
-                  {a.icon}
                   <span className="max-w-32 truncate">{a.label}</span>
                   {branch && <ChevronRight className="size-3" />}
                 </>
               )}
             </button>
+          );
+          return iconOnly ? (
+            <Tooltip key={a.label} content={a.label}>
+              {btn}
+            </Tooltip>
+          ) : (
+            btn
           );
         })
       )}

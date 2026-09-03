@@ -228,7 +228,7 @@ const IconBtn = ({
   disabled,
   pending,
   tap,
-  tip,
+  tip = true,
   children,
 }: {
   onClick: () => void;
@@ -240,7 +240,9 @@ const IconBtn = ({
   pending?: boolean;
   /** fires an async API call — click gets the mx-tap ring pulse */
   tap?: boolean;
-  /** show `label` as a hover tooltip (ui/tooltip host component) */
+  /** show `label` as a hover tooltip (ui/tooltip host component). On by
+   * default (P5.2 — every transport control gets one); pass `tip={false}` to
+   * suppress it for a control whose purpose is already obvious on screen. */
   tip?: boolean;
   children: React.ReactNode;
 }) => {

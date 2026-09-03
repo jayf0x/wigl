@@ -70,15 +70,10 @@ back up** — `docker exec wigl-ma python -c "…"` per SETUP.md "Playback speed
 
 ## P5 — Tooltips
 
-### P5.1 — Trigger on the whole button, not just the icon
-
-`RowActionPanel` / inline action buttons wrap the `<Tooltip>` around the icon,
-so the hint only shows on a pixel-perfect icon hover. Wrap the *button*.
-
-### P5.2 — Every primary action has a tooltip
-
-Play, pause, next, prev, add-to-queue, add-to-playlist, favourite, go-to-artist,
-radio, the queue-mode toggle, the effects on/off — all get `<Tooltip content>`.
+*P5.1 + P5.2 done. `<Tooltip>` now wraps the whole button in `Row` (inline
+shortcuts + `⋯` panel icons); `NowPlaying`'s `IconBtn` shows its label as a
+tooltip by default (opt out with `tip={false}`), so every transport /
+queue-mode / effects / speed / volume control has one.*
 
 ### P5.3 — Simplify `src/components/ui/tooltip.tsx` · `[wigl core]`
 
