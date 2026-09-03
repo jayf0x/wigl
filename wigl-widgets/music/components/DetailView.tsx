@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { hours, useQuery } from "@/wigl/hooks";
-import { Disc3, LoaderCircle, Radio, Trash2, User } from "lucide-react";
+import { Disc3, GripVertical, LoaderCircle, Radio, Trash2, User } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/wigl/utils";
 import { PLAYLIST_RENDER_CAP } from "../music.config";
@@ -8,7 +8,9 @@ import { pickImageDataUri } from "../pickImage";
 import { playlistDisplayImage } from "../playlistImage";
 import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
+import { arrayMove } from "../util";
 import { Row, standardActions } from "./Row";
+import { useDragReorder } from "./useDragReorder";
 
 interface ArtistPayload {
   header: MediaItem | null;
@@ -296,8 +298,14 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
     },
   });
 
+  // Optimistic order during / just after a drag-reorder (P6.2); cleared when a
+  // fresh server fetch lands.
+  const [order, setOrder] = useState<MediaItem[] | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on a new fetch
+  useEffect(() => setOrder(null), [data?.tracks]);
+
   if (loading && !data) return <Loading />;
-  const tracks = data?.tracks ?? [];
+  const tracks = order ?? data?.tracks ?? [];
   // Only real library playlists can be renamed / deleted / have tracks added.
   const editable = item.is_editable !== false && (!item.provider || item.provider === "library");
   const shownName = nameOverride ?? item.name;
@@ -307,6 +315,18 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
     item,
     api.imageUrl(tracks[0]?.metadata?.images?.[0] ?? null),
   );
+
+  const canReorder = editable && tracks.length > 1 && tracks.length <= PLAYLIST_RENDER_CAP;
+  const dnd = useDragReorder(tracks, (from, to) => {
+    const next = arrayMove(tracks, from, to);
+    setOrder(next);
+    void api
+      .reorderPlaylist(
+        item.item_id,
+        next.map((t) => t.uri).filter((u): u is string => !!u),
+      )
+      .then(() => setTimeout(refresh, 900));
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -388,32 +408,47 @@ const PlaylistView = ({ api, item }: { api: MusicApi; item: MediaItem }) => {
       />
       <ScrollArea className="min-h-0 flex-1" scrollFade>
         <div className="p-1.5">
-          {tracks.length ? (
+          {dnd.list.length ? (
             <>
-              {tracks.slice(0, PLAYLIST_RENDER_CAP).map((t, i) => {
-                const pos = t.position ?? i + 1;
+              {dnd.list.slice(0, PLAYLIST_RENDER_CAP).map((t, i) => {
+                const pos = order ? i + 1 : (t.position ?? i + 1);
+                const key = `${t.uri}:${i}`;
                 return (
-                  <Row
-                    key={`${t.uri}:${pos}`}
-                    item={t}
-                    api={api}
-                    index={i + 1}
-                    actions={
-                      editable
-                        ? standardActions(api, t, [
-                            {
-                              label: "Remove from playlist",
-                              icon: <Trash2 className="size-3.5" />,
-                              danger: true,
-                              run: async () => {
-                                await api.removePlaylistTrack(item.item_id, pos);
-                                setTimeout(refresh, 600);
+                  <div key={key} data-reorder-row style={canReorder ? dnd.rowStyle(i, key) : undefined}>
+                    <Row
+                      item={t}
+                      api={api}
+                      index={i + 1}
+                      actions={
+                        editable
+                          ? standardActions(api, t, [
+                              {
+                                label: "Remove from playlist",
+                                icon: <Trash2 className="size-3.5" />,
+                                danger: true,
+                                run: async () => {
+                                  await api.removePlaylistTrack(item.item_id, pos);
+                                  setTimeout(refresh, 600);
+                                },
                               },
-                            },
-                          ])
-                        : undefined
-                    }
-                  />
+                            ])
+                          : undefined
+                      }
+                      dragHandle={
+                        canReorder ? (
+                          <button
+                            type="button"
+                            data-no-drag
+                            aria-label="Drag to reorder"
+                            {...dnd.handleFor(key, i)}
+                            className="-ml-1 shrink-0 cursor-grab touch-none rounded p-0.5 text-muted-foreground/40 hover:text-foreground active:cursor-grabbing"
+                          >
+                            <GripVertical className="size-3.5" />
+                          </button>
+                        ) : undefined
+                      }
+                    />
+                  </div>
                 );
               })}
               {tracks.length > PLAYLIST_RENDER_CAP && (

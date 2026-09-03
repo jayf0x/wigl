@@ -477,6 +477,55 @@ describe("music widget ↔ Music Assistant (live)", () => {
     }
   });
 
+  // P6.2 playlist reorder: MA has no reorder command, so the widget rewrites —
+  // remove_playlist_tracks(all positions) then add_playlist_tracks(new order).
+  // Assert that round-trips to the order asked for.
+  test.skipIf(!reachable)("playlist reorder via remove-all + re-add lands in the new order", async () => {
+    const client = new MaClient(endpoint, () => {});
+    await client.connect();
+    let plId: string | undefined;
+    try {
+      const created = await client.command<MediaItem>("music/playlists/create_playlist", {
+        name: `wigl reorder ${Date.now()}`,
+      });
+      plId = created.item_id;
+      const res = await client.command<SearchResults>("music/search", {
+        search_query: "daft punk",
+        media_types: ["track"],
+        limit: 3,
+      });
+      const uris = res.tracks.slice(0, 3).map((t) => t.uri);
+      if (uris.length < 3) return;
+
+      await client.command("music/playlists/add_playlist_tracks", { db_playlist_id: plId, uris });
+      await new Promise((r) => setTimeout(r, 1500));
+
+      // move the last track to the front
+      const reordered = [uris[2], uris[0], uris[1]];
+      await client.command("music/playlists/remove_playlist_tracks", {
+        db_playlist_id: plId,
+        positions_to_remove: [1, 2, 3],
+      });
+      await client.command("music/playlists/add_playlist_tracks", {
+        db_playlist_id: plId,
+        uris: reordered,
+      });
+      await new Promise((r) => setTimeout(r, 1500));
+
+      const after = await client.command<{ uri: string; position?: number }[]>(
+        "music/playlists/playlist_tracks",
+        { item_id: plId, provider_instance_id_or_domain: "library" },
+      );
+      expect(after.map((t) => t.uri)).toEqual(reordered);
+    } finally {
+      if (plId)
+        await client
+          .command("music/library/remove_item", { media_type: "playlist", library_item_id: plId })
+          .catch(() => {});
+      client.close();
+    }
+  });
+
   // E1 rename: music/playlists/update sticks for a library playlist **only**
   // with overwrite:true and the full playlist object as `update`.
   test.skipIf(!reachable)("music/playlists/update renames a library playlist (overwrite:true)", async () => {

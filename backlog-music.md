@@ -70,23 +70,23 @@ back up** — `docker exec wigl-ma python -c "…"` per SETUP.md "Playback speed
 
 ## P5 — Tooltips
 
-*P5.1 + P5.2 done. `<Tooltip>` now wraps the whole button in `Row` (inline
-shortcuts + `⋯` panel icons); `NowPlaying`'s `IconBtn` shows its label as a
-tooltip by default (opt out with `tip={false}`), so every transport /
-queue-mode / effects / speed / volume control has one.*
+*Done. P5.1/P5.2 — `<Tooltip>` wraps the whole button in `Row`; `NowPlaying`'s
+`IconBtn` shows its label by default (`tip={false}` opts out). P5.3 (commit
+`580a105`) — `src/components/ui/tooltip.tsx` is now the ~30-line pure-CSS
+version from the owner's research block; Base UI dropped, `side`/`align`
+edge-pin, research comment gone.*
 
 ## P6 — Queue & playlist ordering + editing
 
-### P6.1 — Rename "Up next" → "Queue"
+*P6.1 done (commit `3f9d3ae`) — "Queue" everywhere.*
 
-Everywhere: the Home tab label, `state.md`, `FEATURES.md`, comments.
-
-### P6.2 — Playlist drag-reorder
-
-Same interaction as the queue (P0.5) — reorder tracks in `PlaylistView` by
-drag, committed on drop. MA: check `music/playlists/*` for a track-reorder
-command (there may not be one — might need remove + re-add at position, or
-`add_playlist_tracks` with an index). Verify against `/api-docs`.
+*P6.2 done. MA has **no** playlist track-reorder command (the builtin
+provider is append + remove-by-position only), so a reorder is a full
+rewrite: `reorderPlaylist` does `remove_playlist_tracks(all)` +
+`add_playlist_tracks(newOrder)`. The uri list comes from the widget's loaded
+tracks, so nothing is server-only if the re-add fails. The drag itself is the
+shared `useDragReorder` hook (also now backs the Queue tab). Capped at
+`PLAYLIST_RENDER_CAP`.*
 
 ### P6.3 — Rename playlist by double-clicking the name · needs `[wigl core]` `InlineEdit`
 

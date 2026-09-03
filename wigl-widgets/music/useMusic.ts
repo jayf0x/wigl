@@ -151,6 +151,8 @@ export interface MusicApi {
   deletePlaylist: (playlist: MediaItem) => void;
   addToPlaylist: (playlistId: string, uris: string[]) => Promise<void>;
   removePlaylistTrack: (playlistId: string, position: number) => Promise<void>;
+  /** P6.2 — rewrite a library playlist to `orderedUris` (drag-reorder, on drop). */
+  reorderPlaylist: (playlistId: string, orderedUris: string[]) => Promise<void>;
   /** G — audio effects (4-band EQ + reverb + bypass). `fxAvailable` is false
    * in `"direct"` output mode (no `<audio>` to tap); opening the Effects tab
    * transparently switches to `"media-element"` (reconnects the player, with a
@@ -1131,6 +1133,31 @@ export const useMusic = (): MusicApi => {
       .catch((e) => console.warn("[music] removePlaylistTrack", e));
   }, []);
 
+  /** P6.2 — MA has no playlist track-reorder command (the builtin provider
+   * only appends + removes-by-position), so a reorder is a full rewrite:
+   * remove every track, re-add in `orderedUris`. `orderedUris` comes from the
+   * widget's already-loaded track list, so the data is never server-only even
+   * if the re-add fails; the caller refreshes to show server truth.
+   * ponytail: full rewrite per drop — fine for playlists at the render cap;
+   * if huge playlists ever need reordering, that's when to want a real MA API. */
+  const reorderPlaylist = useCallback(async (playlistId: string, orderedUris: string[]) => {
+    const client = clientRef.current;
+    const uris = orderedUris.filter((u) => !!u);
+    if (!client || uris.length < 2) return;
+    try {
+      await client.command("music/playlists/remove_playlist_tracks", {
+        db_playlist_id: playlistId,
+        positions_to_remove: uris.map((_, i) => i + 1),
+      });
+      await client.command("music/playlists/add_playlist_tracks", {
+        db_playlist_id: playlistId,
+        uris,
+      });
+    } catch (e) {
+      console.warn("[music] reorderPlaylist", e);
+    }
+  }, []);
+
   const setVolume = useCallback((v: number) => {
     volumeSetAtRef.current = Date.now();
     setVolumeState(v);
@@ -1244,6 +1271,7 @@ export const useMusic = (): MusicApi => {
       deletePlaylist,
       addToPlaylist,
       removePlaylistTrack,
+      reorderPlaylist,
       fx,
       setFx,
       applyFx,
@@ -1297,7 +1325,7 @@ export const useMusic = (): MusicApi => {
       navStack.length, navTo, navBack, navHome, search, play, startRadio, playPause, next, previous,
       seek, removeFromQueue, moveQueueItem, moveQueueItemToEnd, cycleRepeat, toggleShuffle,
       toggleFavorite, refreshPlaylists, refreshRecent, createPlaylist, saveQueueAsPlaylist,
-      renamePlaylist, mergePlaylist, deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume,
+      renamePlaylist, mergePlaylist, deletePlaylist, addToPlaylist, removePlaylistTrack, reorderPlaylist, setVolume,
       fx, setFx, applyFx, audioOutput, setAudioOutput, playlistImages, setPlaylistImage,
       openServer, startServer, serverStarting, manageServer, setManageServer,
       imageUrl, request, cmd,
