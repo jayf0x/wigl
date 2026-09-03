@@ -81,7 +81,8 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | `useMusic.ts` | **The one hook.** Connect/reconnect (both WS), all state, every action. ~700 lines — the widget's brain. `MusicApi` interface is the contract every component uses. Owns the optimism layer (`optimisticRef` predictions + `pending` set + `markPending`/`pendingClear`, P1.1), the `resyncRef` reconnect safety net (P1.2), and `getProgress()` (SDK live clock + post-seek freeze). |
 | `maClient.ts` | `/ws` transport — login, message_id correlation, event fan-out, one reconnect-safe `connect()`. |
 | `sendspin.ts` | `/sendspin` — authed-socket handshake + `SendspinPlayer` lifecycle + `SendspinHandle` (playerId, setVolume, `getProgress` → SDK `trackProgress`, unlock, disconnect). |
-| `serverProcess.ts` | Docker ops via `runCmd("sh", …)`: `maReachable`, `startMaContainer` (auto-start), and H1's `restartMaContainer` / `clearMaCache` (wipe `/data/.cache` + old logs, restart) / `updateMaImage` (inspect ports+mounts → pull → rm → recreate). Docker binary discovered from a small candidate list. |
+| `serverProcess.ts` | Docker ops via `runCmd("sh", …)`: `maReachable`, `startMaContainer` (auto-start), `dockerState` (up / daemon-down / no-docker) + `startDockerDesktop` (P4 — `open -a Docker` / `systemctl --user`), and H1's `restartMaContainer` / `clearMaCache` / `updateMaImage`. Docker binary discovered from a small candidate list. |
+| `components/OfflinePanel.tsx` | P4 — the unreachable-server surface: shared `ErrorOverlay` + a "Start server" button (`api.startServer` — starts Docker if the daemon is down, then the container, then reconnects), a retry, and the auto-start checkbox in-panel. |
 | `music.config.ts` | Ship defaults + `KEYS` (storage), `SENDSPIN_OUTPUT`, `MA_IMAGE`, `MA_CONTAINER`, timings. |
 | `types.ts` | The MA shapes actually read (partial — `/api-docs` is truth). |
 | `util.ts` | `providerLabel()` and small pure helpers. |

@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 import { AudioLines } from "lucide-react";
-import { ErrorOverlay, Widget } from "@/wigl";
+import { Widget } from "@/wigl";
 import { cn } from "@/wigl/utils";
 import "./music.css";
 import { Browser } from "./components/Browser";
 import { Equalizer } from "./components/Equalizer";
 import { NowPlaying } from "./components/NowPlaying";
+import { OfflinePanel } from "./components/OfflinePanel";
 import { useMusic } from "./useMusic";
 
 const StatusDot = ({ state }: { state: ReturnType<typeof useMusic>["state"] }) => {
@@ -102,16 +103,8 @@ const MusicWidget = () => {
         className="music-cq flex min-h-0 flex-1 flex-col outline-none"
         tabIndex={-1}
       >
-        {api.state === "offline" ? (
-          <ErrorOverlay
-            kind="known"
-            title="Music Assistant isn’t running"
-            message={
-              api.error ??
-              `Start it with:  docker start wigl-ma  — or turn on "Auto-start server" in this widget's settings.`
-            }
-            onRetry={api.retry}
-          />
+        {api.state === "offline" || api.serverStarting ? (
+          <OfflinePanel api={api} />
         ) : (
           <>
             <NowPlaying api={api} />

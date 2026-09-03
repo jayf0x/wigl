@@ -26,7 +26,12 @@ import {
 } from "./music.config";
 import { type AudioFx, attachAudioFx, DEFAULT_FX, type FxState, normalizeFx } from "./audioGraph";
 import { connectSendspin, type SendspinHandle } from "./sendspin";
-import { maReachable, startMaContainer } from "./serverProcess";
+import {
+  dockerState,
+  maReachable,
+  startDockerDesktop,
+  startMaContainer,
+} from "./serverProcess";
 import type {
   ConnState,
   MediaImage,
@@ -164,6 +169,13 @@ export interface MusicApi {
   setAudioOutput: (mode: "direct" | "media-element") => void;
   /** Open the Music Assistant web UI (to add a provider like YouTube Music). */
   openServer: () => void;
+  /** P4 — the offline panel's recovery surface. `startServer` starts Docker if
+   * needed, then the container, then reconnects. `manageServer` (also in
+   * Settings) auto-runs that on any future unreachable connect. */
+  startServer: () => void;
+  serverStarting: boolean;
+  manageServer: boolean;
+  setManageServer: (v: boolean) => void;
   imageUrl: (img?: MediaImage | null) => string | null;
   /** Fire a control command that isn't queue-scoped (artist/album/playlist
    * reads). Rejects if not connected — callers wrap in useQuery. */
@@ -176,7 +188,8 @@ export const useMusic = (): MusicApi => {
   const [username] = useStorage<string>(KEYS.username, DEFAULT_USERNAME);
   const [password] = useStorage<string>(KEYS.password, DEFAULT_PASSWORD);
   const [providerFilter] = useStorage<string>(KEYS.providerFilter, "");
-  const [manageServer] = useStorage<boolean>(KEYS.manageServer, false);
+  const [manageServer, setManageServer] = useStorage<boolean>(KEYS.manageServer, false);
+  const [serverStarting, setServerStarting] = useState(false);
   // Read inside boot() only — toggling it must NOT tear down a live connection
   // (P0.6: doing so stopped playback). It just changes whether a *future*
   // reconnect tries to auto-start the container.
@@ -1140,6 +1153,43 @@ export const useMusic = (): MusicApi => {
     );
   }, [httpBase]);
 
+  /** P4 — bring the backend up from the offline panel: start the Docker daemon
+   * if it's down, then `docker start` the container, then poll for the server
+   * and trigger a reconnect. One button; it figures out which step is needed. */
+  const startServer = useCallback(async () => {
+    if (serverStarting) return;
+    setServerStarting(true);
+    setError(null);
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    try {
+      let ds = await dockerState();
+      if (ds === "no-docker") {
+        setError("Docker isn’t installed on this machine — see the widget’s setup notes.");
+        return;
+      }
+      if (ds === "daemon-down") {
+        const r = await startDockerDesktop();
+        if (!r.ok) {
+          setError(r.message);
+          return;
+        }
+        for (let i = 0; i < 24 && ds !== "up"; i++) {
+          await wait(2000);
+          ds = await dockerState();
+        }
+        if (ds !== "up") {
+          setError("Docker is still starting. Give it a moment, then hit retry.");
+          return;
+        }
+      }
+      await startMaContainer(MA_CONTAINER);
+      for (let i = 0; i < 15 && !(await maReachable(httpBase)); i++) await wait(1500);
+    } finally {
+      setServerStarting(false);
+      setAttempt((n) => n + 1); // reconnect whatever the outcome
+    }
+  }, [httpBase, serverStarting]);
+
   return useMemo(
     () => ({
       state,
@@ -1232,6 +1282,10 @@ export const useMusic = (): MusicApi => {
         return live;
       },
       openServer,
+      startServer,
+      serverStarting,
+      manageServer,
+      setManageServer,
       imageUrl,
       request,
     }),
@@ -1245,7 +1299,8 @@ export const useMusic = (): MusicApi => {
       toggleFavorite, refreshPlaylists, refreshRecent, createPlaylist, saveQueueAsPlaylist,
       renamePlaylist, mergePlaylist, deletePlaylist, addToPlaylist, removePlaylistTrack, setVolume,
       fx, setFx, applyFx, audioOutput, setAudioOutput, playlistImages, setPlaylistImage,
-      openServer, imageUrl, request, cmd,
+      openServer, startServer, serverStarting, manageServer, setManageServer,
+      imageUrl, request, cmd,
     ],
   );
 };

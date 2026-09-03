@@ -36,6 +36,29 @@ const findDocker = async (): Promise<string | null> => {
   return null;
 };
 
+/** Is the Docker CLI present, and is its daemon actually up? (P4 — the offline
+ * panel needs to tell "start the container" from "start Docker first".) */
+export const dockerState = async (): Promise<"up" | "daemon-down" | "no-docker"> => {
+  const docker = await findDocker();
+  if (!docker) return "no-docker";
+  const out = await sh(`${docker} info >/dev/null 2>&1 && echo up`).catch(() => null);
+  return out?.stdout.trim() === "up" ? "up" : "daemon-down";
+};
+
+/** Best-effort "launch the Docker daemon" — Docker Desktop on macOS, the
+ * user systemd unit on Linux. The caller then polls `dockerState`. */
+export const startDockerDesktop = async (): Promise<OpResult> => {
+  const r = await sh(
+    `open -a Docker 2>/dev/null` +
+      ` || open -a "Docker Desktop" 2>/dev/null` +
+      ` || systemctl --user start docker-desktop 2>/dev/null` +
+      ` || systemctl --user start docker 2>/dev/null`,
+  ).catch(() => null);
+  return r && r.code === 0
+    ? { ok: true, message: "Starting Docker — this can take a minute." }
+    : { ok: false, message: "Couldn't start Docker here. Start it yourself, then retry." };
+};
+
 /** Best-effort `docker start <container>`. Returns true if the command exited
  * 0 with some docker binary; the caller still re-checks reachability. */
 export const startMaContainer = async (container: string): Promise<boolean> => {

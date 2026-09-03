@@ -68,20 +68,6 @@ back up** — `docker exec wigl-ma python -c "…"` per SETUP.md "Playback speed
 
 ---
 
-## P4 — "Server not running" needs a real UI
-
-When `wigl-ma` / Docker is down the widget just shows the small
-`ErrorOverlay`. The owner wants the **LocalCode widget's pattern** — a clear
-in-widget state with a **"Start server" button** (and, ideally, "Start Docker"
-if the daemon itself is down — `serverProcess.ts` already has `findDocker` +
-`restartMaContainer`; add a `docker desktop`/`open -a Docker` path). The
-**"Auto-start server" setting should be visible here too** (a checkbox in the
-overlay, not buried in Settings) — the owner suspects the disconnect between
-that setting and the UI is part of the confusion. Read
-`wigl-widgets/LocalCode/index.tsx` + its `ErrorOverlay` usage for the shape.
-
----
-
 ## P5 — Tooltips
 
 ### P5.1 — Trigger on the whole button, not just the icon
