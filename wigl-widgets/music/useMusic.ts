@@ -203,12 +203,19 @@ export const useMusic = (): MusicApi => {
   // Storage may still hold the pre-4-band `{low,mid,high,reverb,echo}` shape —
   // normalise on read so every consumer sees the current `FxState`.
   const fx = useMemo(() => normalizeFx(fxStored), [fxStored]);
-  // Whether the player was playing when the current connection was torn down,
-  // captured in the connect effect's cleanup so the fresh player can re-assert
-  // it after ANY reconnect — an output switch, a host/port/credential edit, the
-  // auto-start-server toggle, or a dropped socket (feedback G, then H). A
-  // reconnect can silently pause (or resume) the queue; this is the failsafe.
-  const playIntentRef = useRef<boolean | null>(null);
+  // P1.2 — the state the widget believed it was in when the current connection
+  // was torn down, captured in the connect effect's cleanup. After the fresh
+  // player is `ready`, `boot()` diffs it against the real server snapshot and
+  // re-asserts anything that drifted — play/pause, repeat, shuffle, volume.
+  // Covers any reconnect (output switch, host/port/credential edit, dropped
+  // socket) and is the owner's "if something ever stops the music, it at least
+  // comes back" safety net.
+  const resyncRef = useRef<{
+    playing: boolean;
+    repeat: RepeatMode;
+    shuffle: boolean;
+    volume: number;
+  } | null>(null);
   const setAudioOutput = useCallback(
     (mode: "direct" | "media-element") => setAudioOutputStored(mode),
     [setAudioOutputStored],
@@ -237,8 +244,33 @@ export const useMusic = (): MusicApi => {
   const queueIdRef = useRef<string | null>(null);
   const nowRef = useRef<NowPlaying | null>(null);
   nowRef.current = now;
+  const repeatRef = useRef<RepeatMode>(repeatMode);
+  repeatRef.current = repeatMode;
+  const shuffleRef = useRef(shuffle);
+  shuffleRef.current = shuffle;
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
   const upNextRef = useRef<QueueItem[]>([]);
   upNextRef.current = upNext;
+  // P1.1 — fields the UI has already predicted. `refreshQueue` keeps each
+  // prediction until the server's own snapshot agrees, then clears the
+  // matching `pending` entry. Without this, any queue*/player* event that
+  // fires before MA has processed the command (a volume echo mid-skip, a
+  // position tick) makes `refreshQueue` read stale state and snap the control
+  // back — the "I pressed pause and waited 3 s" bug.
+  const optimisticRef = useRef<{
+    playing?: boolean;
+    repeat?: RepeatMode;
+    shuffle?: boolean;
+    /** queue_item_id or media uri we expect to become the current item */
+    expectId?: string;
+    /** next / previous / row-play in flight — hold now/currentItem/upNext */
+    holdNow?: boolean;
+    /** queue add/remove/reorder in flight — hold upNext */
+    holdQueue?: boolean;
+    /** hard cap on any hold, in case the confirming event never matches */
+    holdUntil?: number;
+  }>({});
   const providersRef = useRef<string[]>([]);
   providersRef.current = providers;
   // Bumped on every new search() call; a slow provider response for an older
@@ -298,6 +330,21 @@ export const useMusic = (): MusicApi => {
       .catch((e) => console.warn("[music] recent", e));
   }, []);
 
+  // ── optimism: predict now, reconcile on the confirming event ─────────────
+  const syncPending = useCallback(() => setPending(new Set(pendingRef.current.keys())), []);
+
+  /** Clear one in-flight action (its timeout + the `pending` badge). */
+  const pendingClear = useCallback(
+    (action: string) => {
+      const t = pendingRef.current.get(action);
+      if (!t) return;
+      clearTimeout(t);
+      pendingRef.current.delete(action);
+      syncPending();
+    },
+    [syncPending],
+  );
+
   // ── snapshot the queue → now-playing + up-next ───────────────────────────
   const refreshQueue = useCallback(async () => {
     const client = clientRef.current;
@@ -306,12 +353,61 @@ export const useMusic = (): MusicApi => {
     try {
       const q = await client.command<PlayerQueue>("player_queues/get", { queue_id: queueId });
       if (!q) return;
-      setRepeatMode((q.repeat_mode as RepeatMode) ?? "off");
-      setShuffle(!!q.shuffle_enabled);
+      const o = optimisticRef.current;
+      const holdExpired = !o.holdUntil || Date.now() > o.holdUntil;
+
+      // repeat / shuffle — apply the server value unless we're still holding a
+      // prediction the server hasn't confirmed yet.
+      let repeat = (q.repeat_mode as RepeatMode) ?? "off";
+      if (o.repeat !== undefined) {
+        if (o.repeat === repeat || holdExpired) {
+          o.repeat = undefined;
+          pendingClear("repeat");
+        } else repeat = o.repeat;
+      }
+      setRepeatMode(repeat);
+
+      let shuffle = !!q.shuffle_enabled;
+      if (o.shuffle !== undefined) {
+        if (o.shuffle === shuffle || holdExpired) {
+          o.shuffle = undefined;
+          pendingClear("shuffle");
+        } else shuffle = o.shuffle;
+      }
+      setShuffle(shuffle);
+
       const cur = q.current_item ?? null;
-      setCurrentItem(cur);
       const media = cur?.media_item ?? null;
+
+      // track-change prediction (next / previous / row-play). Keep the predicted
+      // now/currentItem/upNext until the server's current item is the one we
+      // expect (or the hold cap lapses).
+      if (o.holdNow) {
+        const matched =
+          o.expectId != null &&
+          (o.expectId === cur?.queue_item_id || o.expectId === media?.uri);
+        if (matched || holdExpired) {
+          o.holdNow = false;
+          o.expectId = undefined;
+          pendingClear("next");
+          pendingClear("previous");
+          pendingClear("play");
+        } else {
+          return; // repeat/shuffle above were safe; the rest waits
+        }
+      }
+
+      setCurrentItem(cur);
       const isRadio = media?.media_type === "radio";
+
+      let playing = q.state === "playing";
+      if (o.playing !== undefined) {
+        if (o.playing === playing || holdExpired) {
+          o.playing = undefined;
+          pendingClear("playPause");
+        } else playing = o.playing;
+      }
+
       setNow(
         cur
           ? {
@@ -322,11 +418,18 @@ export const useMusic = (): MusicApi => {
               artworkUrl: imageUrl(cur.image ?? media?.metadata?.images?.[0] ?? null),
               elapsed: q.elapsed_time ?? 0,
               duration: cur.duration ?? media?.duration ?? 0,
-              playing: q.state === "playing",
+              playing,
               isRadio,
             }
           : null,
       );
+
+      // `previous` carries no held field — any reconcile confirms it.
+      pendingClear("previous");
+
+      if (o.holdQueue && !holdExpired) return; // keep the optimistic upNext
+      o.holdQueue = false;
+      pendingClear("queueEdit");
       if (q.items > 1) {
         const items = await client.command<QueueItem[]>("player_queues/items", {
           queue_id: queueId,
@@ -341,10 +444,7 @@ export const useMusic = (): MusicApi => {
     } catch (e) {
       console.warn("[music] refreshQueue", e);
     }
-  }, [imageUrl]);
-
-  // ── optimism: predict now, reconcile on the confirming event ─────────────
-  const syncPending = useCallback(() => setPending(new Set(pendingRef.current.keys())), []);
+  }, [imageUrl, pendingClear]);
 
   const clearAllPending = useCallback(() => {
     if (pendingRef.current.size === 0) return;
@@ -353,16 +453,27 @@ export const useMusic = (): MusicApi => {
     syncPending();
   }, [syncPending]);
 
-  /** Disable the triggering control and, if no confirming event arrives in
-   * `OPTIMISTIC_TIMEOUT_MS`, re-read the real queue and drop the prediction. */
+  /** Mark an action in flight: the triggering control shows `.mx-pending` and
+   * may disable itself. If no confirming event reconciles it within
+   * `OPTIMISTIC_TIMEOUT_MS`, drop the prediction and trust the server. */
   const markPending = useCallback(
     (action: string) => {
       const prev = pendingRef.current.get(action);
       if (prev) clearTimeout(prev);
+      const o = optimisticRef.current;
+      o.holdUntil = Date.now() + OPTIMISTIC_TIMEOUT_MS;
       pendingRef.current.set(
         action,
         setTimeout(() => {
           pendingRef.current.delete(action);
+          if (action === "playPause") o.playing = undefined;
+          else if (action === "repeat") o.repeat = undefined;
+          else if (action === "shuffle") o.shuffle = undefined;
+          else if (action === "queueEdit") o.holdQueue = false;
+          else if (action === "next" || action === "previous" || action === "play") {
+            o.holdNow = false;
+            o.expectId = undefined;
+          }
           syncPending();
           void refreshQueue();
         }, OPTIMISTIC_TIMEOUT_MS),
@@ -461,9 +572,9 @@ export const useMusic = (): MusicApi => {
           if (ev.event === "queue_time_updated" && typeof ev.data === "number") {
             setNow((n) => (n ? { ...n, elapsed: ev.data as number } : n));
           } else if (ev.event.startsWith("queue") || ev.event.startsWith("player")) {
-            // A real transport/queue change confirms whatever we predicted —
-            // reconcile every optimistic value from the server snapshot.
-            clearAllPending();
+            // Reconcile from the server snapshot. `refreshQueue` clears each
+            // `pending` entry only once the server value actually matches the
+            // prediction (P1.1) — a premature event no longer snaps controls.
             void refreshQueue();
           }
         });
@@ -474,22 +585,32 @@ export const useMusic = (): MusicApi => {
         refreshPlaylists();
         refreshRecent();
 
-        // Failsafe (feedback G, then H): re-assert the play/pause state the
-        // user actually had before this reconnect — any reconnect (output
-        // switch, settings edit, dropped socket) can silently pause or resume
-        // the queue. `playIntentRef` was set in the previous effect's cleanup.
-        if (playIntentRef.current != null) {
-          const want = playIntentRef.current;
-          playIntentRef.current = null;
-          window.setTimeout(() => {
+        // P1.2 — re-assert everything the widget believed before this reconnect
+        // that the fresh server snapshot now contradicts. `resyncRef` was set
+        // in the previous effect's cleanup.
+        if (resyncRef.current != null) {
+          const want = resyncRef.current;
+          resyncRef.current = null;
+          window.setTimeout(async () => {
             if (cancelled || sendspinRef.current !== audio) return;
-            const playing = !!nowRef.current?.playing;
-            if (want && !playing) {
+            const client2 = clientRef.current;
+            if (!client2) return;
+            const q = await client2
+              .command<PlayerQueue>("player_queues/get", { queue_id: audio.playerId })
+              .catch(() => null);
+            if (!q) return;
+            if (want.playing && q.state !== "playing") {
               audio.unlock().catch(() => {});
               cmd("player_queues/play");
-            } else if (!want && playing) {
+            } else if (!want.playing && q.state === "playing") {
               cmd("player_queues/pause");
             }
+            if (want.repeat !== ((q.repeat_mode as RepeatMode) ?? "off"))
+              cmd("player_queues/repeat", { repeat_mode: want.repeat });
+            if (want.shuffle !== !!q.shuffle_enabled)
+              cmd("player_queues/shuffle", { shuffle_enabled: want.shuffle });
+            // The fresh player defaults its own volume; restore the user's.
+            audio.setVolume(want.volume);
           }, 1200);
         }
 
@@ -518,15 +639,22 @@ export const useMusic = (): MusicApi => {
     return () => {
       cancelled = true;
       clearTimeout(reconnectTimer);
-      // Feedback H — carry the play/pause state across the teardown so the next
-      // boot() re-asserts it once the new player is "ready". Runs before every
-      // effect re-run (settings edit or reconnect) and on unmount (harmless).
-      playIntentRef.current = nowRef.current?.playing ?? null;
+      // P1.2 — carry the believed state across the teardown so the next boot()
+      // re-asserts whatever drifted once the new player is "ready". Runs before
+      // every effect re-run (settings edit or reconnect) and on unmount.
+      resyncRef.current = nowRef.current
+        ? {
+            playing: !!nowRef.current.playing,
+            repeat: repeatRef.current,
+            shuffle: shuffleRef.current,
+            volume: volumeRef.current,
+          }
+        : null;
       teardown();
     };
   }, [
     host, port, username, password, httpBase, attempt, refreshQueue, refreshPlaylists,
-    refreshRecent, clearAllPending, audioOutput,
+    refreshRecent, audioOutput,
   ]);
 
   // ── backstop poll for missed events ─────────────────────────────────────
@@ -628,13 +756,29 @@ export const useMusic = (): MusicApi => {
       const opt: PlayOption =
         option ?? (queueMode === "replace" || !nowRef.current ? "replace" : "play");
       cmd("player_queues/play_media", { media: item.uri, option: MA_OPTION[opt] });
-      if (opt === "play" || opt === "replace") markPending("play");
+      if (opt === "play" || opt === "replace") {
+        markPending("play");
+        const o = optimisticRef.current;
+        o.holdNow = true;
+        o.expectId = item.uri;
+        setCurrentItem(null);
+        setNow({
+          title: item.name,
+          subtitle: item.artists?.map((a) => a.name).join(", ") ?? item.album?.name ?? "",
+          artworkUrl: imageUrl(item.image ?? item.metadata?.images?.[0] ?? null),
+          elapsed: 0,
+          duration: item.duration ?? 0,
+          playing: true,
+          isRadio: item.media_type === "radio",
+        });
+      }
     },
-    [cmd, markPending, queueMode],
+    [cmd, markPending, queueMode, imageUrl],
   );
 
   const playPause = useCallback(() => {
     const playing = !!nowRef.current?.playing;
+    optimisticRef.current.playing = !playing;
     setNow((n) => (n ? { ...n, playing: !playing } : n));
     markPending("playPause");
     cmd(playing ? "player_queues/pause" : "player_queues/play");
@@ -643,11 +787,16 @@ export const useMusic = (): MusicApi => {
   const next = useCallback(() => {
     markPending("next");
     // Predict the jump from the known up-next head so the panel doesn't sit on
-    // the old track for a full Docker round-trip. Reconciled on the event.
+    // the old track for a full Docker round-trip. Held until the server's
+    // current item is this one (P1.1).
     const head = upNextRef.current[0];
     if (head) {
       const m = head.media_item ?? null;
       const isRadio = m?.media_type === "radio";
+      const o = optimisticRef.current;
+      o.holdNow = true;
+      o.expectId = head.queue_item_id;
+      setCurrentItem(head);
       setNow(() => ({
         title: m?.name ?? head.name ?? "—",
         subtitle: isRadio
@@ -666,6 +815,8 @@ export const useMusic = (): MusicApi => {
 
   const previous = useCallback(() => {
     markPending("previous");
+    // No known target to hold against; the confirming player event replaces
+    // `now` wholesale. Just reset the clock so the scrubber snaps to 0.
     setNow((n) => (n ? { ...n, elapsed: 0 } : n));
     cmd("player_queues/previous");
   }, [cmd, markPending]);
@@ -705,23 +856,34 @@ export const useMusic = (): MusicApi => {
 
   const cycleRepeat = useCallback(() => {
     const nextMode = REPEAT_CYCLE[(REPEAT_CYCLE.indexOf(repeatMode) + 1) % REPEAT_CYCLE.length];
+    optimisticRef.current.repeat = nextMode;
     setRepeatMode(nextMode);
+    markPending("repeat");
     cmd("player_queues/repeat", { repeat_mode: nextMode });
-  }, [cmd, repeatMode]);
+  }, [cmd, markPending, repeatMode]);
 
   const toggleShuffle = useCallback(() => {
-    setShuffle((s) => {
-      cmd("player_queues/shuffle", { shuffle_enabled: !s });
-      return !s;
-    });
-  }, [cmd]);
+    const nextOn = !shuffle;
+    optimisticRef.current.shuffle = nextOn;
+    setShuffle(nextOn);
+    markPending("shuffle");
+    cmd("player_queues/shuffle", { shuffle_enabled: nextOn });
+  }, [cmd, markPending, shuffle]);
+
+  /** Any queue edit (remove / reorder) — hold the optimistic `upNext` until the
+   * `queue_items_updated` reconcile so it doesn't flicker back mid-command. */
+  const holdQueueEdit = useCallback(() => {
+    optimisticRef.current.holdQueue = true;
+    markPending("queueEdit");
+  }, [markPending]);
 
   const removeFromQueue = useCallback(
     (queueItemId: string) => {
       setUpNext((list) => list.filter((i) => i.queue_item_id !== queueItemId));
+      holdQueueEdit();
       cmd("player_queues/delete_item", { item_id_or_index: queueItemId });
     },
-    [cmd],
+    [cmd, holdQueueEdit],
   );
 
   const moveQueueItem = useCallback(
@@ -734,9 +896,10 @@ export const useMusic = (): MusicApi => {
           posShift,
         ),
       );
+      holdQueueEdit();
       cmd("player_queues/move_item", { queue_item_id: queueItemId, pos_shift: posShift });
     },
-    [cmd],
+    [cmd, holdQueueEdit],
   );
 
   const moveQueueItemToEnd = useCallback(
@@ -749,9 +912,10 @@ export const useMusic = (): MusicApi => {
         copy.push(it);
         return copy;
       });
+      holdQueueEdit();
       cmd("player_queues/move_item_end", { queue_item_id: queueItemId });
     },
-    [cmd],
+    [cmd, holdQueueEdit],
   );
 
   const toggleFavorite = useCallback(

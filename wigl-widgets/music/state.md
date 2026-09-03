@@ -46,12 +46,11 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
   hidden `<audio>`). **The Effects tab (4-band graphic EQ + reverb) needs
   `"media-element"`** — the only mode with an `<audio>` element to tap.
   Opening the tab now **transparently switches** to `"media-element"` (no
-  "enable" step); the switch reconnects the player, and `useMusic` captures the
-  play/pause state into `playIntentRef` beforehand and re-asserts it ~1.2 s
-  after `ready`. That failsafe fires on any real reconnect (output switch,
-  host/port/credential edit, dropped socket). The **auto-start-server toggle no
-  longer reconnects at all** (P0.6 — `manageServer` read via a ref, dropped
-  from the connect effect deps). A proper always-on resync net is still P1.2. `audioGraph.ts` owns the Web Audio chain; `useMusic` owns its
+  "enable" step); the switch reconnects the player, and the P1.2 resync net
+  (`resyncRef`, below) re-asserts play/pause + repeat/shuffle/volume ~1.2 s
+  after `ready` on any reconnect. The **auto-start-server toggle no longer
+  reconnects at all** (P0.6 — `manageServer` read via a ref, dropped from the
+  connect effect deps). `audioGraph.ts` owns the Web Audio chain; `useMusic` owns its
   lifecycle (created on connect if `audio.audioElement` exists, disposed on
   teardown). The SDK's media-element output is a `MediaStream` on
   `<audio>.srcObject`, so the chain taps it with `createMediaStreamSource`
@@ -69,7 +68,7 @@ Music Assistant (Docker container `wigl-ma`, image ghcr.io/sproft/ytmusic-free-p
 | File | Owns |
 |------|------|
 | `index.tsx` | `<Widget w=7 h=11>` root, `.music-cq` container-query wrapper, keyboard handler, offline overlay. Composes `<NowPlaying>` + `<Browser>`. |
-| `useMusic.ts` | **The one hook.** Connect/reconnect (both WS), all state, every action. ~700 lines — the widget's brain. `MusicApi` interface is the contract every component uses. Owns the optimism layer (`pending` set + `markPending`/`clearAllPending`) and `getProgress()` (SDK live clock + post-seek freeze). |
+| `useMusic.ts` | **The one hook.** Connect/reconnect (both WS), all state, every action. ~700 lines — the widget's brain. `MusicApi` interface is the contract every component uses. Owns the optimism layer (`optimisticRef` predictions + `pending` set + `markPending`/`pendingClear`, P1.1), the `resyncRef` reconnect safety net (P1.2), and `getProgress()` (SDK live clock + post-seek freeze). |
 | `maClient.ts` | `/ws` transport — login, message_id correlation, event fan-out, one reconnect-safe `connect()`. |
 | `sendspin.ts` | `/sendspin` — authed-socket handshake + `SendspinPlayer` lifecycle + `SendspinHandle` (playerId, setVolume, `getProgress` → SDK `trackProgress`, unlock, disconnect). |
 | `serverProcess.ts` | Docker ops via `runCmd("sh", …)`: `maReachable`, `startMaContainer` (auto-start), and H1's `restartMaContainer` / `clearMaCache` (wipe `/data/.cache` + old logs, restart) / `updateMaImage` (inspect ports+mounts → pull → rm → recreate). Docker binary discovered from a small candidate list. |
@@ -148,13 +147,26 @@ starts the item now — `queueMode==="append"` → MA `"play"` (insert-after-cur
 `"add"` is an explicit `⋯` / detail-pill action only. `play()` never touches
 `results` or `navStack` — search, scroll and the current view stay put.
 
-**Optimism (A1)**: `playPause` / `next` / `previous` / `play` (row click) flip
-local state immediately, add their name to `pending`, and disable their control
-until the confirming `queue*`/`player*` event lands (`clearAllPending()` +
-`refreshQueue()` reconcile everything from the server snapshot) or a
-`OPTIMISTIC_TIMEOUT_MS` timeout re-reads the queue. `next` predicts the jump
-from `upNext[0]`. `seek` is optimistic + freeze-guarded (above). `repeat` /
-`shuffle` are local-then-reconcile but not disabled (they already feel instant).
+**Optimism (P1.1)**: every control predicts its result, renders it now, and
+holds the prediction until the *server's own snapshot agrees* — not just until
+the next event fires. `optimisticRef` carries the predicted fields (`playing`,
+`repeat`, `shuffle`, an `expectId` for a track change, `holdNow`/`holdQueue`
+flags); `refreshQueue` compares each against `player_queues/get` and only then
+clears the matching `pending` entry. A `queue*`/`player*` event that arrives
+before MA has processed the command (a volume echo mid-skip, a position tick)
+no longer snaps the control back — that was the "pressed pause, waited 3 s"
+bug. `markPending` still caps every hold at `OPTIMISTIC_TIMEOUT_MS` and then
+trusts the server. `next` predicts from `upNext[0]`; `play` (row click) paints
+a minimal `now` from the clicked item and holds on its uri; `seek` is
+freeze-guarded (above). Controls show `.mx-pending` while unconfirmed; the
+transport buttons also disable.
+
+**Resync net (P1.2)**: `resyncRef` snapshots `{playing, repeat, shuffle,
+volume}` in the connect effect's cleanup (before *any* teardown). ~1.2 s after
+the next `ready`, `boot()` re-reads `player_queues/get` and re-asserts whatever
+drifted — play/pause, repeat, shuffle, and always the user's volume (the fresh
+player defaults its own). The owner's "if something ever stops the music, it at
+least comes back" guarantee, covering every reconnect path.
 
 ## MA command cheatsheet
 

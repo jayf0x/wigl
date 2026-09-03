@@ -68,6 +68,17 @@ render
 
 No query library, no cache layer, no IPC-based Rust commands for data — shell out to real CLI tools (`git`, `sh`, `open`, ...) and parse stdout. If a future widget needs something a shell command genuinely can't do, that's the point where a Rust command becomes justified — not before.
 
+### Optimistic UI for a laggy backend
+
+When a widget *controls* something slow (a container, a remote server) rather than just reading it, waiting for the round-trip makes every button feel broken. The pattern, four steps:
+
+1. **Predict** — apply the expected result to `useState` immediately, before the command is sent.
+2. **Disable** — mark the triggering control in-flight so it can't be fired again (and so it can show a pending affordance).
+3. **Reconcile** — when the backend's own state arrives (an event, or a re-read), compare it to the prediction. Clear the in-flight mark *only for fields that now match*.
+4. **Correct** — if a prediction is still unconfirmed after a timeout, drop it and trust the backend.
+
+The trap is step 3: a backend often emits unrelated events while a command is still processing, and a naive "any event → overwrite state from the server" reconcile snaps the control back to its old value for the full round-trip. Hold each predicted field against the server's *actual* value, not against the next event. The music widget (`wigl-widgets/music/useMusic.ts`, `optimisticRef` + `refreshQueue`) is the worked example — play/pause, track skip, repeat/shuffle, and queue edits all ride this.
+
 ## Permissions (the thing that will bite you)
 
 Tauri's `core:default` capability is narrower than it looks. Today's `src-tauri/capabilities/default.json` explicitly grants `core:window:allow-available-monitors` and `core:window:allow-show` on top of `core:default`, because per-monitor layout and un-hiding a widget window at first paint aren't covered by the default set alone — that's the current concrete example, not an exhaustive list. Every new native capability a widget needs (new shell binaries, new window/fs APIs, ...) requires an explicit entry in `default.json`. If you add a Tauri API call and it silently does nothing (no thrown error, no log line), permissions are the first thing to check — see `docs/debugging.md`.
