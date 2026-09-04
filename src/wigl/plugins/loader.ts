@@ -3,9 +3,8 @@ import { join } from "@tauri-apps/api/path";
 import { storageRoot } from "@/wigl/settings/config";
 import { registerSettingsSection } from "@/wigl/settings/registry";
 import type { SettingSection } from "@/wigl/settings/types";
-import { sql, sqlLiteral } from "@/wigl/storage/client";
 import { runCmd } from "@/wigl/utils";
-import { type WidgetInstances, WIDGET_INSTANCES_KEY } from "./instances";
+import type { WidgetInstances } from "./instances";
 import type { createPluginRequire } from "./registry";
 import {
   BACKGROUND_PLUGIN_ID,
@@ -161,28 +160,16 @@ const loadOne = async (dir: string, folder: string, instanceId: string): Promise
   return { manifest: { id: instanceId, folder, permissions, instantiable }, component };
 };
 
-/** Direct, unprefixed read of the core "which folders have extra instances"
- * record (instances.ts) — this runs host-side, before any plugin scope
- * exists to read it through, so it goes straight at the same kv table
- * useStorage/useQuery use rather than through a hook. Never throws: no
- * sqlite3 installed, or no row written yet, both just mean "no extra
- * instances anywhere" — same failure mode useStorage's own read already
- * tolerates. */
-const readInstances = async (): Promise<WidgetInstances> => {
-  try {
-    const raw = (await sql(`SELECT value FROM kv WHERE key=${sqlLiteral(WIDGET_INSTANCES_KEY)}`)).trim();
-    return raw ? (JSON.parse(raw) as WidgetInstances) : {};
-  } catch (e) {
-    console.error("[wigl] failed to read widget instances", e);
-    return {};
-  }
-};
-
 /** Discovers and mounts every installed plugin. Never throws: a plugin that
  * fails to load comes back in `failed` so the caller can surface it, because
  * the alternative — one bad plugin blanking every widget on the desktop —
- * is the failure mode this app's error boundaries exist to prevent. */
-export const loadPlugins = async (): Promise<PluginLoadResult> => {
+ * is the failure mode this app's error boundaries exist to prevent.
+ *
+ * `extraInstances` (F14) are the session-temporary duplicated instances,
+ * held in `App.tsx` React state and never persisted — nothing reads or
+ * writes the old `widget_instances` kv row any more. Keyed by folder id,
+ * same shape as the base-instance list below. */
+export const loadPlugins = async (extraInstances: WidgetInstances = {}): Promise<PluginLoadResult> => {
   const dir = await pluginsDir();
   const loaded: LoadedPlugin[] = [];
   const failed: FailedPlugin[] = [];
@@ -192,7 +179,7 @@ export const loadPlugins = async (): Promise<PluginLoadResult> => {
   // not an error worth reporting.
   const ls = await runCmd("sh", ["-c", `ls -1 ${shq(dir)} 2>/dev/null || true`]);
   const folders = ls.stdout.split("\n").filter(Boolean);
-  const instances = await readInstances();
+  const instances = extraInstances;
 
   for (const folder of folders) {
     // The reserved background folder (F11 half 2) is a singleton special
@@ -214,8 +201,8 @@ export const loadPlugins = async (): Promise<PluginLoadResult> => {
     // guarantee that makes this whole feature transparent to every
     // single-instance widget that existed before it: its storage/layout
     // rows are keyed by the same id they always were, zero migration.
-    // Extra instances (if any were ever duplicated) come from the one core
-    // storage key instances.ts owns, keyed by folder.
+    // Extra instances (if any were duplicated this session) come from
+    // `extraInstances`, keyed by folder — session state, not persisted.
     const instanceIds = [folder, ...(instances[folder] ?? [])];
     for (const instanceId of instanceIds) {
       try {

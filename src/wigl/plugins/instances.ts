@@ -1,19 +1,18 @@
-// F6 — multiple instances of one widget folder ("duplicate widget"). This
-// file owns the one core-level concern that's neither "folder identity"
-// (types.ts's resolvePluginConfig — disk path, code, permissions) nor
-// "runtime scoping" (loader.ts/registry.ts — per-instance require/storage
-// binding): which folders currently have extra instances, and what their
-// ids are. Read/written directly against storage (not through a plugin's
-// scoped useStorage view, which doesn't exist here anyway — this runs
-// host-side) — the exact same pattern Desktop.tsx's own `widget_layout` key
-// already uses for its core, unprefixed state.
+// F6 / F14 — multiple instances of one widget folder ("duplicate widget").
+// This file owns the id math that's neither "folder identity" (types.ts's
+// resolvePluginConfig — disk path, code, permissions) nor "runtime scoping"
+// (loader.ts/registry.ts — per-instance require/storage binding): given a
+// folder and its current extra-instance ids, mint a fresh distinct one.
+//
+// F14: the set of extra instances is session-temporary — held in App.tsx
+// React state, seeded empty each launch, broadcast monitor-to-monitor over
+// the `wigl-duplicates` Tauri event, and never persisted. There is no kv
+// row for it any more.
 
 /** folder id -> the extra instance ids beyond the always-present base
  * instance. The base instance's id is always the folder id itself (see
  * types.ts's WidgetManifest) and is never listed here — only duplicates. */
 export type WidgetInstances = Record<string, string[]>;
-
-export const WIDGET_INSTANCES_KEY = "widget_instances";
 
 /** A fresh instance id for `folder`, guaranteed distinct from the base
  * instance (the folder id itself) and from every id already recorded for

@@ -1,11 +1,12 @@
 import type { ComponentType, ErrorInfo, ReactNode } from "react";
-import { Component, useCallback, useEffect, useMemo, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Desktop } from "@/wigl";
 import { useRegisterGlobalAction } from "@/wigl/hooks";
 import { type FailedPlugin, loadPlugins, type WidgetManifest } from "@/wigl/plugins";
+import type { WidgetInstances } from "@/wigl/plugins/instances";
 import "./App.css";
 
 // `WidgetErrorBoundary` (Desktop.tsx) only catches a crash inside one
@@ -65,6 +66,14 @@ const App = () => {
   // out of `widgets` entirely (see loader.ts's loadPlugins) so <Desktop>
   // never tiles it as an ordinary grid item.
   const [background, setBackground] = useState<ComponentType | undefined>(undefined);
+  // F14 — duplicated widgets are session-temporary: their instance ids live
+  // here in React state, seeded empty every launch, never in the
+  // `widget_instances` kv row (nothing writes it any more). Held in a ref
+  // too so `reload` (deps `[]`) reads the current set without being
+  // recreated, and broadcast monitor-to-monitor via a Tauri event (like
+  // `wigl-reload-widgets`), not the `wigl-kv` storage broadcast.
+  const [duplicates, setDuplicates] = useState<WidgetInstances>({});
+  const duplicatesRef = useRef<WidgetInstances>({});
 
   useEffect(() => {
     if (label !== "main") getCurrentWindow().show().catch(console.error);
@@ -76,7 +85,7 @@ const App = () => {
   // calling it again after `bun run widget:install` is enough to pick up a
   // rebuilt plugin without a full app relaunch.
   const reload = useCallback(() => {
-    loadPlugins()
+    loadPlugins(duplicatesRef.current)
       .then(({ loaded, failed, background }) => {
         setWidgets(Object.fromEntries(loaded.map((p) => [p.manifest.id, p.component])));
         setManifests(Object.fromEntries(loaded.map((p) => [p.manifest.id, p.manifest])));
@@ -121,6 +130,32 @@ const App = () => {
     };
   }, [label, reload]);
 
+  // F14 — apply a new duplicate-instance set locally (state + ref, then
+  // reload so loadPlugins picks it up). `broadcastDuplicates` also emits it
+  // to the other monitor windows; the listener applies what they emit.
+  const applyDuplicates = useCallback(
+    (next: WidgetInstances) => {
+      duplicatesRef.current = next;
+      setDuplicates(next);
+      reload();
+    },
+    [reload],
+  );
+  const broadcastDuplicates = useCallback(
+    (next: WidgetInstances) => {
+      applyDuplicates(next);
+      emit("wigl-duplicates", next).catch(console.error);
+    },
+    [applyDuplicates],
+  );
+  useEffect(() => {
+    if (label === "main") return;
+    const un = listen<WidgetInstances>("wigl-duplicates", (e) => applyDuplicates(e.payload));
+    return () => {
+      un.then((f) => f());
+    };
+  }, [label, applyDuplicates]);
+
   useEffect(() => {
     if (label === "main") return;
     invoke<boolean>("is_windowed_mode")
@@ -150,6 +185,8 @@ const App = () => {
         background={background}
         monitorIndex={Number(label.split("-")[1]) || 0}
         windowed={windowed}
+        duplicates={duplicates}
+        onDuplicatesChange={broadcastDuplicates}
       />
     </AppErrorBoundary>
   );

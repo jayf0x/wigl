@@ -43,11 +43,10 @@ import {
 } from "./grid/math";
 import { useGlobalActions, useRegisterGlobalAction, useStorage } from "./hooks";
 import { useNativeMenu } from "./menu/native";
-import { generateInstanceId, type WidgetInstances, WIDGET_INSTANCES_KEY } from "./plugins/instances";
+import { generateInstanceId, type WidgetInstances } from "./plugins/instances";
 import type { WidgetManifest } from "./plugins/types";
 import { toggleModeLabel, toggleWindowedMode } from "./settings/appMode";
 import { SettingsModal } from "./settings/SettingsModal";
-import { sql, sqlLiteral } from "./storage/client";
 import { ThemeEffect } from "./theme/ThemeEffect";
 import {
   type WidgetGridReport,
@@ -276,6 +275,8 @@ export const Desktop = ({
   background: Background,
   monitorIndex,
   windowed = false,
+  duplicates = {},
+  onDuplicatesChange,
 }: {
   widgets: Record<string, ComponentType>;
   // F6 — per-instance metadata (which folder, whether it can be duplicated
@@ -289,6 +290,13 @@ export const Desktop = ({
   // Renamed on destructure (capitalized) since it's rendered as a component.
   background?: ComponentType;
   monitorIndex: number;
+  // F14 — session-temporary duplicated instances (folder id -> extra
+  // instance ids), owned by App.tsx React state. `onDuplicatesChange` both
+  // applies the new set locally and broadcasts it to the other monitor
+  // windows; Desktop calls it to add a duplicate or erase a closed one.
+  // Defaults so a stale/test caller sees no duplicates rather than crashing.
+  duplicates?: WidgetInstances;
+  onDuplicatesChange?: (next: WidgetInstances) => void;
   // True on Wayland's single-window flow (see lib.rs's windowed_mode): no
   // sibling monitor windows exist to hand a drag off to, and no click-through
   // poller is reading hit-rects (tried it, reverted — see lib.rs), so both
@@ -309,12 +317,9 @@ export const Desktop = ({
   // to a file under storageRoot() and store just the path here instead.
   const [backgroundImage] = useStorage<string | null>("wigl_background_image", null);
   const [backgroundOpacity] = useStorage<number>("wigl_background_opacity", 1);
-  // F6 — the one core record of which folders have extra ("duplicated")
-  // instances beyond their base one (instances.ts owns the shape/key).
-  // Same unprefixed, host-level useStorage call as `widget_layout` above —
-  // this isn't any one plugin's state, so it doesn't go through the
-  // registry's per-plugin key prefix.
-  const [instances, setInstances] = useStorage<WidgetInstances>(WIDGET_INSTANCES_KEY, {});
+  // F14 — duplicated instances come in as a prop from App.tsx (session
+  // state, not persisted). `instancesRef` mirrors it for the callbacks below.
+  const instances = duplicates;
   // Settings > Grid writes this key; applied live onto TILING below (no
   // restart — grid math is JS-only, so there's nothing native to re-read).
   const [gridOverrides] = useStorage<GridOverrides>("wigl_grid", {});
@@ -549,12 +554,45 @@ export const Desktop = ({
   const reportGridRef = useRef(reportGrid);
   reportGridRef.current = reportGrid;
 
+  // F14 — a duplicated instance's id differs from its folder id; the base
+  // instance's always equals it. `manifests` may be `{}` (stale/test
+  // caller) — then nothing counts as a duplicate.
+  const isDuplicate = useCallback(
+    (id: string) => !!manifests[id] && manifests[id].folder !== id,
+    [manifests],
+  );
+
+  // F14 — closing a duplicate *erases* it (not just hides it): drop it from
+  // the session instance set (App.tsx broadcasts the change to every
+  // monitor and reloads), and drop its `widget_layout` entry so nothing
+  // lingers. Its `useStorage`/`useQuery` rows are left as inert orphans by
+  // design — the hash id never recurs (F14's owner decision).
+  const eraseDuplicate = useCallback(
+    (id: string) => {
+      const folder = manifests[id]?.folder;
+      if (!folder) return;
+      const rest = (instancesRef.current[folder] ?? []).filter((x) => x !== id);
+      const next: WidgetInstances = { ...instancesRef.current };
+      if (rest.length) next[folder] = rest;
+      else delete next[folder];
+      const { [id]: _drop, ...restSaved } = savedRef.current;
+      setSaved(restSaved);
+      setLayout((cur) => (cur ? cur.filter((it) => it.id !== id) : cur));
+      onDuplicatesChange?.(next);
+    },
+    [manifests, setSaved, onDuplicatesChange],
+  );
+
   // Close drives the same GridItem.hidden a widget's own report can set
   // (see widget.tsx's WidgetGridProps) — once hidden, <Component> below
   // isn't rendered at all, so nothing but this setter (or reopening from the
-  // menu) can ever bring it back.
+  // menu) can ever bring it back. A duplicate (F14) is erased instead.
   const setClosed = useCallback(
     (id: string, closed: boolean) => {
+      if (closed && isDuplicate(id)) {
+        eraseDuplicate(id);
+        return;
+      }
       const prev = layoutRef.current;
       const nextSaved: SavedPositions = {
         ...savedRef.current,
@@ -585,7 +623,7 @@ export const Desktop = ({
       }
       setSaved(nextSaved);
     },
-    [setSaved, monitorIndex],
+    [setSaved, monitorIndex, isDuplicate, eraseDuplicate],
   );
   const toggleMinimize = useCallback(
     (id: string) => {
@@ -795,24 +833,11 @@ export const Desktop = ({
     invoke("set_drag_active", { active: false }).catch(console.error);
   }, []);
 
-  // F6 — "Duplicate widget": records a fresh instance id for `folder` in the
-  // one core instances key, then reloads (same broadcast App.tsx's own
-  // "Reload widgets" action already uses) so loadPlugins() picks the new
-  // instance up on every monitor, not just this one.
-  //
-  // The row has to actually be in sqlite before that reload fires —
-  // loadPlugins() reads this key with a direct, one-shot sql call
-  // (loader.ts's readInstances), not through this component's live
-  // useStorage state, so there's no live-state shortcut it could otherwise
-  // fall back on. `useStorage`'s own set() is fire-and-forget by design
-  // (deliberately kept that way — see its own comment on why a Promise
-  // return broke `act()` for every existing caller that doesn't await it,
-  // same contract as plain useState's setter), so this writes the row
-  // directly first, with the exact same sql/sqlLiteral primitives
-  // useStorage itself is built on, and only calls setInstances() after —
-  // that still gets this window's optimistic state update and the
-  // cross-window `wigl-kv` broadcast, just redundantly re-writing a row
-  // that's already there (harmless, idempotent).
+  // F14 — "Duplicate widget": mints a fresh instance id for `folder` and
+  // hands it to App.tsx via `onDuplicatesChange`, which updates the session
+  // instance state, broadcasts it to every monitor over `wigl-duplicates`,
+  // and reloads so loadPlugins() picks the new instance up everywhere. The
+  // duplicate lives only for this session — nothing is persisted.
   const duplicateWidget = useCallback(
     (folder: string) => {
       const newId = generateInstanceId(folder, instancesRef.current[folder] ?? []);
@@ -820,17 +845,9 @@ export const Desktop = ({
         ...instancesRef.current,
         [folder]: [...(instancesRef.current[folder] ?? []), newId],
       };
-      const json = JSON.stringify(next);
-      sql(
-        `INSERT INTO kv (key, value) VALUES (${sqlLiteral(WIDGET_INSTANCES_KEY)}, ${sqlLiteral(json)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
-      )
-        .catch((e) => console.error(`[wigl] failed to record widget instance "${newId}"`, e))
-        .then(() => {
-          setInstances(next);
-          emit("wigl-reload-widgets").catch(console.error);
-        });
+      onDuplicatesChange?.(next);
     },
-    [setInstances],
+    [onDuplicatesChange],
   );
 
   // "Reset layout" is a cleanup pass, not a wipe: de-overlap every visible
@@ -914,11 +931,15 @@ export const Desktop = ({
   // rendered straight into the right-click menu.
   const widgetVisibilityEntries = useMemo(
     () =>
-      Object.keys(widgets).map((id) => {
-        const closed = !!saved[id]?.closed;
-        return { id: `view:${id}`, label: id, checked: !closed, run: () => setClosed(id, !closed) };
-      }),
-    [widgets, saved, setClosed],
+      Object.keys(widgets)
+        // F14 — duplicates are session-temporary and erased on close, not
+        // hidden, so they never get their own show/hide toggle here.
+        .filter((id) => !isDuplicate(id))
+        .map((id) => {
+          const closed = !!saved[id]?.closed;
+          return { id: `view:${id}`, label: id, checked: !closed, run: () => setClosed(id, !closed) };
+        }),
+    [widgets, saved, setClosed, isDuplicate],
   );
   useNativeMenu({ enabled: monitorIndex === 0, viewEntries: widgetVisibilityEntries });
 
