@@ -630,10 +630,7 @@ export const Desktop = ({
           ...Object.fromEntries(
             items
               .filter((it) => !it.hidden)
-              .map((it) => [
-                it.id,
-                { ...savedRef.current[it.id], col: it.col, row: it.row, m: monitorIndex },
-              ]),
+              .map((it) => [it.id, { ...savedRef.current[it.id], col: it.col, row: it.row, m: monitorIndex }]),
           ),
           [id]: { ...savedRef.current[id], col: item.col, row: item.row, m: monitorIndex, closed: false },
         };
@@ -1067,7 +1064,13 @@ export const Desktop = ({
   // Shared by both resize entry points (click-drag on the handle, and F8's
   // double-click-then-move-then-click) so neither has to duplicate the
   // ResizeState snapshot logic.
-  const makeResizeState = (id: string, edge: ResizeEdge, el: HTMLDivElement, clientX: number, clientY: number): ResizeState | null => {
+  const makeResizeState = (
+    id: string,
+    edge: ResizeEdge,
+    el: HTMLDivElement,
+    clientX: number,
+    clientY: number,
+  ): ResizeState | null => {
     const layout = layoutRef.current;
     const item = layout?.find((i) => i.id === id);
     if (!layout || !item) return null;
