@@ -58,3 +58,17 @@ Rules for keeping this file real (same spirit as `backlog.md`):
   than throwing. Worth one test: drag a "se" handle diagonally and assert
   both `w` and `h` grew together (same fixture/pitch-math pattern as the
   existing east/west tests).
+
+- **`repack` and un-hide reflow (`src/wigl/grid/math.ts` + `Desktop.tsx`'s
+  `setClosed`).** Two related fixes landed together. (1) `repack(items, cols)`
+  re-places every visible item first-fit top-left — unlike `settle` it also
+  pulls a *non-overlapping* item that drifted off-screen back toward 0,0;
+  it's what "Reset layout" (`doReset`) now runs instead of wiping
+  `widget_layout`, so hidden widgets must stay hidden and keep their stored
+  spot. (2) `setClosed(id, false)` now runs `reflow` against the re-shown
+  item so a widget un-hidden onto a cell another widget has taken over gets
+  the others pushed off it (repro: move A to 0,0, hide A, move B to 0,0,
+  show A → B should reflow away). Worth one test each on the pure math:
+  `repack` moves a lone item at row 99 to row 0 and leaves a `hidden` item
+  untouched; `reflow(items, shownItem, cols)` displaces an overlapping
+  sibling. Same fixture pattern as the existing `settle`/`reflow` tests.

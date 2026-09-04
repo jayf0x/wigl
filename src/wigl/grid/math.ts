@@ -75,6 +75,23 @@ export const settle = (items: GridItem[], cols: number) => {
   for (const it of [...items].sort((a, b) => a.row - b.row || a.col - b.col)) reflow(items, it, cols);
 };
 
+/** Re-place every visible item from scratch, first-fit top-left, walking them
+ * in current reading order. Unlike `settle` (which only moves items that
+ * actually collide) this also pulls a lone, non-overlapping widget that
+ * drifted off-screen back toward 0,0 — the "reset layout" recovery pass.
+ * Hidden items keep their stored position and are ignored. Mutates `items`. */
+export const repack = (items: GridItem[], cols: number) => {
+  const placed: GridItem[] = [];
+  for (const it of items
+    .filter((i) => !i.hidden)
+    .sort((a, b) => a.row - b.row || a.col - b.col)) {
+    const pos = autoPlace(placed, it.w, it.h, cols);
+    it.col = pos.col;
+    it.row = pos.row;
+    placed.push(it);
+  }
+};
+
 /** First open slot scanning left-to-right, top-to-bottom. */
 export const autoPlace = (placed: GridItem[], w: number, h: number, cols: number) => {
   for (let row = 0; ; row++) {

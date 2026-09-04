@@ -35,6 +35,7 @@ import {
   pxToCol,
   pxToRow,
   reflow,
+  repack,
   rowToPx,
   settle,
   spanToPx,
@@ -554,17 +555,37 @@ export const Desktop = ({
   // menu) can ever bring it back.
   const setClosed = useCallback(
     (id: string, closed: boolean) => {
-      setSaved({
+      const prev = layoutRef.current;
+      const nextSaved: SavedPositions = {
         ...savedRef.current,
         [id]: { ...savedRef.current[id], closed },
-      });
-      setLayout((prev) =>
-        prev
-          ? prev.map((it) => (it.id === id ? { ...it, hidden: closed } : it))
-          : prev,
-      );
+      };
+      if (prev) {
+        const next = prev.map((it) =>
+          it.id === id ? { ...it, hidden: closed } : { ...it },
+        );
+        const shown = !closed ? next.find((it) => it.id === id) : undefined;
+        if (shown) {
+          // Re-showing a widget onto a spot something else has taken over
+          // since it was hidden: push the others out of the way (the same
+          // reflow a drag runs) and persist where they land, so the fix
+          // survives a restart instead of re-overlapping on next launch.
+          reflow(next, shown, colsForWidth(window.innerWidth));
+          for (const it of next) {
+            if (it.hidden) continue;
+            nextSaved[it.id] = {
+              ...nextSaved[it.id],
+              col: it.col,
+              row: it.row,
+              m: monitorIndex,
+            };
+          }
+        }
+        setLayout(next);
+      }
+      setSaved(nextSaved);
     },
-    [setSaved],
+    [setSaved, monitorIndex],
   );
   const toggleMinimize = useCallback(
     (id: string) => {
@@ -812,12 +833,27 @@ export const Desktop = ({
     [setInstances],
   );
 
-  // Reset = wipe all saved positions and rebootstrap every monitor: widgets
-  // fall back to monitor 0 + autoPlace + settle, exactly like a first boot.
+  // "Reset layout" is a cleanup pass, not a wipe: de-overlap every visible
+  // widget and pull anything that drifted off-screen back toward 0,0
+  // (repack). Closed/minimized state and per-widget size are left alone — a
+  // hidden widget stays hidden, it doesn't reappear. Each monitor runs this
+  // against its own widgets (see the wigl-reset listener).
   const doReset = useCallback(() => {
-    setSaved({});
-    setLayout(null);
-  }, [setSaved]);
+    const prev = layoutRef.current;
+    if (!prev) return;
+    const next = prev.map((i) => ({ ...i }));
+    repack(next, colsForWidth(window.innerWidth));
+    setLayout(next);
+    setSaved({
+      ...savedRef.current,
+      ...Object.fromEntries(
+        next.map((it) => [
+          it.id,
+          { ...savedRef.current[it.id], col: it.col, row: it.row, m: monitorIndex },
+        ]),
+      ),
+    });
+  }, [setSaved, monitorIndex]);
   // The only default entry in the right-click menu — a widget wanting its
   // own entry there calls this same hook itself, no Desktop/wigl edit needed.
   // Memoized so the registration effect doesn't re-fire on every render
@@ -943,8 +979,7 @@ export const Desktop = ({
 
     const unReset = listen<{ from: number }>("wigl-reset", ({ payload: p }) => {
       if (p.from === monitorIndex) return; // our own broadcast, already applied
-      setSaved({});
-      setLayout(null);
+      doReset();
     });
 
     const unDrop = listen<DropMsg>("wigl-drop", ({ payload: p }) => {
@@ -979,7 +1014,7 @@ export const Desktop = ({
       unReset.then((u) => u());
       unDrop.then((u) => u());
     };
-  }, [monitorIndex]);
+  }, [monitorIndex, doReset]);
 
   // --- resize ------------------------------------------------------------------
   // Local to the home monitor only — unlike drag, a resize never hands off

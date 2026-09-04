@@ -527,7 +527,11 @@ export const useMusic = (): MusicApi => {
 
     const scheduleReconnect = () => {
       if (cancelled) return;
-      setState("connecting");
+      // A dropped live connection goes back to "connecting" while it retries;
+      // an "offline" state (boot() couldn't reach the server at all) stays
+      // "offline" through the backoff so the OfflinePanel actually shows
+      // instead of flickering to "connecting" for the whole retry wait.
+      setState((s) => (s === "offline" ? s : "connecting"));
       reconnectTimer = setTimeout(() => setAttempt((n) => n + 1), backoff);
       backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
     };
