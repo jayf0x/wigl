@@ -92,3 +92,22 @@ Rules for keeping this file real (same spirit as `backlog.md`):
   1's own layout) doesn't contain `id`, calling `setClosed(id, false)` on
   monitor 1 should place `id` into monitor 1's layout with `hidden: false`
   and end up with `saved[id].m === 1`.
+
+- **F8's double-click-resize-mode state machine in `Desktop.tsx`.** New:
+  double-clicking a `data-resize-handle` (`onResizeDoubleClick`) now arms
+  `resize.current` without pointer capture and flips `resizeClickMode` on,
+  instead of requiring the click-drag `onResizeStart` path; a window
+  `pointermove`/`pointerdown`(capture)/`keydown` effect then drives the same
+  `onResizeMove`/`endResize` a real click-drag uses, and Escape reverts to
+  `resize.current.snapshot` (mirrors the drag-abandon revert in the stuck-
+  transaction watchdog further down the file). No real pointer/DOM
+  automation needed — the state machine itself is pure enough to unit-test
+  directly: (1) after arming, a plain `onResizeMove` call previews the new
+  size without touching storage; (2) a synthetic `keydown` with `key:
+  "Escape"` restores the pre-resize snapshot into `layout` and clears
+  `resize.current`/`resizeClickMode` without ever calling `setSaved`; (3) a
+  synthetic `pointerdown` commits via `endResize` (same `setSaved` shape the
+  existing click-drag resize test already asserts on). Worth extending
+  `tests/desktop-resize.test.ts` with a second `test()` using its same
+  fixture/dispatch pattern, subbing `dblclick`+window-level events for the
+  handle's `pointerdown`+`pointermove`+`pointerup` sequence.

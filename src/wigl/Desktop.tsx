@@ -193,6 +193,7 @@ const WidgetItem = memo(function WidgetItem({
   onPointerDown,
   onContextMenu,
   onResizeStart,
+  onResizeDoubleClick,
 }: {
   id: string;
   Component: ComponentType;
@@ -205,6 +206,7 @@ const WidgetItem = memo(function WidgetItem({
   onPointerDown: (e: React.PointerEvent, id: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onResizeStart: (e: React.PointerEvent, id: string, edge: ResizeEdge) => void;
+  onResizeDoubleClick: (e: React.MouseEvent, id: string, edge: ResizeEdge) => void;
 }) {
   const setRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -244,6 +246,14 @@ const WidgetItem = memo(function WidgetItem({
             onPointerDown={(e) => {
               e.stopPropagation();
               onResizeStart(e, id, edge);
+            }}
+            // F8 — double-clicking a handle is a second entry point into
+            // resize: instead of requiring the drag to stay held down, it
+            // arms a "resize mode" (see resizeClickMode below) that tracks
+            // plain mouse movement and commits on the next click.
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              onResizeDoubleClick(e, id, edge);
             }}
           />
         ))}
@@ -305,6 +315,13 @@ export const Desktop = ({
   const [layout, setLayout] = useState<GridItem[] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [resizeId, setResizeId] = useState<string | null>(null);
+  // F8 — true only for the double-click entry point: the pointer isn't
+  // captured/held down (a real click-drag never sets this), so the resize
+  // has to track plain window mousemove instead and wait for the next
+  // click/Escape to commit/cancel (see the effect below). `resize.current`
+  // itself is shared by both entry points — this just says which kind of
+  // gesture is currently driving it.
+  const [resizeClickMode, setResizeClickMode] = useState(false);
   // Right-click menu of global actions (see actions.ts), page-px position.
   // `targetId` is the widget instance whose header was clicked, if any (see
   // openMenu) — what F6's "Duplicate" entry below needs to know which
@@ -1047,25 +1064,35 @@ export const Desktop = ({
   // Local to the home monitor only — unlike drag, a resize never hands off
   // to a foreign monitor window; there's no meaningful "resize onto another
   // screen" gesture.
+  // Shared by both resize entry points (click-drag on the handle, and F8's
+  // double-click-then-move-then-click) so neither has to duplicate the
+  // ResizeState snapshot logic.
+  const makeResizeState = (id: string, edge: ResizeEdge, el: HTMLDivElement, clientX: number, clientY: number): ResizeState | null => {
+    const layout = layoutRef.current;
+    const item = layout?.find((i) => i.id === id);
+    if (!layout || !item) return null;
+    return {
+      id,
+      edge,
+      el,
+      startX: clientX,
+      startY: clientY,
+      startCol: item.col,
+      startRow: item.row,
+      startW: item.w,
+      startH: item.h,
+      snapshot: layout.map((i) => ({ ...i })),
+    };
+  };
+
   const onResizeStart = useCallback(
     (e: React.PointerEvent, id: string, edge: ResizeEdge) => {
-      const layout = layoutRef.current;
-      if (e.button !== 0 || !layout) return;
-      const item = layout.find((i) => i.id === id)!;
+      if (e.button !== 0) return;
       const el = els.current[id]!;
+      const r = makeResizeState(id, edge, el, e.clientX, e.clientY);
+      if (!r) return;
       el.setPointerCapture(e.pointerId);
-      resize.current = {
-        id,
-        edge,
-        el,
-        startX: e.clientX,
-        startY: e.clientY,
-        startCol: item.col,
-        startRow: item.row,
-        startW: item.w,
-        startH: item.h,
-        snapshot: layout.map((i) => ({ ...i })),
-      };
+      resize.current = r;
       setResizeId(id);
       window.getSelection()?.removeAllRanges();
       if (!windowed) invoke("set_drag_active", { active: true }).catch(console.error);
@@ -1073,11 +1100,28 @@ export const Desktop = ({
     [windowed],
   );
 
-  const onResizeMove = (e: React.PointerEvent, r: ResizeState) => {
+  // F8 — the alternative entry point: no pointer capture (double-click has
+  // already released the button), so this just arms `resize.current` and
+  // flips resizeClickMode on; the effect below does the actual tracking.
+  const onResizeDoubleClick = useCallback(
+    (e: React.MouseEvent, id: string, edge: ResizeEdge) => {
+      const el = els.current[id]!;
+      const r = makeResizeState(id, edge, el, e.clientX, e.clientY);
+      if (!r) return;
+      resize.current = r;
+      setResizeId(id);
+      setResizeClickMode(true);
+      window.getSelection()?.removeAllRanges();
+      if (!windowed) invoke("set_drag_active", { active: true }).catch(console.error);
+    },
+    [windowed],
+  );
+
+  const onResizeMove = (pos: { clientX: number; clientY: number }, r: ResizeState) => {
     const cols = colsForWidth(window.innerWidth);
     const pitch = TILING.cell + TILING.gap;
-    const dCols = Math.round((e.clientX - r.startX) / pitch);
-    const dRows = Math.round((e.clientY - r.startY) / pitch);
+    const dCols = Math.round((pos.clientX - r.startX) / pitch);
+    const dRows = Math.round((pos.clientY - r.startY) / pitch);
     let col = r.startCol;
     let row = r.startRow;
     let w = r.startW;
@@ -1127,6 +1171,7 @@ export const Desktop = ({
     const item = layoutNow.find((i) => i.id === r.id)!;
     resize.current = null;
     setResizeId(null);
+    setResizeClickMode(false);
     if (!windowed) invoke("set_drag_active", { active: false }).catch(console.error);
     setLayout(layoutNow);
     // Same col/row/m merge as persist(), plus the resized id's new w/h —
@@ -1147,6 +1192,44 @@ export const Desktop = ({
       ),
     });
   };
+
+  // F8 — while the double-click entry point is armed, there's no captured
+  // pointer to keep delivering move events (unlike the click-drag path),
+  // so this listens on window instead: plain movement live-previews via the
+  // same onResizeMove used by click-drag, a pointerdown (capture phase, so
+  // it runs before whatever it lands on — e.g. starting a fresh drag/resize
+  // on the same click) commits via the same endResize, and Escape reverts
+  // to the pre-resize snapshot, mirroring the watchdog's drag-abandon revert
+  // further below.
+  useEffect(() => {
+    if (!resizeClickMode) return;
+    const onMove = (e: PointerEvent) => {
+      const r = resize.current;
+      if (r) onResizeMove({ clientX: e.clientX, clientY: e.clientY }, r);
+    };
+    const onCommit = () => {
+      if (resize.current) endResize();
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const r = resize.current;
+      if (!r) return;
+      resize.current = null;
+      setResizeId(null);
+      setResizeClickMode(false);
+      layoutRef.current = r.snapshot;
+      setLayout(r.snapshot);
+      if (!windowed) invoke("set_drag_active", { active: false }).catch(console.error);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerdown", onCommit, { capture: true });
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerdown", onCommit, { capture: true });
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [resizeClickMode, windowed]);
 
   // --- drag ------------------------------------------------------------------
   const onPointerDown = useCallback(
@@ -1502,6 +1585,7 @@ export const Desktop = ({
             onPointerDown={onPointerDown}
             onContextMenu={openMenu}
             onResizeStart={onResizeStart}
+            onResizeDoubleClick={onResizeDoubleClick}
           />
         );
       })}
