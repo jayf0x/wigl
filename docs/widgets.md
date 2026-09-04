@@ -136,6 +136,8 @@ useRegisterGlobalAction({ id: "<widget>_do-thing", label: "Do thing", run: () =>
 
 Adds an entry to the desktop's right-click menu for as long as the calling component is mounted — no `Desktop.tsx` or `wigl` edit needed. `id` should be prefixed with the widget's folder name, same rule as storage keys, since the registry is a single flat namespace across every widget's menu entries.
 
+The same entry also appears in the system-tray menu (the app's always-available control surface — see `docs/architecture.md`). By default it sits at that menu's root; pass an optional `group: "view" | "window"` to file it under the matching tray submenu instead. `group` has no effect on the right-click menu, which stays one flat list. A widget on a non-primary monitor won't reach the tray (it's driven from the primary monitor's realm only), but its right-click entry works everywhere as before.
+
 ## Contributing a Settings section (`settingsSection.tsx`)
 
 An optional sibling of `index.tsx`, default-exporting a `SettingSection`:

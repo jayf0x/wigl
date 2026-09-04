@@ -41,6 +41,7 @@ import {
   springEasing,
 } from "./grid/math";
 import { useGlobalActions, useRegisterGlobalAction, useStorage } from "./hooks";
+import { useNativeMenu } from "./menu/native";
 import { generateInstanceId, type WidgetInstances, WIDGET_INSTANCES_KEY } from "./plugins/instances";
 import type { WidgetManifest } from "./plugins/types";
 import { toggleModeLabel, toggleWindowedMode } from "./settings/appMode";
@@ -857,6 +858,7 @@ export const Desktop = ({
     () => ({
       id: "toggle-mode",
       label: toggleModeLabel(windowed),
+      group: "window" as const,
       run: () => {
         toggleWindowedMode(windowed).catch(console.error);
       },
@@ -865,6 +867,24 @@ export const Desktop = ({
   );
   useRegisterGlobalAction(toggleModeAction);
   const globalActions = useGlobalActions();
+
+  // Mirror the right-click menu's actions into the system-tray menu, which
+  // stays reachable with every widget closed (the right-click menu needs a
+  // widget header to open on) and in both window flows. Primary monitor
+  // only — each monitor window is its own JS realm, and only one may drive
+  // the single shared tray. `widgetVisibilityEntries` are the per-widget
+  // show/hide toggles for the tray's "View" submenu, built here (not via
+  // useRegisterGlobalAction) the same way the closed-widget list below is
+  // rendered straight into the right-click menu.
+  const widgetVisibilityEntries = useMemo(
+    () =>
+      Object.keys(widgets).map((id) => {
+        const closed = !!saved[id]?.closed;
+        return { id: `view:${id}`, label: id, checked: !closed, run: () => setClosed(id, !closed) };
+      }),
+    [widgets, saved, setClosed],
+  );
+  useNativeMenu({ enabled: monitorIndex === 0, viewEntries: widgetVisibilityEntries });
 
   // The modal can extend past every widget's hit-rect (it's centered over
   // whatever's underneath, not anchored to one), so click-through has to be

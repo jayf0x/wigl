@@ -10,6 +10,11 @@ export interface GlobalAction {
   id: string;
   label: string;
   run: () => void;
+  // Which submenu this lands in when mirrored to the system-tray menu (see
+  // src/wigl/menu/native.ts). Omitted = the tray menu's root, which is what
+  // almost every action wants. Desktop's right-click menu ignores this and
+  // renders one flat list regardless.
+  group?: "view" | "window";
 }
 
 type Listener = () => void;

@@ -291,6 +291,42 @@ fn wayland_session() -> bool {
     session_type_wayland || has_wayland_display
 }
 
+// A system-tray icon whose menu is the app's always-available control
+// surface — reachable with zero widgets open (the right-click global menu
+// needs a widget header to land on) and in both window flows. The menu here
+// is only a minimal fallback (Quit, always works even if JS never loads);
+// the real menu is built and pushed from JS to mirror the same
+// useGlobalActions registry the right-click menu renders — see
+// src/wigl/menu/native.ts, which looks this icon up by TRAY_ID.
+const TRAY_ID: &str = "wigl";
+
+fn spawn_tray(app: &tauri::AppHandle) {
+    use tauri::menu::MenuBuilder;
+    use tauri::tray::TrayIconBuilder;
+
+    let menu = match MenuBuilder::new(app).text("quit", "Quit wigl").build() {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("[wigl] tray menu build failed: {e}");
+            return;
+        }
+    };
+    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
+        .tooltip("wigl")
+        .menu(&menu)
+        .on_menu_event(|app, event| {
+            if event.id().as_ref() == "quit" {
+                app.exit(0);
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+    if let Err(e) = builder.build(app) {
+        eprintln!("[wigl] tray icon build failed: {e}");
+    }
+}
+
 // One fullscreen transparent window per monitor, ordered left-to-right so
 // `screen-<i>` labels match the JS-side monitor ids. Windows start hidden
 // and click-through; each webview shows itself once mounted, and the
@@ -495,6 +531,8 @@ pub fn run() {
                 std::env::var("WAYLAND_DISPLAY"),
                 std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER"),
             );
+            spawn_tray(app.handle());
+
             if windowed {
                 // Single normal window: decorated, resizable, in the taskbar
                 // — a regular app, not a desktop overlay. Opaque, not

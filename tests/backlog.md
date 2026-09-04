@@ -34,6 +34,20 @@ Rules for keeping this file real (same spirit as `backlog.md`):
   reset contract is the easy thing to regress — a naive `Object.assign`
   merge would leave `cell` at 100). Pure function, no DOM.
 
+- **`buildModel` grouping + `signatureOf` stability in `src/wigl/menu/native.ts`.**
+  New: the system-tray menu is assembled from the `useGlobalActions`
+  registry — `buildModel(actions, viewEntries)` splits actions into
+  root/view/window by their optional `group` field (no group = root), and
+  `signatureOf` produces the string the sync effect diffs against so an
+  unrelated Desktop re-render (a drag) doesn't rebuild the native menu.
+  Worth one test each: (1) actions with `group: "view"`/`"window"`/none land
+  in the right buckets and `viewEntries` are prepended to `view`; (2)
+  `signatureOf` is unchanged when only an entry's `run` identity changes
+  (drag churn) but changes when a `label` or `checked` flips. Pure
+  functions, no DOM/Tauri — but both are currently unexported, so this needs
+  a small `export` or a test-only entry point first. The commit that added
+  `src/wigl/menu/native.ts` is the context.
+
 - **Corner resize (two-axis) in `Desktop.tsx`'s `onResizeMove`.** Edge resize
   (`tests/desktop-resize.test.ts`) only exercises single-axis handles ("e",
   "w"). Corner handles ("ne"/"nw"/"se"/"sw") now exist and rely on the same
