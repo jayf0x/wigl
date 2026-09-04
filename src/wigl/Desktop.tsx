@@ -8,7 +8,14 @@
 // ownership until drop. While the cursor is on a foreign monitor the source
 // freezes the card ("detached") and broadcasts a preview; the target monitor
 // renders the ghost and reflows a phantom. On drop the target adopts the
-// widget in one atomic commit; until then only the drag session mutates.
+// widget in one atomic commit; until then only the drag session mutates. The
+// source's own `saved[id].m` is flipped in the very same commit as dropping
+// the id from its own `layout` (see endDrag), not left to catch up later
+// over the `wigl-kv` broadcast — see the "missing ids" reconcile effect's
+// comment for why that matters. A watchdog further down force-clears a drag
+// or an incoming foreign preview that goes quiet for ~1s, as a backstop
+// against a dropped pointerup/lost broadcast wedging the ghost/field with
+// no live gesture behind them.
 
 import type { ComponentType, ErrorInfo, ReactNode } from "react";
 import {
@@ -356,6 +363,17 @@ export const Desktop = ({
   const layoutRef = useRef<GridItem[] | null>(null);
   const savedRef = useRef<SavedPositions>({});
   const instancesRef = useRef<WidgetInstances>({});
+  // Defensive backstop, independent of the root-cause fixes above: bumped on
+  // every real sign of drag progress (a local pointermove while `drag.current`
+  // is set, or an incoming `wigl-preview` while `foreign.current` is set).
+  // The watchdog below force-clears a stuck transaction if neither has moved
+  // in ~1s — a dropped pointerup/pointercancel (focus stolen mid-drag, an
+  // IPC hiccup losing a `wigl-preview`/`wigl-drop`) can otherwise wedge the
+  // ghost/field on indefinitely, with no drag actually in progress to ever
+  // call endDrag/clearForeign. Not a substitute for the endDrag fix above —
+  // that fix prevents the state disagreement from happening; this only
+  // bounds how long an *unrelated* stall can leave the overlay visibly wedged.
+  const lastActivity = useRef(0);
   // Ids with no saved position yet (true first launch, or a widget added
   // since the last save) — their real size/spot isn't known until they
   // report in, so reflow is deferred until every one of them has reported
@@ -477,6 +495,30 @@ export const Desktop = ({
   // ids in place, without touching anyone else's position — unlike a full
   // rebuild (setLayout(null)), which would also needlessly re-settle every
   // already-placed widget.
+  //
+  // Deliberately not keyed on `saved` (only on `layout`/`widgets`/
+  // `monitorIndex`) — `placeItem` still reads whatever `saved` this closure
+  // captured. That's fine as long as an id never goes missing from `layout`
+  // without `saved[id].m` already agreeing it's left — see endDrag's
+  // cross-monitor branch, which flips `saved[d.id].m` in the same
+  // synchronous handler as the `setLayout` that drops the id, specifically
+  // so this effect's next run can't observe the two disagree and re-place a
+  // widget that was just handed off to another monitor.
+  //
+  // `widgets` is every discovered plugin on disk, the same set on every
+  // monitor window (see loadPlugins()/App.tsx) — not filtered to "this
+  // monitor's own". So `missing` routinely contains ids that placeItem will
+  // rightly no-op on forever (they're some *other* monitor's, per
+  // `saved[id].m`) — that must not itself keep re-triggering this effect.
+  // The functional updater below only returns a new array when it actually
+  // placed something; returning the identical `prev` reference otherwise
+  // lets React bail out of the re-render, so `layout` doesn't change
+  // reference and this effect doesn't re-fire. Skipping that bail-out (an
+  // unconditional `return items`, spreading `prev` regardless of whether
+  // anything was pushed) reproduces a real infinite loop — confirmed live,
+  // independent of any drag — any time this monitor's `widgets` includes so
+  // much as one id that belongs to another monitor, which is the ordinary
+  // multi-widget multi-monitor case, not an edge case.
   useEffect(() => {
     if (loading || !layout) return;
     const known = new Set(layout.map((i) => i.id));
@@ -486,11 +528,14 @@ export const Desktop = ({
     setLayout((prev) => {
       if (!prev) return prev;
       const items = [...prev];
+      let placed = false;
       for (const id of missing) {
         if (items.some((i) => i.id === id)) continue;
+        const before = items.length;
         placeItem(id, items, cols);
+        if (items.length !== before) placed = true;
       }
-      return items;
+      return placed ? items : prev;
     });
   }, [loading, layout, widgets, monitorIndex]);
 
@@ -955,22 +1000,26 @@ export const Desktop = ({
   }, [settingsOpen, windowed]);
 
   // --- incoming cross-monitor previews / drops ---------------------------------
-  useEffect(() => {
-    const clearForeign = () => {
-      if (!foreign.current) return;
-      setLayout(foreign.current.snapshot.map((i) => ({ ...i })));
-      foreign.current = null;
-      setGhostCell(null);
-      hideGhost();
-      wakeField(false);
-    };
+  // Hoisted out of the effect below (component scope, not effect-local) so
+  // the watchdog further down can also reach for it when a foreign preview
+  // goes stale without ever getting a matching "moved on"/"dropped" message.
+  const clearForeign = useCallback(() => {
+    if (!foreign.current) return;
+    setLayout(foreign.current.snapshot.map((i) => ({ ...i })));
+    foreign.current = null;
+    setGhostCell(null);
+    hideGhost();
+    wakeField(false);
+  }, [setGhostCell, hideGhost, wakeField]);
 
+  useEffect(() => {
     const unPreview = listen<PreviewMsg>("wigl-preview", ({ payload: p }) => {
       if (drag.current?.id === p.id) return; // our own broadcast
       if (p.to !== monitorIndex) {
         clearForeign();
         return;
       }
+      lastActivity.current = Date.now();
       if (!foreign.current) {
         foreign.current = {
           id: p.id,
@@ -1035,7 +1084,7 @@ export const Desktop = ({
       unReset.then((u) => u());
       unDrop.then((u) => u());
     };
-  }, [monitorIndex, doReset]);
+  }, [monitorIndex, doReset, clearForeign]);
 
   // --- resize ------------------------------------------------------------------
   // Local to the home monitor only — unlike drag, a resize never hands off
@@ -1172,6 +1221,7 @@ export const Desktop = ({
         },
       };
       setDragId(id);
+      lastActivity.current = Date.now();
       // A fast drag sweeps the pointer across other widgets' content, which
       // is selectable (see App.css) — the browser reads that as "extend a
       // selection" and highlights whatever it passed over. The .dragging
@@ -1198,6 +1248,7 @@ export const Desktop = ({
     const d = drag.current;
     const layoutNow = layoutRef.current;
     if (!d || !layoutNow) return;
+    lastActivity.current = Date.now();
     const item = layoutNow.find((i) => i.id === d.id)!;
 
     // Which monitor is the cursor on? screenX/Y and the monitor rects share
@@ -1322,7 +1373,27 @@ export const Desktop = ({
 
     if (d.target.mon !== monitorIndex) {
       // Commit the transfer: the target surface adopts the widget and writes
-      // storage; we only let go of it.
+      // storage; we only let go of it. We still flip our own `saved[d.id].m`
+      // right here, though — not just `layout` — because the "missing ids"
+      // reconcile effect below re-runs off `layout` changing but doesn't
+      // depend on `saved` (see its own comment: touching anyone else's saved
+      // position isn't its job). Without this, that effect's next pass
+      // would still see `saved[d.id].m` pointing at *this* monitor — stale
+      // until the target's own `persist()` broadcast round-trips back over
+      // `wigl-kv` — and place the widget right back into `items`, since as
+      // far as it can tell an id just went missing from a monitor its own
+      // saved position still claims. React batches this with the
+      // `setLayout` below (same synchronous handler), so the reconcile
+      // effect's next run always sees the two agree. This was Bug A (the
+      // duplicate left behind on the source monitor) and, downstream of it,
+      // Bug B (that duplicate re-placed at TILING.defaultSize because a
+      // freshly-placed id has no saved w/h yet) and Bug C (the target's own
+      // `wigl-drop` handler bailing out via its "our own local drop" guard
+      // because the id had already reappeared in *its* layout too).
+      setSaved({
+        ...savedRef.current,
+        [d.id]: { ...savedRef.current[d.id], m: d.target.mon },
+      });
       emit("wigl-drop", {
         id: d.id,
         to: d.target.mon,
@@ -1352,6 +1423,39 @@ export const Desktop = ({
     setLayout(layoutNow);
     persist(layoutNow);
   };
+
+  // --- stuck-transaction watchdog -----------------------------------------------
+  // Backstop, not the fix (see endDrag's cross-monitor branch above for the
+  // actual root cause this guards against too, belt-and-suspenders): if a
+  // drag we own, or a foreign preview we're rendering a ghost for, goes
+  // quiet for a full second — no local pointermove, no incoming
+  // `wigl-preview` — force it closed rather than leaving the anchor field
+  // and ghost lit up with no live gesture behind them. A dropped
+  // pointerup/pointercancel (focus stolen mid-drag, a lost IPC message) is
+  // the kind of thing this catches; it can't happen on every ordinary
+  // pause, since a held-down real pointer keeps producing move events.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (Date.now() - lastActivity.current < 1000) return;
+      const d = drag.current;
+      if (d) {
+        // Abandon rather than commit: we don't trust `d.target` after a
+        // stall this long, so spring back to where the drag started.
+        drag.current = null;
+        const restored = d.snapshot.map((i) => ({ ...i }));
+        layoutRef.current = restored;
+        setLayout(restored);
+        setGhostCell(null);
+        setDragId(null);
+        hideGhost();
+        wakeField(false);
+        d.el.classList.remove("detached");
+        if (!windowed) invoke("set_drag_active", { active: false }).catch(console.error);
+      }
+      if (foreign.current) clearForeign();
+    }, 300);
+    return () => window.clearInterval(id);
+  }, [windowed, hideGhost, wakeField, setGhostCell, clearForeign]);
 
   if (!layout) return null;
 
