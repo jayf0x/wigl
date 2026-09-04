@@ -72,3 +72,23 @@ Rules for keeping this file real (same spirit as `backlog.md`):
   `repack` moves a lone item at row 99 to row 0 and leaves a `hidden` item
   untouched; `reflow(items, shownItem, cols)` displaces an overlapping
   sibling. Same fixture pattern as the existing `settle`/`reflow` tests.
+
+- **Cross-monitor "show" adoption in `Desktop.tsx`'s `setClosed`.** Fixed
+  B15 (see the commit that removed it from `backlog.md`, alongside this
+  entry): showing a closed widget from a monitor that isn't its owner
+  (`saved[id].m`) used to silently no-op — that monitor's own `layout` never
+  contained the id at all (`placeItem` skips any id whose `saved[id].m`
+  isn't this monitor, both at build and in the "missing ids" reconcile
+  effect), so the plain hidden-flip path had nothing to flip, and nothing
+  rendered until a reload. `setClosed` now detects `!closed && prev &&
+  !prev.some(it => it.id === id)` and adopts the widget locally instead —
+  `autoPlace`s it into this monitor's own layout and rewrites
+  `saved[id].m` to this monitor in the same `setSaved` write, mirroring the
+  `wigl-drop` cross-monitor drag-drop adoption pattern just without the
+  actual drag transaction. Worth one test on `setClosed` (needs a
+  lightweight harness/mock around `layoutRef`/`savedRef`/`setLayout`/
+  `setSaved`, or extracting the adoption branch into a pure helper first):
+  given a `saved` record where `id`'s `m` is monitor 0 and `prev` (monitor
+  1's own layout) doesn't contain `id`, calling `setClosed(id, false)` on
+  monitor 1 should place `id` into monitor 1's layout with `hidden: false`
+  and end up with `saved[id].m === 1`.

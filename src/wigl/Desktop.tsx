@@ -587,6 +587,42 @@ export const Desktop = ({
         return;
       }
       const prev = layoutRef.current;
+      // B15 — showing a widget whose home monitor (saved[id].m) isn't us: our
+      // own `layout` never contains this id at all (placeItem, both at build
+      // and in the "missing ids" reconcile effect, skips any id that isn't
+      // ours), so the plain hidden-flip below would silently no-op — nothing
+      // to flip. Adopt it here instead, the same way a cross-monitor
+      // drag-drop adopts (see the `wigl-drop` handler above): place it into
+      // our own layout and rewrite saved[id].m to us in the same write,
+      // rather than waiting for the actual owning monitor to notice the
+      // closed:false flip (which it never does off a plain `saved` change).
+      if (!closed && prev && !prev.some((it) => it.id === id)) {
+        const s = savedRef.current[id];
+        const validSize = s != null && Number.isFinite(s.w) && Number.isFinite(s.h);
+        const w = validSize ? s!.w! : TILING.defaultSize.w;
+        const h = validSize ? s!.h! : TILING.defaultSize.h;
+        const cols = colsForWidth(window.innerWidth);
+        const items = prev.map((it) => ({ ...it }));
+        const pos = autoPlace(items, w, h, cols);
+        const item: GridItem = { id, w, h, col: pos.col, row: pos.row, hidden: false };
+        items.push(item);
+        reflow(items, item, cols);
+        setLayout(items);
+        const nextSaved: SavedPositions = {
+          ...savedRef.current,
+          ...Object.fromEntries(
+            items
+              .filter((it) => !it.hidden)
+              .map((it) => [
+                it.id,
+                { ...savedRef.current[it.id], col: it.col, row: it.row, m: monitorIndex },
+              ]),
+          ),
+          [id]: { ...savedRef.current[id], col: item.col, row: item.row, m: monitorIndex, closed: false },
+        };
+        setSaved(nextSaved);
+        return;
+      }
       const nextSaved: SavedPositions = {
         ...savedRef.current,
         [id]: { ...savedRef.current[id], closed },
