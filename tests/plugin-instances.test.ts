@@ -17,9 +17,10 @@
 // It's covered instead by this task's own manual verification (see the F6
 // session's report): duplicating a widget and confirming the *original*
 // instance's pre-existing storage rows read back unchanged.
-import { describe, expect, test } from "bun:test";
+
 import { generateInstanceId } from "../src/wigl/plugins/instances";
 import { resolvePluginConfig } from "../src/wigl/plugins/types";
+import { describe, expect, test } from "bun:test";
 
 describe("resolvePluginConfig — instantiable", () => {
   test("defaults to true with no package.json at all", () => {

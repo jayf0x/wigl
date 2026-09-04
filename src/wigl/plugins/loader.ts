@@ -213,9 +213,7 @@ export const loadPlugins = async (extraInstances: WidgetInstances = {}): Promise
           // force a widget that says it can't handle a second instance to
           // run one anyway. The stale id stays recorded (instances.ts has
           // no prune step); it just stops loading until re-enabled.
-          console.warn(
-            `[wigl] plugin "${folder}" is no longer instantiable — skipping extra instance "${instanceId}"`,
-          );
+          console.warn(`[wigl] plugin "${folder}" is no longer instantiable — skipping extra instance "${instanceId}"`);
           continue;
         }
         loaded.push(plugin);

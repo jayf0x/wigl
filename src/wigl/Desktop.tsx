@@ -18,17 +18,7 @@
 // no live gesture behind them.
 
 import type { ComponentType, ErrorInfo, ReactNode } from "react";
-import {
-  Component,
-  memo,
-  Suspense,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Component, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { availableMonitors } from "@tauri-apps/api/window";
@@ -55,11 +45,7 @@ import type { WidgetManifest } from "./plugins/types";
 import { toggleModeLabel, toggleWindowedMode } from "./settings/appMode";
 import { SettingsModal } from "./settings/SettingsModal";
 import { ThemeEffect } from "./theme/ThemeEffect";
-import {
-  type WidgetGridReport,
-  WidgetSlotProvider,
-  type WidgetSlotValue,
-} from "./widget";
+import { type WidgetGridReport, WidgetSlotProvider, type WidgetSlotValue } from "./widget";
 
 // Clicks on these inside a drag handle stay clicks; everything else drags.
 const INTERACTIVE = "button, a, input, select, textarea, [data-no-drag]";
@@ -164,20 +150,13 @@ interface DropMsg {
 
 // All widgets on a monitor share one React root now, so an uncaught render
 // throw in one would otherwise take down every widget on that screen.
-class WidgetErrorBoundary extends Component<
-  { id: string; children: ReactNode },
-  { error: Error | null }
-> {
+class WidgetErrorBoundary extends Component<{ id: string; children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error(
-      `[wigl] widget "${this.props.id}" crashed`,
-      error,
-      info.componentStack,
-    );
+    console.error(`[wigl] widget "${this.props.id}" crashed`, error, info.componentStack);
   }
   render() {
     if (this.state.error) {
@@ -187,11 +166,7 @@ class WidgetErrorBoundary extends Component<
       // own tile — not raw red text floating on the desktop.
       return (
         <div className="dark flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-card/95 font-mono text-card-foreground">
-          <ErrorOverlay
-            kind="unknown"
-            title={`"${this.props.id}" crashed`}
-            message={this.state.error.message}
-          />
+          <ErrorOverlay kind="unknown" title={`"${this.props.id}" crashed`} message={this.state.error.message} />
         </div>
       );
     }
@@ -310,10 +285,7 @@ export const Desktop = ({
   // are skipped rather than firing IPC calls nothing listens to.
   windowed?: boolean;
 }) => {
-  const [saved, setSaved, { loading }] = useStorage<SavedPositions>(
-    "widget_layout",
-    {},
-  );
+  const [saved, setSaved, { loading }] = useStorage<SavedPositions>("widget_layout", {});
   // F11 half 1 — Settings-driven image+opacity background (src/wigl/settings/
   // sections/background.tsx writes both keys live, Tier 1, no restart). Only
   // read/rendered when no `background` plugin (Half 2) is installed — see
@@ -345,9 +317,7 @@ export const Desktop = ({
   const ghost = useRef<HTMLDivElement>(null);
   const field = useRef<SVGSVGElement>(null);
   const fieldGlow = useRef<SVGCircleElement>(null);
-  const [anchors, setAnchors] = useState<
-    { col: number; row: number; x: number; y: number }[]
-  >([]);
+  const [anchors, setAnchors] = useState<{ col: number; row: number; x: number; y: number }[]>([]);
   const drag = useRef<DragState | null>(null);
   const resize = useRef<ResizeState | null>(null);
   const ghostCell = useRef<GridItem | null>(null);
@@ -409,10 +379,7 @@ export const Desktop = ({
       availableMonitors()
         .then((ms) => {
           monitors.current = ms
-            .sort(
-              (a, b) =>
-                a.position.x - b.position.x || a.position.y - b.position.y,
-            )
+            .sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y)
             .map((m) => ({
               x: m.position.x / m.scaleFactor,
               y: m.position.y / m.scaleFactor,
@@ -454,8 +421,7 @@ export const Desktop = ({
     // must degrade to "no saved position", not NaN positions or an
     // orphaned widget (see docs/debugging.md's storage-shape-drift section).
     const validPos = s != null && Number.isFinite(s.col) && Number.isFinite(s.row);
-    const mon =
-      s != null && Number.isFinite(s.m) && s.m! < (monitors.current?.length ?? Infinity) ? s.m! : 0;
+    const mon = s != null && Number.isFinite(s.m) && s.m! < (monitors.current?.length ?? Infinity) ? s.m! : 0;
     if (mon !== monitorIndex) return;
     const validSize = s != null && Number.isFinite(s.w) && Number.isFinite(s.h);
     const w = validSize ? s!.w! : TILING.defaultSize.w;
@@ -557,26 +523,15 @@ export const Desktop = ({
       const hasSavedSize = savedPos?.w != null && savedPos?.h != null;
       const w = g.minimized ? 1 : hasSavedSize ? savedPos!.w! : g.w;
       const h = g.minimized ? 1 : hasSavedSize ? savedPos!.h! : g.h;
-      const col =
-        !hasSavedPos && g.col != null
-          ? Math.max(0, Math.min(g.col, cols - w))
-          : cur.col;
+      const col = !hasSavedPos && g.col != null ? Math.max(0, Math.min(g.col, cols - w)) : cur.col;
       const row = !hasSavedPos && g.row != null ? Math.max(0, g.row) : cur.row;
       const hidden = !!g.hidden;
       const pending = pendingReports.current;
-      if (
-        cur.w === w &&
-        cur.h === h &&
-        cur.col === col &&
-        cur.row === row &&
-        !!cur.hidden === hidden
-      ) {
+      if (cur.w === w && cur.h === h && cur.col === col && cur.row === row && !!cur.hidden === hidden) {
         pending.delete(id);
         return prev; // no-op, bail out
       }
-      const next = prev.map((i) =>
-        i.id === id ? { ...i, w, h, col, row, hidden } : { ...i },
-      );
+      const next = prev.map((i) => (i.id === id ? { ...i, w, h, col, row, hidden } : { ...i }));
       if (pending.has(id)) {
         pending.delete(id);
         // Still waiting on other never-before-seen widgets to report their
@@ -586,11 +541,7 @@ export const Desktop = ({
         settle(next, cols);
         return next;
       }
-      reflow(
-        next,
-        next.find((i) => i.id === id)!,
-        cols,
-      );
+      reflow(next, next.find((i) => i.id === id)!, cols);
       return next;
     });
   };
@@ -602,10 +553,7 @@ export const Desktop = ({
   // F14 — a duplicated instance's id differs from its folder id; the base
   // instance's always equals it. `manifests` may be `{}` (stale/test
   // caller) — then nothing counts as a duplicate.
-  const isDuplicate = useCallback(
-    (id: string) => !!manifests[id] && manifests[id].folder !== id,
-    [manifests],
-  );
+  const isDuplicate = useCallback((id: string) => !!manifests[id] && manifests[id].folder !== id, [manifests]);
 
   // F14 — closing a duplicate *erases* it (not just hides it): drop it from
   // the session instance set (App.tsx broadcasts the change to every
@@ -644,9 +592,7 @@ export const Desktop = ({
         [id]: { ...savedRef.current[id], closed },
       };
       if (prev) {
-        const next = prev.map((it) =>
-          it.id === id ? { ...it, hidden: closed } : { ...it },
-        );
+        const next = prev.map((it) => (it.id === id ? { ...it, hidden: closed } : { ...it }));
         const shown = !closed ? next.find((it) => it.id === id) : undefined;
         if (shown) {
           // Re-showing a widget onto a spot something else has taken over
@@ -684,9 +630,7 @@ export const Desktop = ({
   // One WidgetSlotValue per id, recreated only when its minimized flag
   // actually flips — not on every Desktop render (a drag fires plenty of
   // those), so <Widget>'s effect deps stay stable in between.
-  const slots = useRef<
-    Map<string, { value: WidgetSlotValue; minimized: boolean }>
-  >(new Map());
+  const slots = useRef<Map<string, { value: WidgetSlotValue; minimized: boolean }>>(new Map());
   const getSlot = (id: string, minimized: boolean): WidgetSlotValue => {
     const cached = slots.current.get(id);
     if (cached && cached.minimized === minimized) return cached.value;
@@ -707,8 +651,7 @@ export const Desktop = ({
     for (const it of layout) {
       if (it.id === drag.current?.id || it.id === resize.current?.id) continue;
       const el = els.current[it.id];
-      if (el)
-        el.style.transform = `translate(${colToPx(it.col)}px, ${rowToPx(it.row)}px)`;
+      if (el) el.style.transform = `translate(${colToPx(it.col)}px, ${rowToPx(it.row)}px)`;
     }
   }, [layout, dragId, resizeId]);
 
@@ -741,16 +684,8 @@ export const Desktop = ({
     const p = TILING.cell + TILING.gap;
     const half = TILING.gap / 2;
     const list: { col: number; row: number; x: number; y: number }[] = [];
-    for (
-      let cx = 0, x = colToPx(0) - half;
-      x < window.innerWidth - TILING.padding.right + p;
-      cx++, x += p
-    ) {
-      for (
-        let cy = 0, y = rowToPx(0) - half;
-        y < window.innerHeight - TILING.padding.bottom + p;
-        cy++, y += p
-      ) {
+    for (let cx = 0, x = colToPx(0) - half; x < window.innerWidth - TILING.padding.right + p; cx++, x += p) {
+      for (let cy = 0, y = rowToPx(0) - half; y < window.innerHeight - TILING.padding.bottom + p; cy++, y += p) {
         list.push({ col: cx, row: cy, x, y });
       }
     }
@@ -796,17 +731,12 @@ export const Desktop = ({
     ghostCell.current = cell;
     const svg = field.current;
     if (!svg) return;
-    for (const el of svg.querySelectorAll<SVGPathElement>(
-      ".wigl-anchor.locked",
-    ))
-      el.classList.remove("locked");
+    for (const el of svg.querySelectorAll<SVGPathElement>(".wigl-anchor.locked")) el.classList.remove("locked");
     if (!cell) return;
     for (const col of [cell.col, cell.col + cell.w]) {
       for (const row of [cell.row, cell.row + cell.h]) {
         svg
-          .querySelector<SVGPathElement>(
-            `.wigl-anchor[data-col="${col}"][data-row="${row}"]`,
-          )
+          .querySelector<SVGPathElement>(`.wigl-anchor[data-col="${col}"][data-row="${row}"]`)
           ?.classList.add("locked");
       }
     }
@@ -867,8 +797,7 @@ export const Desktop = ({
     // lives on WidgetItem's own root (see above), one level up from the
     // header itself. Only used for F6's "Duplicate" entry below; every
     // other menu entry ignores it.
-    const targetId =
-      (e.target as HTMLElement).closest<HTMLElement>("[data-widget-id]")?.dataset.widgetId ?? null;
+    const targetId = (e.target as HTMLElement).closest<HTMLElement>("[data-widget-id]")?.dataset.widgetId ?? null;
     menuPos.current = { x: e.clientX, y: e.clientY };
     setMenu({ x: e.clientX, y: e.clientY, targetId });
     invoke("set_drag_active", { active: true }).catch(console.error);
@@ -909,10 +838,7 @@ export const Desktop = ({
     setSaved({
       ...savedRef.current,
       ...Object.fromEntries(
-        next.map((it) => [
-          it.id,
-          { ...savedRef.current[it.id], col: it.col, row: it.row, m: monitorIndex },
-        ]),
+        next.map((it) => [it.id, { ...savedRef.current[it.id], col: it.col, row: it.row, m: monitorIndex }]),
       ),
     });
   }, [setSaved, monitorIndex]);
@@ -1038,10 +964,7 @@ export const Desktop = ({
         h: p.h,
       };
       setGhostCell(phantom);
-      const next = [
-        ...foreign.current.snapshot.map((i) => ({ ...i })),
-        phantom,
-      ];
+      const next = [...foreign.current.snapshot.map((i) => ({ ...i })), phantom];
       reflow(next, phantom, colsForWidth(window.innerWidth));
       showGhost(p.col, p.row, p.w, p.h);
       setLayout(next.filter((i) => i.id !== p.id));
@@ -1059,9 +982,7 @@ export const Desktop = ({
       }
       if (layoutRef.current?.some((i) => i.id === p.id)) return; // our own local drop
       // Adopt: commit the transaction atomically on our surface.
-      const base = (foreign.current?.snapshot ?? layoutRef.current ?? []).map(
-        (i) => ({ ...i }),
-      );
+      const base = (foreign.current?.snapshot ?? layoutRef.current ?? []).map((i) => ({ ...i }));
       const item: GridItem = {
         id: p.id,
         col: p.col,
@@ -1111,8 +1032,7 @@ export const Desktop = ({
       };
       setResizeId(id);
       window.getSelection()?.removeAllRanges();
-      if (!windowed)
-        invoke("set_drag_active", { active: true }).catch(console.error);
+      if (!windowed) invoke("set_drag_active", { active: true }).catch(console.error);
     },
     [windowed],
   );
@@ -1137,8 +1057,7 @@ export const Desktop = ({
     }
     if (r.edge.includes("s")) {
       h = Math.max(1, r.startH + dRows);
-      if (TILING.rows != null)
-        h = Math.min(h, Math.max(1, TILING.rows - r.startRow));
+      if (TILING.rows != null) h = Math.min(h, Math.max(1, TILING.rows - r.startRow));
     } else if (r.edge.includes("n")) {
       const bottomEdge = r.startRow + r.startH;
       row = Math.max(0, Math.min(bottomEdge - 1, r.startRow + dRows));
@@ -1160,8 +1079,7 @@ export const Desktop = ({
     for (const it of next) {
       if (it.id === r.id) continue;
       const el = els.current[it.id];
-      if (el)
-        el.style.transform = `translate(${colToPx(it.col)}px, ${rowToPx(it.row)}px)`;
+      if (el) el.style.transform = `translate(${colToPx(it.col)}px, ${rowToPx(it.row)}px)`;
     }
     layoutRef.current = next;
   };
@@ -1173,8 +1091,7 @@ export const Desktop = ({
     const item = layoutNow.find((i) => i.id === r.id)!;
     resize.current = null;
     setResizeId(null);
-    if (!windowed)
-      invoke("set_drag_active", { active: false }).catch(console.error);
+    if (!windowed) invoke("set_drag_active", { active: false }).catch(console.error);
     setLayout(layoutNow);
     // Same col/row/m merge as persist(), plus the resized id's new w/h —
     // one combined write so it doesn't race persist()'s own async setSaved.
@@ -1201,8 +1118,7 @@ export const Desktop = ({
       const layout = layoutRef.current;
       if (e.button !== 0 || !layout) return;
       const target = e.target as HTMLElement;
-      if (!target.closest("[data-drag-handle]") || target.closest(INTERACTIVE))
-        return;
+      if (!target.closest("[data-drag-handle]") || target.closest(INTERACTIVE)) return;
       const item = layout.find((i) => i.id === id)!;
       const el = els.current[id]!;
       el.setPointerCapture(e.pointerId);
@@ -1234,8 +1150,7 @@ export const Desktop = ({
       wakeField(true);
       // Pause the click-through poller: flipping ignore_cursor_events mid-drag
       // would sever the pointer capture. No poller exists in windowed mode.
-      if (!windowed)
-        invoke("set_drag_active", { active: true }).catch(console.error);
+      if (!windowed) invoke("set_drag_active", { active: true }).catch(console.error);
     },
     [monitorIndex, windowed, setGhostCell, moveFieldCursor, showGhost, wakeField],
   );
@@ -1259,10 +1174,7 @@ export const Desktop = ({
     const sy = e.screenY + d.screenCorrection.y;
     let tgt = monitorIndex;
     if (ms && !windowed) {
-      const hit = ms.findIndex(
-        (m) =>
-          sx >= m.x && sx < m.x + m.width && sy >= m.y && sy < m.y + m.height,
-      );
+      const hit = ms.findIndex((m) => sx >= m.x && sx < m.x + m.width && sy >= m.y && sy < m.y + m.height);
       if (hit >= 0) tgt = hit;
     }
 
@@ -1285,8 +1197,7 @@ export const Desktop = ({
       const cols = colsForWidth(m.width);
       const col = Math.max(0, Math.min(cols - item.w, pxToCol(fx)));
       let row = Math.max(0, pxToRow(fy));
-      if (TILING.rows != null)
-        row = Math.min(row, Math.max(0, TILING.rows - item.h));
+      if (TILING.rows != null) row = Math.min(row, Math.max(0, TILING.rows - item.h));
       d.target = { mon: tgt, col, row };
       emit("wigl-preview", {
         id: d.id,
@@ -1328,8 +1239,7 @@ export const Desktop = ({
     const cols = colsForWidth(window.innerWidth);
     const col = Math.max(0, Math.min(cols - item.w, pxToCol(fx)));
     let row = Math.max(0, pxToRow(fy));
-    if (TILING.rows != null)
-      row = Math.min(row, Math.max(0, TILING.rows - item.h));
+    if (TILING.rows != null) row = Math.min(row, Math.max(0, TILING.rows - item.h));
     d.target = { mon: monitorIndex, col, row };
     if (col === item.col && row === item.row) return;
 
@@ -1352,8 +1262,7 @@ export const Desktop = ({
     for (const it of next) {
       if (it.id === d.id) continue;
       const el = els.current[it.id];
-      if (el)
-        el.style.transform = `translate(${colToPx(it.col)}px, ${rowToPx(it.row)}px)`;
+      if (el) el.style.transform = `translate(${colToPx(it.col)}px, ${rowToPx(it.row)}px)`;
     }
     layoutRef.current = next;
   };
@@ -1368,8 +1277,7 @@ export const Desktop = ({
     setDragId(null); // re-enables the transition; layout effect springs it home
     hideGhost();
     wakeField(false);
-    if (!windowed)
-      invoke("set_drag_active", { active: false }).catch(console.error);
+    if (!windowed) invoke("set_drag_active", { active: false }).catch(console.error);
 
     if (d.target.mon !== monitorIndex) {
       // Commit the transfer: the target surface adopts the widget and writes

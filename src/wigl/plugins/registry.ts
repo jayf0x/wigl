@@ -2,7 +2,6 @@ import * as React from "react";
 import * as Wigl from "@/wigl";
 import * as WiglHooks from "@/wigl/hooks";
 import * as WiglUtils from "@/wigl/utils";
-import { lucideLazy } from "./lucide-lazy";
 import * as ReactJsxDevRuntime from "react/jsx-dev-runtime";
 import * as ReactJsxRuntime from "react/jsx-runtime";
 import * as Badge from "@/components/ui/badge";
@@ -23,6 +22,7 @@ import * as Tabs from "@/components/ui/tabs";
 import * as Textarea from "@/components/ui/textarea";
 import * as Tooltip from "@/components/ui/tooltip";
 import type { HostModuleId } from "./host-modules";
+import { lucideLazy } from "./lucide-lazy";
 import type { WidgetPermission } from "./types";
 
 // The module registry is the entire plugin/host boundary. A plugin's build

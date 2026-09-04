@@ -2,10 +2,11 @@
 // a widget's east handle should grow its w, push a colliding neighbor down
 // via the same reflow() collision pass drag uses, and persist the new size
 // — but only for the widget actually resized, not the one it pushed.
-import { afterAll, expect, mock, test } from "bun:test";
-import { act, render } from "@testing-library/react";
+
 import * as React from "react";
+import { act, render } from "@testing-library/react";
 import { mockStorage } from "./mock-storage";
+import { afterAll, expect, mock, test } from "bun:test";
 
 const storage = mockStorage();
 storage.kv.set(
@@ -106,9 +107,7 @@ test("resizing a widget's west edge shrinks it and shifts its col, keeping the r
     );
   });
   await act(async () => {
-    root.dispatchEvent(
-      new PointerEvent("pointermove", { bubbles: true, pointerId: 1, clientX: 82, clientY: 0 }),
-    );
+    root.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId: 1, clientX: 82, clientY: 0 }));
   });
   await act(async () => {
     root.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1 }));

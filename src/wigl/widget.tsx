@@ -1,9 +1,4 @@
-import {
-  createContext,
-  type ReactNode,
-  useContext,
-  useLayoutEffect,
-} from "react";
+import { createContext, type ReactNode, useContext, useLayoutEffect } from "react";
 import { cn } from "@/wigl/utils";
 import { CircleX, Expand, Grip, Minimize2 } from "lucide-react";
 import { TILING } from "./grid/config";
@@ -101,9 +96,7 @@ export const Widget = ({
       <WidgetHeader slot={slot} className={cn(minimized && "hidden")}>
         {headerContent}
       </WidgetHeader>
-      <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", minimized && "hidden")}>
-        {children}
-      </div>
+      <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", minimized && "hidden")}>{children}</div>
     </div>
   );
 };
@@ -126,13 +119,7 @@ export const WidgetHeader = ({
   children?: ReactNode;
   slot?: WidgetSlotValue | null;
 }) => (
-  <div
-    data-widget-header
-    className={cn(
-      "flex items-center gap-1 border-b border-border py-1 pr-1 pl-2",
-      className,
-    )}
-  >
+  <div data-widget-header className={cn("flex items-center gap-1 border-b border-border py-1 pr-1 pl-2", className)}>
     <div className="mr-1 flex shrink-0 items-center gap-1 border-r border-border pr-2">
       {!!slot?.onClose && (
         <button
@@ -171,18 +158,10 @@ export const WidgetHeader = ({
 // left, drag full-height right) pinned on top of `background`, which renders
 // centered underneath — an icon/emoji/image the split-view controls are
 // never customizable through, only what's behind them is.
-const MinimizedWidget = ({
-  slot,
-  background,
-}: {
-  slot?: WidgetSlotValue | null;
-  background?: ReactNode;
-}) => (
+const MinimizedWidget = ({ slot, background }: { slot?: WidgetSlotValue | null; background?: ReactNode }) => (
   <div data-widget-header className="relative h-full w-full">
     {!!background && (
-      <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
-        {background}
-      </div>
+      <div className="absolute inset-0 flex items-center justify-center overflow-hidden">{background}</div>
     )}
     <div className="absolute inset-0 flex bg-card/60">
       <button

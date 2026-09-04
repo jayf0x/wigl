@@ -1,12 +1,6 @@
-import {
-  CheckMenuItem,
-  Menu,
-  MenuItem,
-  PredefinedMenuItem,
-  Submenu,
-} from "@tauri-apps/api/menu";
-import { TrayIcon } from "@tauri-apps/api/tray";
 import { useEffect, useMemo } from "react";
+import { CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu } from "@tauri-apps/api/menu";
+import { TrayIcon } from "@tauri-apps/api/tray";
 import { type GlobalAction, useGlobalActions } from "../hooks/useGlobalActions";
 
 // Must match TRAY_ID in src-tauri/src/lib.rs. Rust creates the tray icon
@@ -49,11 +43,7 @@ const buildModel = (actions: GlobalAction[], viewEntries: MenuEntry[]): Model =>
 // drag fires plenty) where the registry and the visibility flags are
 // untouched.
 const signatureOf = (m: Model): string =>
-  JSON.stringify(
-    (["root", "view", "window"] as const).map((k) =>
-      m[k].map((e) => [e.id, e.label, e.checked ?? null]),
-    ),
-  );
+  JSON.stringify((["root", "view", "window"] as const).map((k) => m[k].map((e) => [e.id, e.label, e.checked ?? null])));
 
 type Item = MenuItem | CheckMenuItem | Submenu | PredefinedMenuItem;
 
@@ -75,9 +65,7 @@ const buildMenu = async (m: Model): Promise<Menu> => {
     ["Window", m.window],
   ] as const) {
     if (entries.length === 0) continue;
-    items.push(
-      await Submenu.new({ text: label, items: await Promise.all(entries.map(toItem)) }),
-    );
+    items.push(await Submenu.new({ text: label, items: await Promise.all(entries.map(toItem)) }));
   }
   items.push(await PredefinedMenuItem.new({ item: "Separator" }));
   items.push(await PredefinedMenuItem.new({ item: "Quit", text: "Quit wigl" }));
@@ -101,13 +89,7 @@ let activeMenu: Menu | null = null;
  * register one action each, the same reason Desktop renders its
  * closed-widget list into the right-click menu directly.
  */
-export const useNativeMenu = ({
-  enabled,
-  viewEntries,
-}: {
-  enabled: boolean;
-  viewEntries: MenuEntry[];
-}): void => {
+export const useNativeMenu = ({ enabled, viewEntries }: { enabled: boolean; viewEntries: MenuEntry[] }): void => {
   const actions = useGlobalActions();
   const model = useMemo(() => buildModel(actions, viewEntries), [actions, viewEntries]);
   const signature = signatureOf(model);

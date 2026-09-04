@@ -21,11 +21,7 @@ function DialogBackdrop({ className, ...props }: DialogPrimitive.Backdrop.Props)
   );
 }
 
-function DialogContent({
-  className,
-  children,
-  ...props
-}: DialogPrimitive.Popup.Props): React.ReactElement {
+function DialogContent({ className, children, ...props }: DialogPrimitive.Popup.Props): React.ReactElement {
   return (
     <DialogPrimitive.Portal>
       <DialogBackdrop />
@@ -48,13 +44,7 @@ function DialogClose(props: DialogPrimitive.Close.Props) {
 }
 
 function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
-  return (
-    <DialogPrimitive.Title
-      data-slot="dialog-title"
-      className={cn("font-medium text-sm", className)}
-      {...props}
-    />
-  );
+  return <DialogPrimitive.Title data-slot="dialog-title" className={cn("font-medium text-sm", className)} {...props} />;
 }
 
 export { Dialog, DialogBackdrop, DialogClose, DialogContent, DialogTitle };

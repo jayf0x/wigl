@@ -1,10 +1,10 @@
+import { useMemo, useState } from "react";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { RotateCw, X } from "lucide-react";
-import { useMemo, useState } from "react";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useRestartRequired } from "./restartBanner";
 import { useSettingsSections } from "./registry";
+import { useRestartRequired } from "./restartBanner";
 import { appearanceSection } from "./sections/appearance";
 import { backgroundSection } from "./sections/background";
 import { gridSection } from "./sections/grid";
@@ -143,9 +143,7 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
           <div className="min-w-0 flex-1 overflow-y-auto p-3.5">
             {matches ? (
               matches.length === 0 ? (
-                <div className="px-1 py-6 text-center text-muted-foreground text-xs">
-                  No settings match "{query}"
-                </div>
+                <div className="px-1 py-6 text-center text-muted-foreground text-xs">No settings match "{query}"</div>
               ) : (
                 <div className="flex flex-col gap-0.5">
                   {matches.map(({ section, field }) => (

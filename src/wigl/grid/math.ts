@@ -82,9 +82,7 @@ export const settle = (items: GridItem[], cols: number) => {
  * Hidden items keep their stored position and are ignored. Mutates `items`. */
 export const repack = (items: GridItem[], cols: number) => {
   const placed: GridItem[] = [];
-  for (const it of items
-    .filter((i) => !i.hidden)
-    .sort((a, b) => a.row - b.row || a.col - b.col)) {
+  for (const it of items.filter((i) => !i.hidden).sort((a, b) => a.row - b.row || a.col - b.col)) {
     const pos = autoPlace(placed, it.w, it.h, cols);
     it.col = pos.col;
     it.row = pos.row;

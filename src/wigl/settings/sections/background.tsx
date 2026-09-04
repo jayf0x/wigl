@@ -34,9 +34,7 @@ const BackgroundSection = () => {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="mb-2 px-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">
-          Image
-        </div>
+        <div className="mb-2 px-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">Image</div>
         <div className="flex items-center gap-2 px-1">
           {/* A native file picker — no Tauri dialog plugin needed, this
               already opens the OS's real picker. Hidden and triggered via

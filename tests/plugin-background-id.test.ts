@@ -6,8 +6,9 @@
 // plugin (folded into RESERVED_PLUGIN_IDS by mistake) or silently start
 // rejecting "main"/"wigl" again (BACKGROUND_PLUGIN_ID defined but the set
 // itself touched by accident).
-import { describe, expect, test } from "bun:test";
+
 import { BACKGROUND_PLUGIN_ID, RESERVED_PLUGIN_IDS, resolvePluginConfig } from "../src/wigl/plugins/types";
+import { describe, expect, test } from "bun:test";
 
 describe("BACKGROUND_PLUGIN_ID", () => {
   test("is not itself a reserved id — a 'background' folder must be loadable", () => {

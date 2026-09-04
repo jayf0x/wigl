@@ -1,6 +1,6 @@
+import { useEffect, useState } from "react";
 import { join } from "@tauri-apps/api/path";
 import { Download, FolderOpen, RotateCw, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -102,7 +102,12 @@ true`,
   return id;
 };
 
-const basenameNoGit = (url: string) => url.replace(/\/+$/, "").split("/").pop()?.replace(/\.git$/, "") ?? "";
+const basenameNoGit = (url: string) =>
+  url
+    .replace(/\/+$/, "")
+    .split("/")
+    .pop()
+    ?.replace(/\.git$/, "") ?? "";
 
 // Same shared "widget_layout" kv record Desktop.tsx reads/writes — only the
 // `closed` field is used here, so the type only claims that much. One
@@ -233,8 +238,7 @@ const WidgetsSection = () => {
         </div>
       )}
       <p className="px-1 text-[11px] text-muted-foreground">
-        Removing a widget only deletes the installed copy — reload widgets above to see the change without a
-        restart.
+        Removing a widget only deletes the installed copy — reload widgets above to see the change without a restart.
       </p>
 
       <div className="flex flex-col gap-1.5 border-t pt-3">

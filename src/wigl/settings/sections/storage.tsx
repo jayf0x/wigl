@@ -1,6 +1,6 @@
+import { useEffect, useState } from "react";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { FolderOpen } from "lucide-react";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sql } from "../../storage/client";
@@ -109,15 +109,13 @@ const StorageSection = () => {
         </div>
         <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">
           Where the database and installed widgets live — <code>wigl-config.json</code> itself always stays at the
-          default location so it can be found on the next launch. A path here must already exist and be writable;
-          takes effect on restart.
+          default location so it can be found on the next launch. A path here must already exist and be writable; takes
+          effect on restart.
         </p>
       </div>
 
       <div className="border-border/60 border-t pt-3">
-        <div className="mb-2 px-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">
-          Paths
-        </div>
+        <div className="mb-2 px-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">Paths</div>
         {paths ? (
           <div className="flex flex-col gap-2.5">
             <PathRow label="Installed widgets" path={paths.plugins} />

@@ -47,5 +47,4 @@ export const registerSettingsSection = (section: SettingSection): void => {
 };
 
 /** The live list of registered (widget-contributed) Settings sections. */
-export const useSettingsSections = (): SettingSection[] =>
-  useSyncExternalStore(subscribe, snapshot, snapshot);
+export const useSettingsSections = (): SettingSection[] => useSyncExternalStore(subscribe, snapshot, snapshot);

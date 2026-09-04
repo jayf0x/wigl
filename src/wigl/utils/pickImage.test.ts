@@ -5,14 +5,13 @@
 import { describe, expect, test } from "bun:test";
 
 const PY =
-  'import sys,base64,io;from PIL import Image,ImageOps;' +
-  's,m=sys.argv[1],int(sys.argv[2]);' +
+  "import sys,base64,io;from PIL import Image,ImageOps;" +
+  "s,m=sys.argv[1],int(sys.argv[2]);" +
   'im=ImageOps.exif_transpose(Image.open(s)).convert("RGB");' +
   'im.thumbnail((m,m));b=io.BytesIO();im.save(b,format="JPEG",quality=82,optimize=True);' +
   'sys.stdout.write("data:image/jpeg;base64,"+base64.b64encode(b.getvalue()).decode())';
 
-const hasPillow =
-  (await Bun.spawn(["python3", "-c", "import PIL"]).exited.catch(() => 1)) === 0;
+const hasPillow = (await Bun.spawn(["python3", "-c", "import PIL"]).exited.catch(() => 1)) === 0;
 
 describe("pickAndProcessImage — the Python resize/encode hop", () => {
   test.skipIf(!hasPillow)("produces a downscaled JPEG data URI", async () => {

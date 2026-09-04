@@ -1,8 +1,8 @@
 "use client";
 
 import { type ComponentRef, type Ref, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/wigl/utils/index";
+import { Eye, EyeOff } from "lucide-react";
 import { Input, type InputProps } from "@/components/ui/input";
 
 /** An `<Input type="password">` with an eye / eye-off toggle that flips it to
@@ -17,12 +17,7 @@ export function PasswordInput({
   const Icon = shown ? EyeOff : Eye;
   return (
     <span className="relative inline-flex w-full">
-      <Input
-        ref={ref}
-        type={shown ? "text" : "password"}
-        className={cn("pr-8", className)}
-        {...props}
-      />
+      <Input ref={ref} type={shown ? "text" : "password"} className={cn("pr-8", className)} {...props} />
       <button
         type="button"
         tabIndex={-1}

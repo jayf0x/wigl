@@ -1,8 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useStorage } from "../../hooks/useStorage";
 import type { GridOverrides } from "../../grid/config";
 import { TILING } from "../../grid/config";
+import { useStorage } from "../../hooks/useStorage";
 import type { SettingSection } from "../types";
 
 // Live (Tier 1): the override object is a plain `useStorage` row ("wigl_grid").
@@ -57,9 +57,7 @@ const GridSection = () => {
       </Button>
 
       <div>
-        <div className="mb-2 px-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">
-          Cells
-        </div>
+        <div className="mb-2 px-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">Cells</div>
         <div className="flex flex-col gap-1.5">
           {NUMBER_FIELDS.map(({ key, label }) => (
             <div key={key} className="flex items-center gap-2 px-1">

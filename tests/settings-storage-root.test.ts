@@ -12,8 +12,8 @@ mock.module("@tauri-apps/api/path", () => ({
   join: async (...parts: string[]) => parts.join("/"),
 }));
 
-import { afterAll, describe, expect, test } from "bun:test";
 import { setConfigOverride, storageRoot } from "../src/wigl/settings/config";
+import { afterAll, describe, expect, test } from "bun:test";
 
 describe("storageRoot", () => {
   afterAll(() => mock.restore());

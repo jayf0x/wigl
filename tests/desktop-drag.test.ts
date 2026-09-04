@@ -6,11 +6,11 @@
 // simulate exactly that: screenX stays a true global coordinate, screenY is
 // reported window-relative (equal to clientY) throughout the drag, which is
 // the observed WebKit behavior this fix corrects for.
-import { mock, test } from "bun:test";
-import { act, render } from "@testing-library/react";
-import { expect } from "bun:test";
+
 import * as React from "react";
+import { act, render } from "@testing-library/react";
 import { mockStorage } from "./mock-storage";
+import { expect, mock, test } from "bun:test";
 
 const storage = mockStorage();
 storage.kv.set("widget_layout", JSON.stringify({ w1: { col: 0, row: 0, m: 0 } }));
@@ -190,33 +190,26 @@ test("a widget dropped onto another monitor doesn't reappear on the source monit
 // regression here still means killing a hung `bun test` by hand — but it
 // costs nothing to leave in place, and it's what tells you *why* the run
 // hung instead of leaving that to be rediscovered from scratch.
-test(
-  "a widget belonging to another monitor doesn't loop the reconcile effect forever",
-  async () => {
-    storage.kv.set(
-      "widget_layout",
-      JSON.stringify({ w1: { col: 0, row: 0, m: 0 }, w2: { col: 0, row: 0, m: 1 } }),
-    );
+test("a widget belonging to another monitor doesn't loop the reconcile effect forever", async () => {
+  storage.kv.set("widget_layout", JSON.stringify({ w1: { col: 0, row: 0, m: 0 }, w2: { col: 0, row: 0, m: 1 } }));
 
-    // Monitor 1's own widget (w2) plus one that only ever belongs to
-    // monitor 0 (w1) — w1 is permanently "missing" from monitor 1's layout,
-    // by design, not a bug to fix in `saved`.
-    const { container } = render(
-      React.createElement(Desktop, {
-        widgets: { w1: DragHandle, w2: DragHandle },
-        monitorIndex: 1,
-        windowed: false,
-      }),
-    );
+  // Monitor 1's own widget (w2) plus one that only ever belongs to
+  // monitor 0 (w1) — w1 is permanently "missing" from monitor 1's layout,
+  // by design, not a bug to fix in `saved`.
+  const { container } = render(
+    React.createElement(Desktop, {
+      widgets: { w1: DragHandle, w2: DragHandle },
+      monitorIndex: 1,
+      windowed: false,
+    }),
+  );
 
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 100));
-    });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 100));
+  });
 
-    expect(container.querySelector('[data-widget-id="w2"]')).not.toBeNull();
-    expect(container.querySelector('[data-widget-id="w1"]')).toBeNull();
+  expect(container.querySelector('[data-widget-id="w2"]')).not.toBeNull();
+  expect(container.querySelector('[data-widget-id="w1"]')).toBeNull();
 
-    storage.restore();
-  },
-  5000,
-);
+  storage.restore();
+}, 5000);

@@ -5,8 +5,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { Check } from "lucide-react";
 import { cn } from "@/wigl/utils/index";
+import { Check } from "lucide-react";
 
 /** A label that turns into a text input on click, with a save affordance at
  * its trailing edge — same shape as the other `ui/` components (owned code,

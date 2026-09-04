@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
 import { oppositeMode, toggleModeLabel } from "../src/wigl/settings/appMode";
+import { describe, expect, test } from "bun:test";
 
 describe("oppositeMode", () => {
   test("windowed toggles to overlay", () => {

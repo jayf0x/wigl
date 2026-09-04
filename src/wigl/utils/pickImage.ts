@@ -15,14 +15,13 @@ import { isMacos, runCmd } from "./index";
 // `python3 -c '<this>'` — it uses only double quotes, so wrapping in single
 // quotes in the shell needs no escaping.
 const PY =
-  'import sys,base64,io;from PIL import Image,ImageOps;' +
-  's,m=sys.argv[1],int(sys.argv[2]);' +
+  "import sys,base64,io;from PIL import Image,ImageOps;" +
+  "s,m=sys.argv[1],int(sys.argv[2]);" +
   'im=ImageOps.exif_transpose(Image.open(s)).convert("RGB");' +
   'im.thumbnail((m,m));b=io.BytesIO();im.save(b,format="JPEG",quality=82,optimize=True);' +
   'sys.stdout.write("data:image/jpeg;base64,"+base64.b64encode(b.getvalue()).decode())';
 
-const MAC_PICK =
-  `osascript -e 'POSIX path of (choose file with prompt "Choose an image" of type {"public.image"})' 2>/dev/null`;
+const MAC_PICK = `osascript -e 'POSIX path of (choose file with prompt "Choose an image" of type {"public.image"})' 2>/dev/null`;
 const LINUX_PICK = `zenity --file-selection --title="Choose an image" 2>/dev/null`;
 
 /** ~900 KB of base64 — a cover this big already lives in the widget's kv blob;

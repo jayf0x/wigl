@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, RotateCw, ShieldAlert } from "lucide-react";
 import { cn } from "@/wigl/utils";
+import { AlertTriangle, RotateCw, ShieldAlert } from "lucide-react";
 
 /** A widget's shared "something is broken" surface (backlog.md's F1) — one
  * place to show a real, current error condition instead of an ad-hoc
@@ -28,12 +28,7 @@ export const ErrorOverlay = ({
    * widget's own escape hatch never needs a new prop here. */
   children?: ReactNode;
 }) => (
-  <div
-    className={cn(
-      "flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center",
-      className,
-    )}
-  >
+  <div className={cn("flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center", className)}>
     {kind === "known" ? (
       <ShieldAlert className="size-6 text-muted-foreground" />
     ) : (

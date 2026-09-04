@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
 import { lucideLazy } from "../src/wigl/plugins/lucide-lazy";
+import { describe, expect, test } from "bun:test";
 
 describe("lucideLazy", () => {
   test("resolves a plain icon name to a component", () => {

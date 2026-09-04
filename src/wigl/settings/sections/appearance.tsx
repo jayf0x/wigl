@@ -96,9 +96,7 @@ const AppearanceSection = () => {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="mb-2 px-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">
-          Theme
-        </div>
+        <div className="mb-2 px-0.5 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">Theme</div>
         <div className="grid grid-cols-3 gap-2">
           {PRESETS.map((p) => (
             <PresetCard
@@ -113,12 +111,7 @@ const AppearanceSection = () => {
             name="Custom"
             active={themeId === CUSTOM_THEME_ID}
             onClick={() => setThemeId(CUSTOM_THEME_ID)}
-            colors={[
-              customPreview.background,
-              customPreview.card,
-              customPreview.primary,
-              customPreview.wiglAccent,
-            ]}
+            colors={[customPreview.background, customPreview.card, customPreview.primary, customPreview.wiglAccent]}
           />
         </div>
       </div>
@@ -138,9 +131,7 @@ const AppearanceSection = () => {
             ))}
           </div>
           <div className="flex flex-col gap-1.5">
-            <span className="px-1 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">
-              Adjust
-            </span>
+            <span className="px-1 font-medium text-[10px] text-muted-foreground uppercase tracking-widest">Adjust</span>
             {FILTER_FIELDS.map(({ key, label, min, max }) => (
               <div key={key} className="flex items-center gap-2 px-1">
                 <span className="w-20 shrink-0 text-xs">{label}</span>
@@ -167,8 +158,16 @@ export const appearanceSection: SettingSection = {
   id: "appearance",
   label: "Appearance",
   fields: [
-    { id: "theme-preset", label: "Theme preset", keywords: ["color", "dark", "light", "nord", "dracula", "catppuccin", "gruvbox"] },
-    { id: "theme-custom", label: "Custom theme", keywords: ["hue", "brightness", "contrast", "saturation", "parametric"] },
+    {
+      id: "theme-preset",
+      label: "Theme preset",
+      keywords: ["color", "dark", "light", "nord", "dracula", "catppuccin", "gruvbox"],
+    },
+    {
+      id: "theme-custom",
+      label: "Custom theme",
+      keywords: ["hue", "brightness", "contrast", "saturation", "parametric"],
+    },
   ],
   render: () => <AppearanceSection />,
 };
