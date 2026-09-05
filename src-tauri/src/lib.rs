@@ -350,6 +350,18 @@ fn spawn_screen_window(app: &tauri::AppHandle, i: usize, mon: &tauri::Monitor) {
         .always_on_bottom(true)
         .skip_taskbar(true)
         .resizable(false)
+        // Without this, macOS pins the window to whichever Space was active
+        // when it was created (NSWindowCollectionBehavior defaults to no
+        // canJoinAllSpaces). Since the window is always-on-bottom and fully
+        // transparent, you never see it — but any time AppKit re-orders or
+        // activates it (a widget click, the click-through poller, a monitor
+        // reconcile), it satisfies that by switching you to the window's
+        // home Space instead, which reads as "randomly kicked to the
+        // desktop, nothing visibly changes" (the destination Space just
+        // looks like a bare desktop). `visible_on_all_workspaces` maps to
+        // canJoinAllSpaces here and to the sticky/all-desktops window state
+        // on X11/GTK, so it's the one flag that fixes this on both.
+        .visible_on_all_workspaces(true)
         .build();
     match win {
         Ok(w) => {
