@@ -2,6 +2,7 @@
 // session says nothing about which session it is), animating the width so the
 // transcript reflows instead of jumping.
 import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/wigl/utils";
 import type { SessionView } from "../hooks/useSessions";
@@ -39,15 +40,17 @@ export const Sidebar = ({
         <span className="flex-1 px-1.5 text-[9.5px] tracking-[0.14em] text-muted-foreground/50 uppercase">
           sessions
         </span>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           data-no-drag
           title="new session"
           onClick={onCreate}
-          className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
+          className="shrink-0 rounded-md text-muted-foreground"
         >
           <Plus className="size-3.5" />
-        </button>
+        </Button>
       </div>
 
       <ScrollArea className="min-h-0 w-52 flex-1">

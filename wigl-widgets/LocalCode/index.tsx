@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { PanelLeft, RotateCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ErrorOverlay, Widget } from "@/wigl";
 import { useStorage } from "@/wigl/hooks";
 import { cn, homeDir } from "@/wigl/utils";
@@ -55,12 +56,14 @@ const LocalCodeWidget = () => {
       row={0}
       headerContent={
         <>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             data-no-drag
             title={sidebarOpen ? "hide sessions" : "show sessions"}
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
+            className="rounded-md text-muted-foreground"
           >
             <PanelLeft
               className={cn(
@@ -68,7 +71,7 @@ const LocalCodeWidget = () => {
                 !sidebarOpen && "-scale-x-100",
               )}
             />
-          </button>
+          </Button>
           <span className="min-w-0 flex-1 truncate text-[11px] text-foreground/70">
             {activeSession?.displayTitle ?? "localcode"}
           </span>
@@ -77,8 +80,10 @@ const LocalCodeWidget = () => {
             ran `ollama pull`, pick it up now" without a full app restart.
             When unreachable, the same click spawns `ollama serve` instead
             (F4 in backlog.md) rather than just re-checking. */}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             data-no-drag
             onClick={ollamaOnline === false ? startOllamaNow : reloadModels}
             disabled={ollamaStarting}
@@ -90,12 +95,14 @@ const LocalCodeWidget = () => {
                   : "reload ollama models (pick up a fresh `ollama pull`)"
             }
             className={cn(
-              "rounded-md p-0.5 transition-colors duration-150 hover:bg-muted disabled:opacity-50",
-              ollamaOnline === false ? "text-destructive" : "text-muted-foreground hover:text-foreground",
+              "rounded-md",
+              ollamaOnline === false
+                ? "text-destructive hover:text-destructive"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             <RotateCw className={cn("size-3", ollamaStarting && "animate-spin")} />
-          </button>
+          </Button>
         </>
       }
     >
@@ -108,15 +115,16 @@ const LocalCodeWidget = () => {
             onRetry={restart}
           >
             {ollamaOnline === false && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 data-no-drag
                 onClick={startOllamaNow}
                 disabled={ollamaStarting}
-                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-foreground/80 transition-colors duration-150 hover:bg-muted disabled:opacity-50"
+                className="h-auto gap-1 border border-border px-2 py-1 text-[11px] font-normal text-foreground/80"
               >
                 {ollamaStarting ? "starting ollama…" : "boot ollama"}
-              </button>
+              </Button>
             )}
           </ErrorOverlay>
         ) : (

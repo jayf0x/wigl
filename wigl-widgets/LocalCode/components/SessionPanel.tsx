@@ -1,4 +1,5 @@
 import { MessageSquarePlus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { relativeTime } from "@/wigl/utils";
 import { useActiveSession } from "../hooks/useActiveSession";
 import type { useModelCatalog } from "../hooks/useModelCatalog";
@@ -25,15 +26,16 @@ const Landing = ({
   const recent = recentSessions.slice(0, RECENT_COUNT);
   return (
     <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-4 px-6">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         data-no-drag
         onClick={onCreate}
-        className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[11.5px] text-muted-foreground transition-colors duration-150 hover:border-ring/60 hover:text-foreground"
+        className="h-auto gap-1.5 border border-border px-3 py-2 text-[11.5px] font-normal text-muted-foreground hover:bg-transparent hover:border-ring/60 hover:text-foreground"
       >
         <MessageSquarePlus className="size-3.5" />
         new session
-      </button>
+      </Button>
 
       {loading ? (
         <div className="flex flex-col gap-1">
@@ -50,18 +52,19 @@ const Landing = ({
         <div className="flex flex-col gap-0.5">
           <span className="px-2 pb-1 text-[9.5px] tracking-[0.14em] text-muted-foreground/50 uppercase">recent</span>
           {recent.map((s) => (
-            <button
+            <Button
               key={s.id}
               type="button"
+              variant="ghost"
               data-no-drag
               onClick={() => onSelect(s.id)}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11.5px] text-muted-foreground transition-colors duration-150 hover:bg-muted/40 hover:text-foreground"
+              className="h-auto justify-start gap-2 rounded-md px-2 py-1.5 text-left text-[11.5px] font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             >
               <span className="min-w-0 flex-1 truncate">{s.displayTitle}</span>
               <span className="shrink-0 text-[10px] text-muted-foreground/40">
                 {relativeTime(s.time.updated / 1000)}
               </span>
-            </button>
+            </Button>
           ))}
         </div>
       ) : (
@@ -116,9 +119,17 @@ export const SessionPanel = ({
       {session.error && (
         <div className="mx-4 mb-2 flex shrink-0 items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-[11px] text-destructive">
           <span className="flex-1 truncate">{session.error}</span>
-          <button type="button" data-no-drag title="dismiss" onClick={session.dismissError} className="shrink-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            data-no-drag
+            title="dismiss"
+            onClick={session.dismissError}
+            className="shrink-0 hover:bg-transparent"
+          >
             <X className="size-3" />
-          </button>
+          </Button>
         </div>
       )}
       <Composer

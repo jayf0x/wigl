@@ -11,6 +11,7 @@
 // collapsible content. See AGENTS.md's decisions log.
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Check, Pencil, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/wigl/utils";
 import type { MessageWithParts } from "../types";
@@ -57,20 +58,29 @@ const UserTurn = ({
         />
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <span className="flex-1">⌘↵ resend · esc cancel</span>
-          <button type="button" data-no-drag onClick={() => setDraft(null)} className="hover:text-foreground">
-            <X className="size-3" />
-          </button>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
+            data-no-drag
+            onClick={() => setDraft(null)}
+            className="hover:bg-transparent hover:text-foreground"
+          >
+            <X className="size-3" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
             data-no-drag
             onClick={() => {
               setDraft(null);
               onResend(draft);
             }}
-            className="text-primary hover:text-foreground"
+            className="text-primary hover:bg-transparent hover:text-foreground"
           >
             <Check className="size-3" />
-          </button>
+          </Button>
         </div>
       </Turn>
     );
@@ -82,16 +92,18 @@ const UserTurn = ({
         <p className="flex-1 whitespace-pre-wrap break-words border-primary/40 border-l-2 pl-2.5 text-[12.5px] leading-relaxed text-foreground/85">
           {original}
         </p>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           data-no-drag
           title={busy ? "wait for the current reply" : "edit and resend"}
           disabled={busy}
           onClick={() => setDraft(original)}
-          className="shrink-0 text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-60 hover:opacity-100 disabled:opacity-0"
+          className="shrink-0 text-muted-foreground opacity-0 transition-opacity duration-150 hover:bg-transparent group-hover:opacity-60 hover:opacity-100 disabled:opacity-0"
         >
           <Pencil className="size-3" />
-        </button>
+        </Button>
       </div>
     </Turn>
   );
@@ -123,14 +135,15 @@ export const MessageList = ({
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto flex w-full max-w-[76ch] flex-col gap-6 px-4 py-5">
         {hidden > 0 && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             data-no-drag
             onClick={() => setExpanded(true)}
-            className="self-center rounded-md px-2 py-1 text-[10.5px] text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
+            className="h-auto self-center rounded-md px-2 py-1 text-[10.5px] font-normal text-muted-foreground"
           >
             {hidden} earlier message{hidden === 1 ? "" : "s"}
-          </button>
+          </Button>
         )}
 
         {visible.map((m) =>

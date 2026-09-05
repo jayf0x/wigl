@@ -4,6 +4,7 @@
 // a list you're scanning.
 import { useState } from "react";
 import { Check, Loader2, Pin, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { relativeTime, cn } from "@/wigl/utils";
 import type { SessionView } from "../hooks/useSessions";
 
@@ -82,27 +83,34 @@ export const SessionRow = ({
       ) : confirming ? (
         <>
           <span className="min-w-0 flex-1 truncate text-muted-foreground">delete this session?</span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             data-no-drag
             onClick={runDelete}
             title="confirm delete"
-            className="shrink-0 text-destructive/70 hover:text-destructive"
+            className="shrink-0 text-destructive/70 hover:bg-transparent hover:text-destructive"
           >
             <Check className="size-3.5" />
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             data-no-drag
             onClick={() => setConfirming(false)}
             title="cancel"
-            className="shrink-0 text-muted-foreground/60 hover:text-foreground"
+            className="shrink-0 text-muted-foreground/60 hover:bg-transparent hover:text-foreground"
           >
             <X className="size-3.5" />
-          </button>
+          </Button>
         </>
       ) : (
         <>
+          {/* A plain click target blended into the row's own text, not a
+              button-shaped affordance — the row div above already carries the
+              hover/active styling. check-style:allow-raw-button */}
           <button
             type="button"
             data-no-drag
@@ -115,27 +123,31 @@ export const SessionRow = ({
           <span className="shrink-0 text-[10px] text-muted-foreground/40 group-hover:hidden">
             {relativeTime(session.time.updated / 1000)}
           </span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             data-no-drag
             onClick={onTogglePin}
             title={session.pinned ? "unpin" : "pin to top"}
             className={cn(
-              "hidden shrink-0 text-muted-foreground/60 hover:text-foreground group-hover:block",
+              "hidden shrink-0 text-muted-foreground/60 hover:bg-transparent hover:text-foreground group-hover:block",
               session.pinned && "block text-foreground/70",
             )}
           >
             <Pin className={cn("size-3", session.pinned && "fill-current")} />
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             data-no-drag
             onClick={() => setConfirming(true)}
             title="delete session"
-            className="hidden shrink-0 text-muted-foreground/60 hover:text-destructive group-hover:block"
+            className="hidden shrink-0 text-muted-foreground/60 hover:bg-transparent hover:text-destructive group-hover:block"
           >
             <Trash2 className="size-3" />
-          </button>
+          </Button>
         </>
       )}
     </div>

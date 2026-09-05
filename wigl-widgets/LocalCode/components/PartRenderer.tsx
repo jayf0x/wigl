@@ -5,6 +5,7 @@
 // the transcript down several screens on its own.
 import { type ReactNode, useState } from "react";
 import { ChevronRight, Loader2, ListTodo, Repeat, Sparkles, Terminal } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/wigl/utils";
 import { splitAtRepeat } from "../repetition";
 import type { MessagePart } from "../types";
@@ -46,12 +47,13 @@ const AnswerText = ({ text }: { text: string }) => {
   return (
     <div className="flex flex-col gap-1.5">
       {head && <Markdown text={head} />}
-      <button
+      <Button
         type="button"
+        variant="ghost"
         data-no-drag
         onClick={() => setShowAll((v) => !v)}
         title="the model started repeating itself — collapsed to keep the useful part readable"
-        className="flex items-center gap-1.5 self-start rounded-md border border-border/50 px-1.5 py-0.5 text-[10.5px] text-muted-foreground/70 transition-colors duration-150 hover:text-foreground"
+        className="h-auto gap-1.5 self-start border border-border/50 px-1.5 py-0.5 text-[10.5px] font-normal text-muted-foreground/70 hover:bg-transparent hover:text-foreground"
       >
         <Repeat className="size-3 shrink-0 opacity-60" />
         {showAll ? (
@@ -61,7 +63,7 @@ const AnswerText = ({ text }: { text: string }) => {
             repeats “{previewText}” ×{count}
           </span>
         )}
-      </button>
+      </Button>
       {showAll && <Markdown text={repeated} className="opacity-50" />}
     </div>
   );
@@ -83,11 +85,12 @@ const Trace = ({
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         data-no-drag
         onClick={() => setOpen((v) => !v)}
-        className="group flex w-full items-center gap-1.5 py-0.5 text-left text-[10.5px] text-muted-foreground/70 transition-colors duration-150 hover:text-foreground"
+        className="group h-auto w-full justify-start gap-1.5 py-0.5 text-left text-[10.5px] font-normal text-muted-foreground/70 hover:bg-transparent hover:text-foreground"
       >
         <ChevronRight
           className={cn("size-3 shrink-0 opacity-50 transition-transform duration-200", open && "rotate-90")}
@@ -95,7 +98,7 @@ const Trace = ({
         <Icon className={cn("size-3 shrink-0", spin && "animate-spin")} />
         <span className="truncate">{label}</span>
         {meta && <span className="shrink-0 truncate opacity-50">{meta}</span>}
-      </button>
+      </Button>
       {open && (
         <div className="mt-1 mb-1.5 ml-1.5 max-h-56 overflow-y-auto border-border border-l pl-3 text-muted-foreground">
           {children}

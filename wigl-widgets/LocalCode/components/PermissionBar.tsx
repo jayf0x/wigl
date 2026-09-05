@@ -3,6 +3,8 @@
 // theme tokens only; the old amber literal was a hardcoded color, which
 // docs/theming.md bans outright.
 import { Ban, Check, CheckCheck, ShieldAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/wigl/utils";
 import type { PermissionRequest } from "../types";
 
 const Action = ({
@@ -16,17 +18,17 @@ const Action = ({
   danger?: boolean;
   onClick: () => void;
 }) => (
-  <button
+  <Button
     type="button"
+    variant="ghost"
+    size="icon-xs"
     data-no-drag
     title={title}
     onClick={onClick}
-    className={`rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted ${
-      danger ? "hover:text-destructive" : "hover:text-foreground"
-    }`}
+    className={cn("rounded-md text-muted-foreground", danger ? "hover:text-destructive" : "hover:text-foreground")}
   >
     <Icon className="size-3.5" />
-  </button>
+  </Button>
 );
 
 export const PermissionBar = ({

@@ -90,8 +90,9 @@ const ChipMenu = ({
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="max-h-64 w-56 gap-0 overflow-y-auto p-1">
         {onClear && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             data-no-drag
             onClick={() => {
               onClear();
@@ -99,22 +100,21 @@ const ChipMenu = ({
             }}
             title={clearLabel}
             className={cn(
-              "flex w-full items-center rounded-md px-2 py-1.5 text-left text-[11px] transition-colors duration-100",
-              selectedValue === undefined
-                ? "bg-primary/15 text-foreground"
-                : "text-muted-foreground/70 hover:bg-muted hover:text-foreground",
+              "h-auto w-full justify-start rounded-md px-2 py-1.5 text-left font-normal text-[11px]",
+              selectedValue === undefined ? "bg-primary/15 text-foreground" : "text-muted-foreground/70",
             )}
           >
             <span className="flex-1 truncate italic">{clearLabel}</span>
-          </button>
+          </Button>
         )}
         {options.length === 0 ? (
           <span className="px-2 py-1.5 text-[11px] text-muted-foreground/50">none available</span>
         ) : (
           options.map((o) => (
-            <button
+            <Button
               key={o.value}
               type="button"
+              variant="ghost"
               data-no-drag
               onClick={() => {
                 onSelect(o.value);
@@ -122,14 +122,12 @@ const ChipMenu = ({
               }}
               title={o.hint ? `${o.label} — ${o.hint}` : o.label}
               className={cn(
-                "flex w-full items-center rounded-md px-2 py-1.5 text-left text-[11px] transition-colors duration-100",
-                o.value === selectedValue
-                  ? "bg-primary/15 text-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                "h-auto w-full justify-start rounded-md px-2 py-1.5 text-left font-normal text-[11px]",
+                o.value === selectedValue ? "bg-primary/15 text-foreground" : "text-muted-foreground",
               )}
             >
               <span className="truncate">{o.label}</span>
-            </button>
+            </Button>
           ))
         )}
       </PopoverContent>
