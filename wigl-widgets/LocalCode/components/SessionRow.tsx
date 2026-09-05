@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Check, Loader2, Pin, Trash2, X } from "lucide-react";
 import { relativeTime, cn } from "@/wigl/utils";
-import type { SessionView } from "../useSessions";
+import type { SessionView } from "../hooks/useSessions";
 
 export const SessionRow = ({
   session,

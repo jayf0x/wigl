@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { hours, useQuery, useStorage } from "@/wigl/hooks";
 import { homeDir } from "@/wigl/utils";
-import { loadArchivedRepoNames } from "./commands";
-import { POLL_INTERVAL_MS, SOURCE_DIR_RELATIVE_TO_HOME } from "./config";
-import { scanSourceDir } from "./scan";
-import type { ProjectStatus } from "./types";
+import { loadArchivedRepoNames } from "../commands";
+import { POLL_INTERVAL_MS, SOURCE_DIR_RELATIVE_TO_HOME } from "../config";
+import { scanSourceDir } from "../scan";
+import type { ProjectStatus } from "../types";
 
 export const useReposWidget = () => {
   const [projects, setProjects] = useState<ProjectStatus[]>([]);

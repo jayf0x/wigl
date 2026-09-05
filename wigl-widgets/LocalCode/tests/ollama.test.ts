@@ -5,7 +5,7 @@ import { afterEach, expect, mock, test } from "bun:test";
 // directly by `bun test`. Mocked here rather than routing this file
 // through that build, same reasoning as tests/mock-storage.ts.
 mock.module("@/wigl/utils", () => ({ runCmdBackground: async () => ({ stop: async () => {} }) }));
-const { startOllama } = await import("../ollama");
+const { startOllama } = await import("../server/ollama");
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {

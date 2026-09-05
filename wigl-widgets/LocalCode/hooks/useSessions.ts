@@ -4,10 +4,10 @@
 // this widget loses nothing opencode itself considers durable.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStorage } from "@/wigl/hooks";
-import * as client from "./client";
-import { STORAGE_KEYS } from "./config";
-import { formatAutoTitle } from "./sessionTitle";
-import type { OpencodeSession } from "./types";
+import * as client from "../server/client";
+import { STORAGE_KEYS } from "../config";
+import { formatAutoTitle } from "../sessionTitle";
+import type { OpencodeSession } from "../types";
 
 export interface SessionView extends OpencodeSession {
   displayTitle: string;

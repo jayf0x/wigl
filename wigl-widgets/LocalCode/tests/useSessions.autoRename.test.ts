@@ -7,7 +7,7 @@
 // server is connected. sessionTitle.test.ts covers the title-generation
 // algorithm itself; this file covers the state machine around it.
 //
-// `@/wigl/hooks` and `../client` only resolve inside the app's own Vite
+// `@/wigl/hooks` and `../server/client` only resolve inside the app's own Vite
 // build, not for a widget test run directly by `bun test` (same reasoning
 // as tests/ollama.test.ts) — both mocked below with minimal fakes rather
 // than routed through that build. The fake useStorage is a plain in-memory
@@ -48,7 +48,7 @@ const createSessionMock = mock(async (_baseUrl: string, opts: { directory: strin
 // the fetch entirely (see useSessions.ts's `refresh`).
 let cannedSessions: unknown[] = [];
 
-mock.module("../client", () => ({
+mock.module("../server/client", () => ({
   listSessions: async () => cannedSessions,
   subscribeEvents: () => () => {},
   createSession: createSessionMock,
@@ -56,7 +56,7 @@ mock.module("../client", () => ({
   deleteSession: async () => {},
 }));
 
-const { useSessions } = await import("../useSessions");
+const { useSessions } = await import("../hooks/useSessions");
 
 beforeEach(() => {
   store = new Map();

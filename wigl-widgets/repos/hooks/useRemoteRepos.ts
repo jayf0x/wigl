@@ -1,7 +1,7 @@
 import { useQuery } from "@/wigl/hooks";
-import { loadRemoteRepos } from "./commands";
-import { REMOTE_REPOS_STALE_MS } from "./config";
-import type { RemoteRepo } from "./types";
+import { loadRemoteRepos } from "../commands";
+import { REMOTE_REPOS_STALE_MS } from "../config";
+import type { RemoteRepo } from "../types";
 
 // Every repo the user owns on GitHub, gh-backed and cached a week (see
 // config.ts) — this is the full remote list the "un-downloaded" view filters

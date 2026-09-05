@@ -3,10 +3,10 @@
 // (see AGENTS.md's "server lifecycle" section for the tradeoffs of this
 // choice, and what a multi-monitor / multi-instance setup would need).
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_CHAT_AGENT } from "./config";
-import { getModelInfo, isOllamaReachable, listOllamaModels, startOllama } from "./ollama";
-import { disableSkillTool, type OllamaModelSync, syncChatAgent, syncOllamaModels } from "./opencodeConfig";
-import { type OpencodeServerHandle, startOpencodeServer } from "./serverProcess";
+import { DEFAULT_CHAT_AGENT } from "../config";
+import { getModelInfo, isOllamaReachable, listOllamaModels, startOllama } from "../server/ollama";
+import { disableSkillTool, type OllamaModelSync, syncChatAgent, syncOllamaModels } from "../server/opencodeConfig";
+import { type OpencodeServerHandle, startOpencodeServer } from "../server/serverProcess";
 
 export type ServerStatus = "connecting" | "online" | "offline";
 

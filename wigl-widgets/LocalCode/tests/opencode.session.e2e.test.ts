@@ -10,7 +10,7 @@
 // file still needs them (deterministic-decoding config, directory scoping)
 // even though its own assertions don't wait on real output.
 import { afterAll, describe, expect, test } from "bun:test";
-import * as client from "../client";
+import * as client from "../server/client";
 import { applyEvent, emptySessionState, type SessionState } from "../eventReducer";
 import { SCRATCH_DIRECTORY, setupE2eSuite, subscribeEventsViaFetch } from "./testServer";
 import type { OpencodeEvent } from "../types";

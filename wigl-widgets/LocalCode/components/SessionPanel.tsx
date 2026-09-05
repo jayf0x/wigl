@@ -1,8 +1,8 @@
 import { MessageSquarePlus, X } from "lucide-react";
 import { relativeTime } from "@/wigl/utils";
-import { useActiveSession } from "../useActiveSession";
-import type { useModelCatalog } from "../useModelCatalog";
-import type { SessionView } from "../useSessions";
+import { useActiveSession } from "../hooks/useActiveSession";
+import type { useModelCatalog } from "../hooks/useModelCatalog";
+import type { SessionView } from "../hooks/useSessions";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 import { PermissionBar } from "./PermissionBar";

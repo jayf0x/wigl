@@ -3,9 +3,9 @@
 // widget needs to react to live) — no SSE subscription needed here, unlike
 // sessions/messages.
 import { useCallback, useEffect, useState } from "react";
-import * as client from "./client";
-import { ALLOWED_PROVIDER_IDS } from "./config";
-import type { AgentDef, ProviderCatalogEntry } from "./types";
+import * as client from "../server/client";
+import { ALLOWED_PROVIDER_IDS } from "../config";
+import type { AgentDef, ProviderCatalogEntry } from "../types";
 
 export const useModelCatalog = (baseUrl: string | null) => {
   const [agents, setAgents] = useState<AgentDef[]>([]);

@@ -13,7 +13,7 @@
 //
 // Skips (not fails) if qwen3.5:0.8b / smollm:135m aren't pulled locally.
 import { afterAll, describe, expect, test } from "bun:test";
-import * as client from "../client";
+import * as client from "../server/client";
 import { applyEvent, emptySessionState, type SessionState } from "../eventReducer";
 import { SCRATCH_DIRECTORY, setupE2eSuite, subscribeEventsViaFetch } from "./testServer";
 import type { OpencodeEvent } from "../types";

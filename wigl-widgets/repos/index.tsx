@@ -28,8 +28,8 @@ import {
   type SortKey,
   sortProjects,
 } from "./sort";
-import { useRemoteRepos } from "./useRemoteRepos";
-import { useReposWidget } from "./useReposWidget";
+import { useRemoteRepos } from "./hooks/useRemoteRepos";
+import { useReposWidget } from "./hooks/useReposWidget";
 
 const ReposWidget = () => {
   const {

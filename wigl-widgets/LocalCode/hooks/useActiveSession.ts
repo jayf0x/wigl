@@ -6,11 +6,11 @@
 // wholesale on every event.
 import { useCallback, useEffect, useState } from "react";
 import { useStorage } from "@/wigl/hooks";
-import * as client from "./client";
-import { DEFAULT_CHAT_AGENT, STORAGE_KEYS } from "./config";
-import { applyEvent, emptySessionState, type SessionState } from "./eventReducer";
-import { endsInLoop } from "./repetition";
-import type { ModelSelection } from "./types";
+import * as client from "../server/client";
+import { DEFAULT_CHAT_AGENT, STORAGE_KEYS } from "../config";
+import { applyEvent, emptySessionState, type SessionState } from "../eventReducer";
+import { endsInLoop } from "../repetition";
+import type { ModelSelection } from "../types";
 
 export const useActiveSession = (baseUrl: string | null, sessionID: string | null) => {
   const [state, setState] = useState<SessionState>(emptySessionState);

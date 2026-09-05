@@ -6,9 +6,9 @@ import { cn, homeDir } from "@/wigl/utils";
 import { Sidebar } from "./components/Sidebar";
 import { SessionPanel } from "./components/SessionPanel";
 import { STORAGE_KEYS } from "./config";
-import { useModelCatalog } from "./useModelCatalog";
-import { useOpencodeServer } from "./useOpencodeServer";
-import { useSessions } from "./useSessions";
+import { useModelCatalog } from "./hooks/useModelCatalog";
+import { useOpencodeServer } from "./hooks/useOpencodeServer";
+import { useSessions } from "./hooks/useSessions";
 
 const LocalCodeWidget = () => {
   const [activeID, setActiveID] = useState<string | null>(null);

@@ -4,7 +4,7 @@
 import { Plus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/wigl/utils";
-import type { SessionView } from "../useSessions";
+import type { SessionView } from "../hooks/useSessions";
 import { SessionRow } from "./SessionRow";
 
 export const Sidebar = ({

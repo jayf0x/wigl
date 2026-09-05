@@ -19,7 +19,7 @@
 // builtin: child_process"). `/v2/client` is client-only, confirmed no
 // `cross-spawn`/`child_process` reference anywhere in its own module graph.
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
-import type { AgentDef, MessageWithParts, OpencodeEvent, OpencodeSession, ProviderCatalogEntry, Todo } from "./types";
+import type { AgentDef, MessageWithParts, OpencodeEvent, OpencodeSession, ProviderCatalogEntry, Todo } from "../types";
 
 const client = (baseUrl: string) => createOpencodeClient({ baseUrl });
 
