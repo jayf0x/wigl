@@ -1,24 +1,32 @@
 #!/usr/bin/env bun
 /**
- * Guard for the one code-shape rule in docs/principles.md that a machine can
- * actually decide: `const` arrow functions, never `function` declarations
- * (see "`export const`, not `export function`" there for the reasoning — this
- * script enforces that rule, it doesn't own it).
+ * Guards the code-shape rules in docs/principles.md that a machine can
+ * actually decide:
+ * - `const` arrow functions, never `function` declarations (see "`export
+ *   const`, not `export function`" there for the reasoning).
+ * - no raw `<button` — the shared `@/components/ui/button` `Button` is
+ *   already host-module-registered for every widget (see "No raw
+ *   `<button>`" there). A genuine exception (the shared component's
+ *   baseline styling actively fights the layout, not just "didn't feel
+ *   like it") is a `// check-style:allow-raw-button` comment on the same
+ *   line or the line directly above, mirroring this codebase's existing
+ *   `// biome-ignore` convention.
  *
  *   bun run check:style
  *
  * Why a script and not a biome rule: biome has no "no function declarations"
- * rule (`useArrowFunction` only rewrites function *expressions*), and biome's
- * `files.includes` covers `src/**` only, so widgets and scripts — where the
- * rule matters just as much — are unlinted either way.
+ * rule (`useArrowFunction` only rewrites function *expressions*) or a
+ * built-in "ban this JSX tag" rule, and biome's `files.includes` covers
+ * `src/**` only, so widgets and scripts — where both rules matter just as
+ * much — are unlinted either way.
  *
- * Why a script and not a paragraph anyone can read: it already was one, and
- * the drift got caught by the owner reviewing a diff by hand ("I still see
- * export function, instead of — like most — export const") rather than by any
- * tool. Prose can't fail a build.
+ * Why a script and not a paragraph anyone can read: the function-declaration
+ * rule already was one, and the drift got caught by the owner reviewing a
+ * diff by hand ("I still see export function, instead of — like most —
+ * export const") rather than by any tool. Prose can't fail a build.
  *
  * Deliberately regex-based, in the same spirit as check-eager.ts: this checks
- * one syntactic shape, doesn't need a parser to do it, and a false positive
+ * syntactic shapes, doesn't need a parser to do it, and a false positive
  * costs a comment, not a bug.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -46,6 +54,12 @@ const SKIP_PATHS = ["src/components/ui"];
  *   start at the beginning of a line modulo indentation. */
 const RE_FN_DECL = /^[ \t]*(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s*\*?\s+[A-Za-z_$]/gm;
 
+/** Raw JSX `<button` — should be `@/components/ui/button`'s `Button` instead
+ * (see the file doc comment above). Matches the opening tag only, so it
+ * doesn't also flag `</button>` or the word appearing in prose. */
+const RE_RAW_BUTTON = /<button\b/g;
+const ALLOW_RAW_BUTTON = "check-style:allow-raw-button";
+
 const walk = (dir: string, out: string[] = []): string[] => {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name.startsWith(".") && entry.name !== ".wigl") continue;
@@ -60,7 +74,8 @@ const walk = (dir: string, out: string[] = []): string[] => {
   return out;
 };
 
-const violations: string[] = [];
+const fnViolations: string[] = [];
+const buttonViolations: string[] = [];
 for (const root of ROOTS) {
   const abs = join(ROOT, root);
   try {
@@ -72,19 +87,37 @@ for (const root of ROOTS) {
     const rel = relative(ROOT, file);
     if (SKIP_PATHS.some((p) => rel.startsWith(p))) continue;
     const text = readFileSync(file, "utf8");
+    const lines = text.split("\n");
     for (const m of text.matchAll(RE_FN_DECL)) {
       const line = text.slice(0, m.index).split("\n").length;
-      violations.push(`${rel}:${line}  ${m[0].trim()}...`);
+      fnViolations.push(`${rel}:${line}  ${m[0].trim()}...`);
+    }
+    if (/\.tsx$/.test(file)) {
+      for (const m of text.matchAll(RE_RAW_BUTTON)) {
+        const line = text.slice(0, m.index).split("\n").length;
+        const allowed = [lines[line - 1], lines[line - 2]].some((l) => l?.includes(ALLOW_RAW_BUTTON));
+        if (!allowed) buttonViolations.push(`${rel}:${line}`);
+      }
     }
   }
 }
 
-if (!violations.length) {
-  console.log("✓ no function declarations outside vendored code");
+if (!fnViolations.length && !buttonViolations.length) {
+  console.log("✓ no function declarations or raw <button> outside vendored/allowed code");
   process.exit(0);
 }
 
-console.error(`✗ ${violations.length} function declaration(s) — use a const arrow instead (docs/principles.md):\n`);
-for (const v of violations) console.error(`  ${v}`);
-console.error("\n  A React class component is the one legitimate exception, and it's a class, not a function.");
+if (fnViolations.length) {
+  console.error(`✗ ${fnViolations.length} function declaration(s) — use a const arrow instead (docs/principles.md):\n`);
+  for (const v of fnViolations) console.error(`  ${v}`);
+  console.error("\n  A React class component is the one legitimate exception, and it's a class, not a function.");
+}
+if (buttonViolations.length) {
+  if (fnViolations.length) console.error("");
+  console.error(`✗ ${buttonViolations.length} raw <button> — use @/components/ui/button's Button instead (docs/principles.md):\n`);
+  for (const v of buttonViolations) console.error(`  ${v}`);
+  console.error(
+    `\n  A genuine exception gets a "// ${ALLOW_RAW_BUTTON}" comment on the same line or the line above, not silence.`,
+  );
+}
 process.exit(1);

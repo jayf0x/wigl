@@ -33,8 +33,24 @@ formatter doesn't drag a `useEffect` subscription in for free.
 
 Outside those two, only split a concern into its own folder once it's more
 than one file — a single-file concern stays a flat file at the top level
-(`src/wigl/Desktop.tsx`, `src/wigl/widget.tsx`). A folder with one file in
-it is a sign the split happened too early.
+(`src/wigl/widget.tsx`). A folder with one file in it is a sign the split
+happened too early.
+
+Same rule inside a widget's own folder: once it has **2+** `use*.ts` hooks,
+they get their own `hooks/`; once it has **2+** process-management/API-
+client files talking to the same backing service, they get their own
+`server/` (both group by kind, mirroring `src/wigl/hooks`/`utils`). A
+widget with exactly one hook or one server file keeps it flat at the top
+level — same "one file, too early" signal as above.
+
+`src/wigl/Desktop.tsx` outgrew the "single-file concern" case above by line
+count and coupling, not by this rule — it's `Desktop/` now (a composing
+shell plus one hook per gesture/concern: drag, resize, cross-monitor sync,
+the anchor field, the persisted layout, the right-click menu). That's a
+different trigger than "2+ files of one kind": a single component whose
+own body has grown several genuinely separate responsibilities. See the
+80/20 rule below for when a file (not a whole widget folder) has reached
+that point.
 
 ## `export const`, not `export function`
 
@@ -79,6 +95,30 @@ something else already defined elsewhere (`tauri.conf.json`'s
 drift out of sync. If a config value's origin isn't obvious from where it's
 declared, say so in a one-line comment (`// must match X`) rather than
 leaving the next reader to guess.
+
+## No raw `<button>` — adopt the shared `Button`
+
+`@/components/ui/button`'s `Button` (variants default/outline/secondary/
+ghost/destructive/link, sizes default/xs/sm/lg/icon/icon-xs/icon-sm/icon-lg)
+is already host-module-registered (`src/wigl/plugins/host-modules.ts`), so
+every widget can import it exactly like `calendar/Sidebar.tsx` does — this
+isn't a "build something new" ask, it's picking up what's already there.
+Write a new interactive control as `<Button variant="..." size="...">`, not
+a bare `<button className="...">` reimplementing focus/hover/disabled
+styling that variant already has. Need a look the existing variants don't
+cover? Add a variant to `Button` itself (a second real use — see below) or
+extend one via `className` (it merges through `cn()`/`twMerge`, so a later
+class in the string wins over the variant's own conflicting one) — never
+stand up a parallel button component.
+
+This isn't absolute: a control that isn't actually button-shaped (a 16px
+color-swatch chip, a multi-row card, a bare tag a CSS selector already
+styles for a whole repeated list) can fight the shared component's baked-in
+sizing/padding more than it helps. A genuine case like that stays a raw
+`<button>` with a one-line comment explaining why, plus a
+`// check-style:allow-raw-button` marker (`scripts/check-style.ts` enforces
+this the same mechanical way it enforces `export const` over `export
+function` — see that script's own doc comment).
 
 ## Promote to shared only on the second real use
 

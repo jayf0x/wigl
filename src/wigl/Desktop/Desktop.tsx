@@ -322,9 +322,16 @@ export const Desktop = ({
           }}
           onContextMenu={(e) => e.preventDefault()}
         >
+          {/* Every button below is a bare tag styled entirely by the
+              `.wigl-menu button` CSS selector (App.css), not per-instance
+              Tailwind classes — wrapping each in the shared Button would
+              mean fighting its own baked-in variant styling back off for no
+              reuse benefit (this is already the DRY form for a repeated
+              plain-text menu item). */}
           <div className="wigl-menu" style={{ left: menu.menu.x, top: menu.menu.y }}>
             {duplicateTarget?.instantiable && (
               <>
+                {/* check-style:allow-raw-button — see comment above */}
                 <button
                   onClick={() => {
                     menu.closeMenu();
@@ -337,6 +344,7 @@ export const Desktop = ({
               </>
             )}
             {menu.globalActions.map((a) => (
+              // check-style:allow-raw-button — see comment above
               <button
                 key={a.id}
                 onClick={() => {
@@ -351,6 +359,7 @@ export const Desktop = ({
               <>
                 <div className="wigl-menu-separator" />
                 {closedIds.map((id) => (
+                  // check-style:allow-raw-button — see comment above
                   <button
                     key={id}
                     onClick={() => {

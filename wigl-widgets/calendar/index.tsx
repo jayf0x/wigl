@@ -216,6 +216,9 @@ const CalendarWidget = () => {
                   </div>
                   <div className="flex flex-wrap content-start gap-0.5 overflow-hidden">
                     {dayEvents.map((ev) => (
+                      // A 16px color-swatch avatar chip, not a button-shaped
+                      // affordance — Button's baseline sizing/padding has
+                      // nothing to offer here. check-style:allow-raw-button
                       <button
                         key={ev.id}
                         onClick={(e) => {

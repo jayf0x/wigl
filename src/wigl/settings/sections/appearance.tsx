@@ -70,6 +70,9 @@ const PresetCard = ({
   active: boolean;
   onClick: () => void;
 }) => (
+  // A multi-row card (swatches + label), not a pill-shaped control —
+  // Button's fixed h-8/px-2.5 sizing fights this layout more than it helps.
+  // check-style:allow-raw-button
   <button
     type="button"
     onClick={onClick}
