@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 // Shared plumbing for every mini game: phase state, a fixed-timestep rAF loop
 // that exists only while running (zero idle cost), and the chrome around the
@@ -74,7 +75,8 @@ export const GameChrome = ({
     if (phase === "running") boxRef.current?.focus();
   }, [phase]);
 
-  const btn = "rounded border border-border bg-accent/10 px-3 py-1 text-[11px] tracking-widest hover:bg-accent/25";
+  const btn =
+    "h-auto rounded border border-border bg-accent/10 px-3 py-1 font-normal text-[11px] tracking-widest hover:bg-accent/25";
 
   return (
     <div
@@ -105,17 +107,17 @@ export const GameChrome = ({
           {phase === "paused" && <span className="text-xs tracking-widest opacity-80">PAUSED</span>}
           <div className="flex gap-2">
             {phase === "paused" ? (
-              <button data-no-drag onClick={() => setPhase("running")} className={btn}>
+              <Button variant="ghost" data-no-drag onClick={() => setPhase("running")} className={btn}>
                 RESUME
-              </button>
+              </Button>
             ) : (
-              <button data-no-drag onClick={onStart} className={btn}>
+              <Button variant="ghost" data-no-drag onClick={onStart} className={btn}>
                 {phase === "idle" ? "START" : "AGAIN"}
-              </button>
+              </Button>
             )}
-            <button data-no-drag onClick={onExit} className={`${btn} opacity-60`}>
+            <Button variant="ghost" data-no-drag onClick={onExit} className={`${btn} opacity-60`}>
               EXIT
-            </button>
+            </Button>
           </div>
           <span className="text-[9px] opacity-40">{hint}</span>
         </div>

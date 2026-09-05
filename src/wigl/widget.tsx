@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useContext, useLayoutEffect } from "react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/wigl/utils";
 import { CircleX, Expand, Grip, Minimize2 } from "lucide-react";
 import { TILING } from "./grid/config";
@@ -122,24 +123,28 @@ export const WidgetHeader = ({
   <div data-widget-header className={cn("flex items-center gap-1 border-b border-border py-1 pr-1 pl-2", className)}>
     <div className="mr-1 flex shrink-0 items-center gap-1 border-r border-border pr-2">
       {!!slot?.onClose && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           onClick={slot.onClose}
           title="Close"
-          className="text-card-foreground/40 hover:text-destructive"
+          className="text-card-foreground/40 hover:bg-transparent hover:text-destructive"
         >
           <CircleX className="size-3.5" />
-        </button>
+        </Button>
       )}
       {!!slot?.onToggleMinimize && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           onClick={slot.onToggleMinimize}
           title="Minimize"
-          className="text-card-foreground/40 hover:text-card-foreground"
+          className="text-card-foreground/40 hover:bg-transparent hover:text-card-foreground"
         >
           <Minimize2 className="size-3" />
-        </button>
+        </Button>
       )}
     </div>
     <div className="flex min-w-0 flex-1 items-center gap-1">{children}</div>
@@ -164,14 +169,15 @@ const MinimizedWidget = ({ slot, background }: { slot?: WidgetSlotValue | null; 
       <div className="absolute inset-0 flex items-center justify-center overflow-hidden">{background}</div>
     )}
     <div className="absolute inset-0 flex bg-card/60">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={slot?.onToggleMinimize}
         title="Expand"
-        className="flex flex-1 items-center justify-center text-card-foreground/50 hover:text-card-foreground"
+        className="h-auto flex-1 rounded-none text-card-foreground/50 hover:bg-transparent hover:text-card-foreground"
       >
         <Expand className="size-3.5" />
-      </button>
+      </Button>
       <div
         data-drag-handle
         title="Drag"

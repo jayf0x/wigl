@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { RotateCw, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/wigl/utils";
 import { useSettingsSections } from "./registry";
 import { useRestartRequired } from "./restartBanner";
 import { appearanceSection } from "./sections/appearance";
@@ -112,31 +114,34 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
         {restartRequired && (
           <div className="flex items-center justify-between gap-2 border-amber-500/30 border-b bg-amber-500/10 px-3 py-1.5 text-amber-600 text-xs dark:text-amber-400">
             <span>Restart wigl to apply the changed setting.</span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               onClick={() => relaunch()}
-              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium hover:bg-amber-500/15"
+              className="h-auto gap-1 rounded-md px-1.5 py-0.5 font-medium text-amber-600 hover:bg-amber-500/15 dark:text-amber-400"
             >
               <RotateCw className="size-3" />
               Restart
-            </button>
+            </Button>
           </div>
         )}
 
         <div className="flex min-h-0 flex-1">
           <nav className="flex w-36 shrink-0 flex-col gap-0.5 overflow-y-auto border-border/60 border-r p-2">
             {sections.map((s, i) => (
-              <button
+              <Button
                 key={s.id}
                 type="button"
+                variant="ghost"
                 onClick={() => jumpTo(s.id)}
-                className={cnTab(s.id === active?.id && !matches)}
+                className={cn("justify-start", cnTab(s.id === active?.id && !matches))}
               >
                 <span className="w-4 shrink-0 text-muted-foreground/50 tabular-nums">
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 {s.label}
-              </button>
+              </Button>
             ))}
           </nav>
 
@@ -147,17 +152,18 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
               ) : (
                 <div className="flex flex-col gap-0.5">
                   {matches.map(({ section, field }) => (
-                    <button
+                    <Button
                       key={`${section.id}:${field.id}`}
                       type="button"
+                      variant="ghost"
                       onClick={() => jumpTo(section.id)}
-                      className="flex items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                      className="h-auto justify-between rounded-md px-2 py-1.5 text-left text-sm font-normal hover:bg-accent hover:text-accent-foreground"
                     >
                       <span>{field.label}</span>
                       <span className="font-mono text-[10px] text-muted-foreground/60 uppercase tracking-wide">
                         {section.label}
                       </span>
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )

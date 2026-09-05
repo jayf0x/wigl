@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Widget } from "@/wigl";
 import Breakout from "./breakout";
 import Snake from "./snake";
@@ -29,13 +30,14 @@ const GamesWidget = () => {
             GAMES{active ? ` · ${active.name}` : ""}
           </span>
           {active && (
-            <button
+            <Button
+              variant="ghost"
               data-no-drag
               onClick={() => setActive(null)}
-              className="ml-auto rounded px-1.5 text-[10px] tracking-widest opacity-40 hover:bg-accent hover:opacity-80"
+              className="ml-auto h-auto rounded px-1.5 font-normal text-[10px] tracking-widest opacity-40 hover:bg-accent hover:opacity-80"
             >
               MENU
-            </button>
+            </Button>
           )}
         </>
       }
@@ -45,14 +47,15 @@ const GamesWidget = () => {
       ) : (
         <div className="flex flex-1 flex-col justify-center gap-1.5 p-3">
           {GAMES.map((game) => (
-            <button
+            <Button
               key={game.id}
+              variant="ghost"
               data-no-drag
               onClick={() => setActive(game)}
-              className="rounded-md border border-border bg-accent/10 px-3 py-2 text-left font-mono text-[11px] tracking-widest opacity-70 hover:bg-accent/25 hover:opacity-100"
+              className="h-auto justify-start rounded-md border border-border bg-accent/10 px-3 py-2 text-left font-mono font-normal text-[11px] tracking-widest opacity-70 hover:bg-accent/25 hover:opacity-100"
             >
               {game.name}
-            </button>
+            </Button>
           ))}
         </div>
       )}

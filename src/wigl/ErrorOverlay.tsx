@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/wigl/utils";
 import { AlertTriangle, RotateCw, ShieldAlert } from "lucide-react";
 
@@ -38,15 +39,10 @@ export const ErrorOverlay = ({
     {message && <p className="max-w-xs text-[11px] text-muted-foreground">{message}</p>}
     <div className="mt-1 flex items-center gap-2">
       {onRetry && (
-        <button
-          type="button"
-          data-no-drag
-          onClick={onRetry}
-          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-foreground/80 transition-colors duration-150 hover:bg-muted"
-        >
+        <Button type="button" variant="outline" size="xs" data-no-drag onClick={onRetry}>
           <RotateCw className="size-3" />
           retry
-        </button>
+        </Button>
       )}
       {children}
     </div>
