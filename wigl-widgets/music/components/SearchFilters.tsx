@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { cn } from "@/wigl/utils";
 import type { MusicApi } from "../useMusic";
 import { providerLabel } from "../util";
@@ -20,19 +21,19 @@ const Pill = ({
   onClick: () => void;
   children: React.ReactNode;
 }) => (
-  <button
-    type="button"
+  <Button
+    variant="ghost"
     data-no-drag
     onClick={onClick}
     className={cn(
-      "mx-press rounded-full border px-2 py-0.5 text-[10px] transition-colors",
+      "mx-press h-auto rounded-full border px-2 py-0.5 text-[10px] transition-colors",
       active
-        ? "border-foreground/30 bg-accent text-foreground"
-        : "border-border text-muted-foreground hover:text-foreground",
+        ? "border-foreground/30 bg-accent text-foreground hover:bg-accent"
+        : "border-border text-muted-foreground hover:bg-transparent hover:text-foreground",
     )}
   >
     {children}
-  </button>
+  </Button>
 );
 
 const toggle = (list: string[], id: string) =>

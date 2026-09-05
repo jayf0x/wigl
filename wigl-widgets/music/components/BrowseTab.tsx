@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Folder, LoaderCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { MediaItem } from "../types";
 import type { MusicApi } from "../useMusic";
 import { providerLabel } from "../util";
@@ -49,27 +50,27 @@ export const BrowseTab = ({ api }: { api: MusicApi }) => {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-1 px-1 pt-1 pb-1 text-[10px] text-muted-foreground">
         {stack.length > 1 && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             data-no-drag
             aria-label="Back"
             onClick={() => setStack((s) => s.slice(0, -1))}
-            className="mx-press rounded p-0.5 hover:bg-muted hover:text-foreground"
+            className="mx-press h-auto rounded p-0.5 hover:bg-muted hover:text-foreground"
           >
             <ChevronLeft className="size-3.5" />
-          </button>
+          </Button>
         )}
         {stack.map((c, i) => (
           <span key={c.path ?? "root"} className="flex items-center gap-1">
             {i > 0 && <ChevronRight className="size-2.5 opacity-50" />}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               data-no-drag
               onClick={() => setStack((s) => s.slice(0, i + 1))}
-              className="mx-press max-w-24 truncate hover:text-foreground"
+              className="mx-press h-auto max-w-24 truncate p-0 hover:bg-transparent hover:text-foreground"
             >
               {c.label}
-            </button>
+            </Button>
           </span>
         ))}
       </div>
@@ -84,35 +85,35 @@ export const BrowseTab = ({ api }: { api: MusicApi }) => {
         ) : (
           items.map((i) =>
             isFolder(i) ? (
-              <button
+              <Button
                 key={getPath(i) ?? i.name}
-                type="button"
+                variant="ghost"
                 data-no-drag
                 data-music-row
                 onClick={() => open(i)}
-                className="mx-press flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left outline-none hover:bg-accent focus-visible:bg-accent"
+                className="mx-press h-auto flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left outline-none hover:bg-accent focus-visible:bg-accent"
               >
                 <Folder className="size-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate text-[12px] text-foreground/90">
                   {stack.length === 1 ? (providerLabel(getPath(i)) ?? i.name) : i.name}
                 </span>
                 <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" />
-              </button>
+              </Button>
             ) : (
               <Row key={i.uri || i.item_id} item={i} api={api} />
             ),
           )
         )}
         {stack.length === 1 && !loading && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             data-no-drag
             onClick={api.openServer}
             title="Opens Music Assistant → Settings → Music — add local files, a NAS/SMB share, or a streaming account"
-            className="mx-press mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="mx-press h-auto mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <span className="music-tag">＋ add a music source</span>
-          </button>
+          </Button>
         )}
       </div>
     </div>

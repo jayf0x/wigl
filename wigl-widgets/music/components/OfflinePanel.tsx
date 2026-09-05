@@ -1,5 +1,6 @@
 import { Check, Play, RotateCw } from "lucide-react";
 import { ErrorOverlay } from "@/wigl";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/wigl/utils";
 import type { MusicApi } from "../useMusic";
 
@@ -21,13 +22,13 @@ export const OfflinePanel = ({ api }: { api: MusicApi }) => (
   >
     <div className="flex flex-col items-center gap-2">
       <div className="flex flex-wrap items-center justify-center gap-2">
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         data-no-drag
         onClick={api.startServer}
         disabled={api.serverStarting}
         className={cn(
-          "mx-press mx-tap flex items-center gap-1.5 rounded-md border border-foreground bg-foreground px-2.5 py-1 text-[11px] text-background transition-colors hover:bg-foreground/85 disabled:opacity-60",
+          "mx-press mx-tap h-auto flex items-center gap-1.5 rounded-md border border-foreground bg-foreground px-2.5 py-1 text-[11px] text-background transition-colors hover:bg-foreground/85 disabled:opacity-60",
           api.serverStarting && "mx-pending-long",
         )}
       >
@@ -37,26 +38,26 @@ export const OfflinePanel = ({ api }: { api: MusicApi }) => (
           <Play className="size-3" fill="currentColor" />
         )}
         {api.serverStarting ? "starting…" : "Start server"}
-      </button>
+      </Button>
 
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         data-no-drag
         onClick={api.retry}
-        className="mx-press flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-foreground/80 transition-colors hover:bg-muted"
+        className="mx-press h-auto flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-foreground/80 transition-colors"
       >
         <RotateCw className="size-3" />
         retry
-      </button>
+      </Button>
       </div>
 
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         data-no-drag
         role="checkbox"
         aria-checked={api.manageServer}
         onClick={() => api.setManageServer(!api.manageServer)}
-        className="mx-press flex items-center gap-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+        className="mx-press h-auto flex items-center gap-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
       >
         <span
           className={cn(
@@ -67,7 +68,7 @@ export const OfflinePanel = ({ api }: { api: MusicApi }) => (
           {api.manageServer && <Check className="size-2.5" />}
         </span>
         Start automatically next time
-      </button>
+      </Button>
     </div>
   </ErrorOverlay>
 );

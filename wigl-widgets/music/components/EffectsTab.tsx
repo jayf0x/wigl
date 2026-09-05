@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Power, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/wigl/utils";
 import {
   BAND_HZ,
@@ -88,29 +89,29 @@ export const EffectsTab = ({ api }: { api: MusicApi }) => {
       <div className="flex items-center justify-between">
         <p className="music-tag text-muted-foreground/70">Effects</p>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             data-no-drag
             disabled={fxIsFlat(fx)}
             onClick={() => commit({ ...fx, bands: [...DEFAULT_FX.bands], reverb: 0 })}
-            className="mx-press flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+            className="mx-press h-auto flex items-center gap-1 p-0 text-[10px] text-muted-foreground hover:bg-transparent hover:text-foreground disabled:opacity-40"
           >
             <RotateCcw className="size-2.5" /> reset
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
             data-no-drag
             aria-pressed={fx.bypass}
             onClick={() => commit({ ...fx, bypass: !fx.bypass })}
             className={cn(
-              "mx-press flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors",
+              "mx-press h-auto flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors",
               fx.bypass
-                ? "border-border text-muted-foreground hover:text-foreground"
-                : "border-foreground bg-foreground text-background",
+                ? "border-border text-muted-foreground hover:bg-transparent hover:text-foreground"
+                : "border-foreground bg-foreground text-background hover:bg-foreground",
             )}
           >
             <Power className="size-2.5" /> {fx.bypass ? "off" : "on"}
-          </button>
+          </Button>
         </div>
       </div>
 

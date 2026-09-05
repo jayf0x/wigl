@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ArrowDownToLine, ArrowUpToLine, Check, GripVertical, ListPlus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/wigl/utils";
 import type { MusicApi } from "../useMusic";
 import { Equalizer } from "./Equalizer";
@@ -50,22 +51,27 @@ const QueueHeader = ({ api, count }: { api: MusicApi; count: number }) => {
             placeholder={`queue ${new Date().toISOString().slice(5, 16).replace("T", " ")}`}
             className="w-28 min-w-0 rounded border border-border bg-input/40 px-2 py-0.5 text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60"
           />
-          <button type="submit" data-no-drag className="mx-press text-[10px] text-muted-foreground hover:text-foreground">
+          <Button
+            type="submit"
+            variant="ghost"
+            data-no-drag
+            className="mx-press h-auto p-0 text-[10px] text-muted-foreground hover:bg-transparent hover:text-foreground"
+          >
             save
-          </button>
+          </Button>
         </form>
       ) : (
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             data-no-drag
             onClick={() => setSaving(true)}
-            className="mx-press flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+            className="mx-press h-auto flex items-center gap-1 p-0 text-[10px] text-muted-foreground hover:bg-transparent hover:text-foreground"
           >
             <ListPlus className="size-3" /> Save
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
             data-no-drag
             onClick={() => {
               if (confirmClear) {
@@ -76,10 +82,10 @@ const QueueHeader = ({ api, count }: { api: MusicApi; count: number }) => {
                 setTimeout(() => setConfirmClear(false), 3000);
               }
             }}
-            className="mx-press text-[10px] text-muted-foreground hover:text-destructive"
+            className="mx-press h-auto p-0 text-[10px] text-muted-foreground hover:bg-transparent hover:text-destructive"
           >
             {confirmClear ? "clear queue?" : "Clear"}
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -147,15 +153,15 @@ export const QueueList = ({ api }: { api: MusicApi }) => {
               onPlay={media ? () => api.play(media, "play") : undefined}
               actions={media ? standardActions(api, media, extras) : extras}
               dragHandle={
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
                   data-no-drag
                   aria-label="Drag to reorder"
                   {...handleFor(it.queue_item_id, i)}
-                  className="-ml-1 shrink-0 cursor-grab touch-none rounded p-0.5 text-muted-foreground/40 hover:text-foreground active:cursor-grabbing"
+                  className="-ml-1 h-auto shrink-0 cursor-grab touch-none rounded p-0.5 text-muted-foreground/40 hover:bg-transparent hover:text-foreground active:cursor-grabbing"
                 >
                   <GripVertical className="size-3.5" />
-                </button>
+                </Button>
               }
             />
           </div>

@@ -1,6 +1,7 @@
 import { type FormEvent, type RefObject, useEffect, useRef, useState } from "react";
 import { ChevronLeft, Clock, LoaderCircle, Search, X } from "lucide-react";
 import { useStorage } from "@/wigl/hooks";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/wigl/utils";
 import type { NavView, SearchResults } from "../types";
@@ -123,8 +124,8 @@ export const Browser = ({
             {api.searching ? (
               <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
             ) : q ? (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 data-no-drag
                 aria-label="Clear search"
                 onClick={() => {
@@ -132,36 +133,36 @@ export const Browser = ({
                   api.clearResults();
                   inputRef.current?.focus();
                 }}
-                className="mx-press shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                className="mx-press h-auto shrink-0 rounded p-0.5 text-muted-foreground hover:bg-transparent hover:text-foreground"
               >
                 <X className="size-3.5" />
-              </button>
+              </Button>
             ) : null}
           </form>
           {showHistory && (
             <div className="flex flex-wrap items-center gap-1 px-3 pb-2">
               {history.map((term) => (
-                <button
+                <Button
                   key={term}
-                  type="button"
+                  variant="ghost"
                   data-no-drag
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => runSearch(term)}
-                  className="mx-press flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                  className="mx-press h-auto flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
                   <Clock className="size-2.5" />
                   {term}
-                </button>
+                </Button>
               ))}
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 data-no-drag
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setHistory([])}
-                className="px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:text-destructive"
+                className="h-auto px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-transparent hover:text-destructive"
               >
                 clear
-              </button>
+              </Button>
             </div>
           )}
           {(q.trim() !== "" || results) && (
@@ -176,24 +177,24 @@ export const Browser = ({
         </div>
       ) : (
         <div className="flex items-center gap-1.5 px-2 py-2">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             data-no-drag
             aria-label="Back"
             onClick={api.navBack}
-            className="mx-press shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="mx-press h-auto shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <ChevronLeft className="size-4" />
-          </button>
+          </Button>
           <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{crumb(nav)}</span>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             data-no-drag
             onClick={api.navHome}
-            className="music-tag mx-press shrink-0 rounded px-1.5 py-1 text-muted-foreground/70 hover:text-foreground"
+            className="music-tag mx-press h-auto shrink-0 rounded px-1.5 py-1 text-muted-foreground/70 hover:bg-transparent hover:text-foreground"
           >
             search
-          </button>
+          </Button>
         </div>
       )}
 
@@ -238,15 +239,15 @@ export const Browser = ({
       </div>
 
       {nav.kind === "browse" && !ytReady && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           data-no-drag
           onClick={api.openServer}
           title="Opens Music Assistant → Settings → Music sources → add “YouTube Music (Free)” (no account needed)"
-          className="mx-press flex shrink-0 items-center justify-center gap-1.5 border-border border-t px-3 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="mx-press h-auto flex shrink-0 items-center justify-center gap-1.5 rounded-none border-border border-t px-3 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <span className="music-tag">＋ add youtube music</span>
-        </button>
+        </Button>
       )}
     </div>
   );

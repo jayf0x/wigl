@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { type SettingSection, useStorage } from "@/wigl/hooks";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/wigl/utils";
 import {
   DEFAULT_PASSWORD,
   DEFAULT_USERNAME,
@@ -49,14 +51,17 @@ const OpButton = ({ label, hint, run, confirm }: { label: string; hint: string; 
         <span className="text-sm">{label}</span>
         <span className="truncate text-[11px] text-muted-foreground">{msg ?? hint}</span>
       </span>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         disabled={busy}
         onClick={go}
-        className={`mx-press shrink-0 rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent disabled:opacity-50 ${busy ? "mx-pending-long" : ""}`}
+        className={cn(
+          "mx-press h-auto shrink-0 rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent disabled:opacity-50",
+          busy && "mx-pending-long",
+        )}
       >
         {busy ? "…" : armed ? "confirm" : "run"}
-      </button>
+      </Button>
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Compass, History, ListMusic, Plus, SlidersHorizontal } from "lucide-react";
 import { useStorage } from "@/wigl/hooks";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/wigl/utils";
 import { fxIsActive } from "../audioGraph";
 import { playlistDisplayImage } from "../playlistImage";
@@ -23,13 +24,13 @@ const PinnedStrip = ({ api }: { api: MusicApi }) => {
       {pinned.map((p) => {
         const art = playlistDisplayImage(api, p);
         return (
-          <button
+          <Button
             key={p.item_id}
-            type="button"
+            variant="ghost"
             data-no-drag
             onClick={() => api.navTo({ kind: "playlist", item: p })}
             title={p.name}
-            className="mx-press flex shrink-0 items-center gap-1.5 rounded-full border border-border py-0.5 pr-2.5 pl-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="mx-press h-auto flex shrink-0 items-center gap-1.5 rounded-full border border-border py-0.5 pr-2.5 pl-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <span className="grid size-5 shrink-0 place-items-center overflow-hidden rounded-full border border-border bg-background text-muted-foreground/40">
               {art ? (
@@ -39,7 +40,7 @@ const PinnedStrip = ({ api }: { api: MusicApi }) => {
               )}
             </span>
             <span className="max-w-24 truncate">{p.name}</span>
-          </button>
+          </Button>
         );
       })}
     </div>
@@ -106,19 +107,24 @@ const PlaylistsTab = ({ api }: { api: MusicApi }) => {
               placeholder="Playlist name"
               className="w-28 rounded border border-border bg-input/40 px-2 py-0.5 text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60"
             />
-            <button type="submit" data-no-drag className="mx-press text-[10px] text-muted-foreground hover:text-foreground">
+            <Button
+              type="submit"
+              variant="ghost"
+              data-no-drag
+              className="mx-press h-auto p-0 text-[10px] text-muted-foreground hover:bg-transparent hover:text-foreground"
+            >
               add
-            </button>
+            </Button>
           </form>
         ) : (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             data-no-drag
             onClick={() => setCreating(true)}
-            className="mx-press flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+            className="mx-press h-auto flex items-center gap-1 p-0 text-[10px] text-muted-foreground hover:bg-transparent hover:text-foreground"
           >
             <Plus className="size-3" /> New
-          </button>
+          </Button>
         )}
       </div>
 
@@ -156,22 +162,22 @@ export const Home = ({ api }: { api: MusicApi }) => {
         {TABS.map((t) => {
           const Icon = ICON[t.id as keyof typeof ICON];
           return (
-            <button
+            <Button
               key={t.id}
-              type="button"
+              variant="ghost"
               data-no-drag
               onClick={() => setTab(t.id)}
               className={cn(
-                "music-tag mx-press flex-1 basis-16 rounded px-2 py-1.5 transition-colors",
+                "music-tag mx-press h-auto flex-1 basis-16 rounded px-2 py-1.5 transition-colors",
                 tab === t.id
-                  ? "bg-accent text-foreground"
+                  ? "bg-accent text-foreground hover:bg-accent"
                   : "text-muted-foreground/70 hover:bg-accent/50 hover:text-foreground",
               )}
             >
               {Icon && <Icon className="mr-1 inline size-3 -translate-y-px" />}
               {t.label}
               {t.id === "fx" && fxOn && <span className="ml-1 inline-block size-1 rounded-full bg-foreground align-middle" />}
-            </button>
+            </Button>
           );
         })}
       </div>
