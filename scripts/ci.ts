@@ -35,23 +35,28 @@ const git = async (args: string[]): Promise<string> =>
 
 const branch = process.argv[2] ?? (await git(["rev-parse", "--abbrev-ref", "HEAD"]));
 
+// Newest dispatch run id before we trigger — poll until it changes, rather
+// than comparing timestamps (local vs GitHub clock skew ate the old check).
+const latestDispatch = async (): Promise<string | undefined> => {
+  const runs: { databaseId: number; event: string }[] = JSON.parse(
+    await gh([
+      "run", "list", "--workflow", WORKFLOW, "--branch", branch,
+      "--limit", "5", "--json", "databaseId,event",
+    ]),
+  );
+  const r = runs.find((r) => r.event === "workflow_dispatch");
+  return r ? String(r.databaseId) : undefined;
+};
+
 console.log(`▶ dispatching ${WORKFLOW} on ${branch}`);
-const since = new Date().toISOString();
+const before = await latestDispatch();
 await gh(["workflow", "run", WORKFLOW, "--ref", branch]);
 
 let runId = "";
-for (let i = 0; i < 20 && !runId; i++) {
+for (let i = 0; i < 30 && !runId; i++) {
   await Bun.sleep(1500);
-  const runs: { databaseId: number; createdAt: string; event: string }[] = JSON.parse(
-    await gh([
-      "run", "list", "--workflow", WORKFLOW, "--branch", branch,
-      "--limit", "5", "--json", "databaseId,createdAt,event",
-    ]),
-  );
-  const fresh = runs
-    .filter((r) => r.event === "workflow_dispatch" && r.createdAt >= since)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-  if (fresh) runId = String(fresh.databaseId);
+  const now = await latestDispatch();
+  if (now && now !== before) runId = now;
 }
 if (!runId) {
   console.error("✗ dispatched run never appeared — check `gh run list` by hand");

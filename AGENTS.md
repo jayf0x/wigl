@@ -50,7 +50,7 @@ If a task's outcome doesn't change any of those claims, there's nothing to updat
    - A widget imports React and everything shared through the host module registry (`src/wigl/plugins/host-modules.ts`), never its own copy, and never `@tauri-apps/*` directly. Needing something the registry doesn't serve means adding a host module — not an escape hatch. Anything else it needs, it bundles.
 2. Shared components follow the shadcn philosophy: owned code, children + `className`, no prop-per-feature APIs. Nothing new becomes "shared" until a second widget concretely needs it. Everything shared lives in `src/wigl/` behind exactly three barrels — visual/layout primitives from `@/wigl`, stateful/React hooks from `@/wigl/hooks`, plain non-React helpers from `@/wigl/utils` — each barrel's `index.ts` is the authoritative list of what it exports; widgets never deep-import past those three. The header component's own content (title, buttons) is ordinary interactive/selectable content — only its small top-right grip drags the widget; use `data-no-drag` for custom clickable elements placed inside the grip itself (rare), never `stopPropagation` workarounds.
 3. Data comes from shell commands (`tauri-plugin-shell`), not custom Rust. New Rust logic requires the operation to be impossible via shell.
-4. macOS and Linux (Ubuntu) only — no Windows — for the app itself: the GUI (window chrome, drag, click-through, `src-tauri/src/lib.rs`, `src/wigl/Desktop.tsx`) and `bun run verify`/`qa` (shell scripts). The widget **authoring/build tooling** (`scripts/widget.ts`'s `build`/`install`/`check`/`devkit`/etc., and the `tests/e2e/` suite that exercises it) is plain Bun/TypeScript with no shell scripts or macOS/Linux-only APIs, and is expected to work on Windows too — see `tests/e2e/README.md`'s "Platform scope". Don't read this as a broader Windows-support decision; it isn't one. No performance work without measuring first. If a task can't be tied to a real feature in one sentence, skip it and note it. Widgets sharing a monitor share one JS realm and React tree (each monitor is its own window/realm, not each widget) — a per-widget error boundary in `Desktop.tsx` stops one widget's crash from taking down the others on that screen, but don't assume render isolation between widgets the way separate windows would give you.
+4. macOS and Linux (Ubuntu) only — no Windows — for the app itself: the GUI (window chrome, drag, click-through, `src-tauri/src/lib.rs`, `src/wigl/Desktop.tsx`) and `bun run verify`/`qa` (shell scripts). The widget **authoring/build tooling** (`scripts/widget.ts`'s `build`/`install`/`check`/`devkit`/etc., and the `tests/e2e/` suite that exercises it) is plain Bun/TypeScript with no shell scripts or macOS/Linux-only APIs, and is *meant* to work on Windows too — but doesn't yet (tracked as B17 in `backlog.md`; the e2e suite self-skips on `win32` so CI stays green). Verified on macOS + Linux. Don't read any of this as a broader Windows-support decision; it isn't one. No performance work without measuring first. If a task can't be tied to a real feature in one sentence, skip it and note it. Widgets sharing a monitor share one JS realm and React tree (each monitor is its own window/realm, not each widget) — a per-widget error boundary in `Desktop.tsx` stops one widget's crash from taking down the others on that screen, but don't assume render isolation between widgets the way separate windows would give you.
 5. Never use `dangerouslySetInnerHTML` in a widget — CSP is disabled (`csp: null`), so any injected markup runs with full IPC access. React's default escaping is the safety layer; keep it in the loop.
 
 ## Verify before claiming done
@@ -124,8 +124,17 @@ what normally turns `tests/backlog.md` queue entries into real tests — see
 directly.
 
 `bun run test` runs everything safe (core + `tests/e2e` + every widget's
-own tests); `bun run test:e2e` / `bun run test:widgets` isolate one slice —
-see `scripts/wigl.ts`.
+own tests); `bun run test:core` is just `src/wigl` coverage + `tests/e2e`
+(no per-widget deps — this is what CI runs); `bun run test:e2e` /
+`bun run test:widgets` isolate one slice — see `scripts/wigl.ts`.
+
+CI (`.github/workflows/test.yml`) is **opt-in** — `workflow_dispatch` or a
+`v*` tag only, never on plain push. It runs `bun run test:core` on
+ubuntu + macos + windows. Trigger and follow it locally with
+`bun run test:ci` (`scripts/ci.ts`): dispatches on the current branch,
+watches to completion, dumps failed-step logs. The Tauri GUI, `bun run verify`/`qa`, and anything in
+`tests/manual/` (incl. perf) are **not** in CI — no display, and perf
+numbers off shared runners aren't comparable across OSes anyway.
 
 ## Working tips
 

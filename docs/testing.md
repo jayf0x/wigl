@@ -85,6 +85,12 @@ framework for a need that doesn't exist yet.
 
 - `bun run test` — everything safe: every flat file in `tests/`,
   `tests/e2e`, and every widget's own `wigl-widgets/<name>/tests/`.
+- `bun run test:core` — only `tests/` (flat files + `tests/e2e`), no
+  per-widget deps. What CI runs on ubuntu/macos/windows
+  (`.github/workflows/test.yml`, opt-in: `workflow_dispatch` or a `v*` tag).
+  `tests/e2e` self-skips on Windows — see its README and `backlog.md` B17.
+- `bun run test:ci` — dispatch that workflow on the current branch and
+  follow it to completion (`scripts/ci.ts`); dumps failed-step logs.
 - `bun run test:widgets` — only widget-local tests.
 - `bun run test:e2e` — only the widget CLI e2e suite, isolated (useful when
   iterating on `scripts/widget.ts` without waiting on everything else).

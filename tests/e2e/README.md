@@ -117,9 +117,17 @@ by-hand check per `docs/debugging.md`, same as before this suite existed.
 This suite (and the `scripts/widget.ts` commands it drives — `build`,
 `install`, `check`, `list`, `rm`, `devkit`) is plain Bun/TypeScript using
 `node:fs`/`node:path` and `Bun.spawn`/`Bun.build` — no shell scripts, no
-macOS/Linux-only APIs — and is expected to pass on Windows as well as macOS
-and Linux. This is narrower than it sounds: it's the widget **authoring**
-tooling, not the Tauri desktop app itself. `bun run verify`/`qa`
-(`scripts/verify.sh`/`qa.sh`) and the actual GUI (window chrome, drag,
-click-through — `src-tauri/src/lib.rs`, `src/wigl/Desktop.tsx`) remain
-macOS + Linux only per `AGENTS.md`'s hard rules; nothing here changes that.
+macOS/Linux-only APIs. It's verified on **macOS and Linux** (the CI matrix
+in `.github/workflows/test.yml`, and where widgets are actually authored).
+This is narrower than the app itself: it's the widget **authoring** tooling,
+not the Tauri desktop app. `bun run verify`/`qa` (`scripts/verify.sh`/
+`qa.sh`) and the actual GUI (window chrome, drag, click-through —
+`src-tauri/src/lib.rs`, `src/wigl/Desktop.tsx`) remain macOS + Linux only
+per `AGENTS.md`'s hard rules; nothing here changes that.
+
+**Windows:** the design goal is for this tooling to run there too, but it
+doesn't yet — the first `windows-latest` CI run found real bugs (tsc-shim
+lookup in `helpers.ts`, path-separator assumptions in `scripts/widget.ts`).
+The suite self-skips when `process.platform === "win32"` (top of
+`widgets-root.test.ts`) so CI stays green; the gap is tracked as **B17** in
+the repo-root `backlog.md`. Drop the skip guard once B17 is fixed.

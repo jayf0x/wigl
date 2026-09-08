@@ -21,6 +21,7 @@
     "kill": "pkill -x wigl || true; pkill -f 'opencode serve' || true",
     "wigl": "bun scripts/wigl.ts",
     "test": "bun run wigl test",
+    "test:core": "bun run wigl test core",
     "test:widgets": "bun run wigl test widgets",
     "test:e2e": "bun run wigl test e2e",
     "test:ci": "bun scripts/ci.ts",

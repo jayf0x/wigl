@@ -3,6 +3,7 @@
  * wigl CLI — root dispatcher for repo-wide commands.
  *
  *   wigl test                 # every safe *.test.ts (widgets + tests/, incl. tests/e2e)
+ *   wigl test core            # only tests/ (src/wigl coverage + tests/e2e) — no per-widget deps; this is what CI runs
  *   wigl test widgets         # only wigl-widgets/<name>/tests/*.test.ts
  *   wigl test e2e             # only tests/e2e/*.test.ts (see tests/e2e/README.md)
  *
@@ -32,9 +33,14 @@ const runTest = async (scope: string | undefined) => {
       ? ["wigl-widgets"]
       : scope === "e2e"
         ? ["tests/e2e"]
-        : scope === undefined
-          ? ["wigl-widgets", "tests"]
-          : die(`unknown test scope "${scope}" — use "widgets" or "e2e"`);
+        : scope === "core"
+          ? // src/wigl coverage only (flat tests/ + tests/e2e), no per-widget deps — what CI runs.
+            // Absolute path, not "tests": bun's filter is substring-matched, and a bare "tests"
+            // also catches wigl-widgets/<name>/tests/.
+            [resolve(repoRoot, "tests")]
+          : scope === undefined
+            ? ["wigl-widgets", "tests"]
+            : die(`unknown test scope "${scope}" — use "core", "widgets" or "e2e"`);
 
   const proc = Bun.spawn(["bun", "test", ...dirs], {
     cwd: repoRoot,
