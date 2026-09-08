@@ -101,10 +101,13 @@ export const runWidgetCliFrom = async (
  * a global `tsc` — this must typecheck the same compiler version the repo
  * is pinned to). `<dir>` is expected to already contain a `tsconfig.json` +
  * `types/` pair, i.e. the output of `widget:devkit` — see `exportDevkit`
- * below. */
+ * below. Runs the compiler's own JS entry through `bun` rather than a
+ * `node_modules/.bin` shim — the shim's name and form differ per platform
+ * (`tsc` vs `tsc.cmd` vs a Bun-specific `.bunx`), and `bun <script.js>`
+ * sidesteps all of that. */
 export const typecheck = async (dir: string): Promise<CliResult> => {
-  const tscBin = join(repoRoot, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc");
-  const proc = Bun.spawn([tscBin, "-p", dir, "--noEmit"], {
+  const tscMain = Bun.resolveSync("typescript/lib/tsc.js", repoRoot);
+  const proc = Bun.spawn(["bun", tscMain, "-p", dir, "--noEmit"], {
     cwd: repoRoot,
     stdout: "pipe",
     stderr: "pipe",

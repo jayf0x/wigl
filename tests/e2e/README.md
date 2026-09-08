@@ -115,19 +115,18 @@ by-hand check per `docs/debugging.md`, same as before this suite existed.
 ## Platform scope
 
 This suite (and the `scripts/widget.ts` commands it drives — `build`,
-`install`, `check`, `list`, `rm`, `devkit`) is plain Bun/TypeScript using
-`node:fs`/`node:path` and `Bun.spawn`/`Bun.build` — no shell scripts, no
-macOS/Linux-only APIs. It's verified on **macOS and Linux** (the CI matrix
-in `.github/workflows/test.yml`, and where widgets are actually authored).
-This is narrower than the app itself: it's the widget **authoring** tooling,
-not the Tauri desktop app. `bun run verify`/`qa` (`scripts/verify.sh`/
-`qa.sh`) and the actual GUI (window chrome, drag, click-through —
-`src-tauri/src/lib.rs`, `src/wigl/Desktop.tsx`) remain macOS + Linux only
-per `AGENTS.md`'s hard rules; nothing here changes that.
+`install`, `check`, `list`, `rm`, `devkit`, `add`) is plain Bun/TypeScript
+using `node:fs`/`node:path` and `Bun.spawn`/`Bun.build` — no shell scripts,
+no macOS/Linux-only APIs — and runs on **Windows as well as macOS and
+Linux**, verified by the CI matrix in `.github/workflows/test.yml` (`bun run
+test:core` on all three). This is narrower than the app itself: it's the
+widget **authoring** tooling, not the Tauri desktop app. `bun run
+verify`/`qa` (`scripts/verify.sh`/`qa.sh`) and the actual GUI (window
+chrome, drag, click-through — `src-tauri/src/lib.rs`, `src/wigl/Desktop.tsx`)
+remain macOS + Linux only per `AGENTS.md`'s hard rules; nothing here changes
+that.
 
-**Windows:** the design goal is for this tooling to run there too, but it
-doesn't yet — the first `windows-latest` CI run found real bugs (tsc-shim
-lookup in `helpers.ts`, path-separator assumptions in `scripts/widget.ts`).
-The suite self-skips when `process.platform === "win32"` (top of
-`widgets-root.test.ts`) so CI stays green; the gap is tracked as **B17** in
-the repo-root `backlog.md`. Drop the skip guard once B17 is fixed.
+Keeping it that way: no `node_modules/.bin` shim paths (their name/form is
+per-platform — `typecheck` in `helpers.ts` runs `bun <tsc.js>` instead), and
+no `"/"`-splitting of OS paths in assertions (use `node:path`'s `basename`
+etc. — a temp dir is `C:\...` on the Windows runner).

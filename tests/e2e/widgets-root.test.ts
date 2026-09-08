@@ -22,17 +22,9 @@ import {
   runWidgetCliFrom,
   typecheck,
 } from "./helpers";
-import { afterAll, beforeAll, describe as bunDescribe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { access } from "node:fs/promises";
-import { join } from "node:path";
-
-// This suite shells `bun scripts/widget.ts` and `tsc` through Bun.spawn. On
-// Windows the repo's tsc shim path (helpers.ts `typecheck`) and a few path
-// separators in scripts/widget.ts aren't handled yet — see backlog.md
-// ("widget authoring tooling — Windows"). CI (bun run test:core) skips the
-// whole suite there rather than whack-a-mole; it's verified on macOS/Linux,
-// which is where widgets are actually authored.
-const describe = process.platform === "win32" ? bunDescribe.skip : bunDescribe;
+import { basename, join } from "node:path";
 
 const exists = (p: string) =>
   access(p)
@@ -101,7 +93,7 @@ describe("widget:add", () => {
   test("derives the id from the URL when none is given", async () => {
     const repo = await makeGitFixtureRepo("good-widget");
     const appData = await makeTempDir("wigl-e2e-appdata-add-noid-");
-    const idFromUrl = repo.split("/").pop() as string;
+    const idFromUrl = basename(repo); // repo is an OS path — basename, not split("/") (Windows separators)
 
     const add = await runWidgetCli(["add", repo], { env: { WIGL_APP_DATA_DIR: appData } });
     expect(add.code, add.stdout + add.stderr).toBe(0);
