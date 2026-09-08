@@ -73,10 +73,11 @@ storage.kv.get("some_key"); // inspect what got written
 a static top-level import of it. `mock.module` is also process-global and
 Bun doesn't auto-restore it between test files, so call `storage.restore()`
 in an `afterAll` if a later test in the same run needs the real modules
-back. `tests/mock-storage.demo.test.ts` is a working example.
+back. `tests/use-storage.test.ts` is a worked example.
 
 Nothing else needs a mock today (the plugin registry's permission gating
-and grid math are pure functions — call them directly). If a future test
+and grid math are pure functions — call them directly, see
+`tests/plugin-registry.test.ts` / `tests/grid-math.test.ts`). If a future test
 needs to mock a different host module (`@tauri-apps/plugin-shell`, say),
 follow the same `mock.module` pattern rather than building a generic mocking
 framework for a need that doesn't exist yet.

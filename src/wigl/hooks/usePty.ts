@@ -5,6 +5,14 @@
 // can't do (no tty semantics, no stdin write path), so this is the one host
 // module backed by app-specific Rust rather than a shell-out. See
 // docs/widgets.md's host module section for the pattern this follows.
+//
+// No automated coverage, by nature: the hook body is `invoke()` calls into
+// `pty_*` Rust commands and a read loop over their output — there is no
+// pure logic to unit-test, and exercising it needs a real Tauri runtime
+// plus a real pseudo-terminal (Unix-only; the app is Unix-only anyway per
+// AGENTS.md hard rule 4). It's verified by hand against a live terminal
+// widget — see docs/debugging.md. If real logic ever accretes here (retry,
+// backpressure, buffering), extract it into a pure helper and test that.
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 

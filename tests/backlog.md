@@ -24,16 +24,6 @@ Rules for keeping this file real (same spirit as `backlog.md`):
 
 ## Queue
 
-- **`applyGridOverrides` in `src/wigl/grid/config.ts`.** New: Settings > Grid
-  went from Tier-2/restart to live — it writes a `useStorage("wigl_grid")`
-  row that `Desktop.tsx` feeds to `applyGridOverrides`, which mutates the
-  shared `TILING` object in place and falls each field back to a module-load
-  snapshot (`GRID_DEFAULTS`) when absent. Worth one test: pass `{cell: 100,
-  padding: {top: 5}}` then `{}` and assert `TILING` ends back at the exact
-  defaults both for the scalars and the `padding` object (the `{}` = full
-  reset contract is the easy thing to regress — a naive `Object.assign`
-  merge would leave `cell` at 100). Pure function, no DOM.
-
 - **`buildModel` grouping + `signatureOf` stability in `src/wigl/menu/native.ts`.**
   New: the system-tray menu is assembled from the `useGlobalActions`
   registry — `buildModel(actions, viewEntries)` splits actions into
@@ -59,19 +49,17 @@ Rules for keeping this file real (same spirit as `backlog.md`):
   both `w` and `h` grew together (same fixture/pitch-math pattern as the
   existing east/west tests).
 
-- **`repack` and un-hide reflow (`src/wigl/grid/math.ts` + `Desktop.tsx`'s
-  `setClosed`).** Two related fixes landed together. (1) `repack(items, cols)`
-  re-places every visible item first-fit top-left — unlike `settle` it also
-  pulls a *non-overlapping* item that drifted off-screen back toward 0,0;
-  it's what "Reset layout" (`doReset`) now runs instead of wiping
-  `widget_layout`, so hidden widgets must stay hidden and keep their stored
-  spot. (2) `setClosed(id, false)` now runs `reflow` against the re-shown
-  item so a widget un-hidden onto a cell another widget has taken over gets
-  the others pushed off it (repro: move A to 0,0, hide A, move B to 0,0,
-  show A → B should reflow away). Worth one test each on the pure math:
-  `repack` moves a lone item at row 99 to row 0 and leaves a `hidden` item
-  untouched; `reflow(items, shownItem, cols)` displaces an overlapping
-  sibling. Same fixture pattern as the existing `settle`/`reflow` tests.
+- **Un-hide reflow in `Desktop.tsx`'s `setClosed` (the non-adoption path).**
+  `setClosed(id, false)` runs `reflow` against the re-shown item so a widget
+  un-hidden onto a cell another widget has taken over gets the others pushed
+  off it, *and persists where they land* so the fix survives a restart
+  (repro: move A to 0,0, hide A, move B to 0,0, show A → B should reflow
+  away and stay away after relaunch). The pure `reflow`/`repack`/`settle`
+  math is now covered in `tests/grid-math.test.ts`; what's still untested is
+  `setClosed` wiring that math into a `setLayout` + `setSaved` write for the
+  non-cross-monitor case. Needs the same lightweight `layoutRef`/`savedRef`
+  harness the cross-monitor `setClosed` entry below calls for — do both in
+  one pass.
 
 - **Cross-monitor "show" adoption in `Desktop.tsx`'s `setClosed`.** Fixed
   B15 (see the commit that removed it from `backlog.md`, alongside this
@@ -111,3 +99,66 @@ Rules for keeping this file real (same spirit as `backlog.md`):
   `tests/desktop-resize.test.ts` with a second `test()` using its same
   fixture/dispatch pattern, subbing `dblclick`+window-level events for the
   handle's `pointerdown`+`pointermove`+`pointerup` sequence.
+
+- **`useQuery` (`src/wigl/hooks/useQuery.ts`) — has no coverage at all.**
+  The shared async cache every widget (and `useUploader`, indirectly) can
+  lean on. Four invariants worth one test each, all reachable with the
+  `mock-storage` tier (`useSql: true` rides the same mocked kv table
+  `useStorage` does): (1) two callers with the same `key` mounted together
+  fire `fn` once, not twice (in-flight dedup via the `inflight` Map); (2) a
+  result inside `stale` ms is served from `memoryCache` without calling
+  `fn` again; (3) `refresh()` forces a refetch past a still-fresh cache and
+  updates every reader of that key; (4) `useSql: true` round-trips through
+  `query_<key>` and a second mount reads the persisted value before `fn`
+  resolves. `memoryCache`/`inflight` are module globals with no reset hook —
+  a test needs unique keys per case (same as the hook's real usage).
+
+- **`useMonitors` (`src/wigl/Desktop/useMonitors.ts`) monitor-list
+  normalization.** `refreshMonitors` is the one bit of logic in an otherwise
+  thin Tauri wrapper: it sorts `availableMonitors()` left-to-right (`x`,
+  then `y`) and divides every rect field by that monitor's `scaleFactor` so
+  the shared logical-space coords the drag hit-test relies on are correct on
+  HiDPI (Retina `scaleFactor: 2`, Linux fractional scaling). A regression
+  here silently offsets every cross-monitor drop on a scaled display. Hard
+  to unit-test as-is (the transform is inline in a `useCallback` over a
+  mocked `availableMonitors`); worth extracting the `ms => MonitorRect[]`
+  mapping into a pure exported helper first, then one test: unsorted input
+  with a `scaleFactor: 2` monitor in → sorted, scale-normalized rects out.
+
+- **`useCrossMonitorSync` (`src/wigl/Desktop/useCrossMonitorSync.ts`) —
+  the *receiving* side of a cross-monitor drag.** `tests/desktop-drag.test.ts`
+  covers the *sending* monitor (the `wigl-preview`/`wigl-drop` it emits);
+  nothing drives those events *into* a second monitor's `useCrossMonitorSync`
+  and asserts the result. Three things to pin, all via a `<Desktop
+  monitorIndex={1}>` render fed synthetic `wigl-preview`/`wigl-drop`/
+  `wigl-reset` events (the `mock-storage` mock already relays Tauri events
+  in-process): (1) an incoming `wigl-preview` for this monitor renders a
+  phantom and `reflow`s the real widgets around it off a pre-preview
+  snapshot; (2) a `wigl-preview` that moves to another monitor (`p.to !==
+  monitorIndex`) restores that snapshot exactly (`clearForeign`); (3) a
+  `wigl-drop` for this monitor adopts the widget into `layout` + persists it
+  once, and a drop elsewhere doesn't.
+
+- **`reportGrid` deferred-settle in `src/wigl/Desktop/useWidgetLayout.ts`.**
+  A never-before-seen widget (no saved position) is added to
+  `pendingReports`; `reportGrid` holds off `settle`ing the layout until
+  *every* pending widget has reported its real size at least once, then does
+  one `settle` pass — so the final layout is deterministic regardless of
+  which widget's `<Widget>` effect fired first (see the effect's own
+  comment, and the `backlog` note it references). Worth one test through a
+  `<Desktop>` render with two brand-new widgets reporting sizes in both
+  orders and asserting identical final positions. Needs a widget stub that
+  calls its `report` slot callback with a chosen `w/h` — the resize test's
+  fixture pattern plus a `useEffect(() => slot.report({w,h}))`.
+
+- **`generateParametricColors` in `src/wigl/theme/parametric.ts` — no
+  coverage.** Pure function, ~20 derived tokens from 6 knobs, used
+  app-wide (Settings > Appearance's parametric mode writes the knobs live).
+  A regression is silent and only shows as "the theme looks off". Worth a
+  small test: (1) `DEFAULT_KNOBS` in → every `ThemeColors` key present and a
+  valid `oklch(...)`/`#hex` string (no `NaN`, culori didn't choke); (2) the
+  light/dark pivot holds — `brightness: 0.05` gives a `background` lightness
+  below `foreground`'s, `brightness: 0.95` flips it — since that `isDarkBg`
+  branch drives every elevation formula; (3) `saturation: 0` leaves
+  `secondary`/`background` near-gray (chroma ≤ `SURFACE_CHROMA`). Parse the
+  returned strings with `culori`'s own `oklch()` — it's already a dep.
