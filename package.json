@@ -23,6 +23,7 @@
     "test": "bun run wigl test",
     "test:widgets": "bun run wigl test widgets",
     "test:e2e": "bun run wigl test e2e",
+    "test:ci": "bun scripts/ci.ts",
     "tw-colors": "bun scripts/tw-colors.ts",
     "check:eager": "bun scripts/check-eager.ts",
     "check:style": "bun scripts/check-style.ts",

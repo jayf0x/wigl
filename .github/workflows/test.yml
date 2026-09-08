@@ -1,0 +1,26 @@
+name: test
+
+# Opt-in only — the safe test suite (core + tests/e2e + widget tests) is
+# pure Bun/TS and platform-agnostic, but running it on every push is noise.
+# Trigger by hand (`bun run test:ci`, or `gh workflow run test.yml`) or let
+# a version tag run it automatically. The Tauri GUI and bun run verify/qa
+# are macOS/Linux-only and deliberately not exercised here — CI has no
+# display. Perf lives in tests/manual/ and stays manual (see AGENTS.md).
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
