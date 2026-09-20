@@ -386,61 +386,35 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
   their text so `2 * 3 * 4` and glob patterns stop turning into italics.
   The `dangerouslySetInnerHTML` ban (see Hard rules) is why a real markdown
   library is not an option.
-- **The composer field is Milkdown's Crepe editor, not a plain `<textarea>`
-  (and no longer CodeMirror).** WYSIWYG markdown with native list handling —
-  `- `/`1. ` start lists, `Tab`/`Shift+Tab` nest/unnest (the hard requirement
-  that drove the choice), `Enter` continues/exits a list. Two files:
-  `components/CrepeField.tsx` (a controlled React wrapper: create once, sync
-  external `value` in via `replaceAll`, forward edits out via Crepe's
-  `markdownUpdated` listener) and `components/composer.css` (the required
-  stylesheet). Three things that are load-bearing, not incidental:
-  - **`CrepeBuilder` from `@milkdown/crepe/builder`, never the `Crepe`
-    umbrella.** The umbrella statically imports *every* feature (katex,
-    `@codemirror/language-data`, codemirror `basicSetup`, dompurify, …) whether
-    enabled or not; in this repo's non-tree-shaking single-file widget bundle
-    that's ~17MB. The builder pulls only what you `addFeature` — here just
-    `list-item` and `placeholder`. Bundle lands ~5.6MB (up from the
-    CodeMirror era's ~3.8MB; the delta is Vue + ProseMirror, the price of a
-    real WYSIWYG editor, and was accepted deliberately). Crepe's own
-    code-block CodeMirror feature is left off for the same language-data bloat
-    reason the old CodeMirror pass documented — fenced code stays plain.
-  - **The editor libs load via dynamic `import()` inside the mount effect, not
-    static top-level imports.** Milkdown's Vue/ProseMirror modules touch
-    `document` at evaluation time, which crashes `widget:check`'s headless
-    render. Deferring the import to the browser-only effect keeps the module
-    import-safe; Bun inlines the dynamic imports into the one bundle (no
-    chunks), so it still loads through the blob loader.
+- **The composer field is the host's shared `<MarkdownEditor>` (Milkdown
+  Crepe), not a plain `<textarea>` (and no longer CodeMirror).** WYSIWYG
+  markdown with native list handling — `- `/`1. ` start lists,
+  `Tab`/`Shift+Tab` nest/unnest (the hard requirement that drove the choice),
+  `Enter` continues/exits a list. The editor, its stylesheet, and the reasons
+  behind its shape (`CrepeBuilder` not the umbrella, dynamic imports, no
+  virtual cursor, token-bridged theming) live in `src/wigl/markdown/` — it was
+  promoted out of this widget once a second widget (notes) needed it, which
+  also took this bundle from ~5.6MB to under 1MB. What stays here is what is
+  specific to a chat prompt:
+  - **`formatOnType={false}`:** `# ` and ` ``` ` stay literal text in a prompt
+    instead of silently reshaping the editor mid-keystroke (the fence read as
+    "nothing happens, then the closing backticks turn it into a code input").
+    Pasted markdown still round-trips.
   - **`⌘/Ctrl/⌥+Enter` sends via a capture-phase `onKeyDownCapture` in
     `Composer.tsx`, not a ProseMirror keymap.** A capture handler on the editor
-    wrapper runs before ProseMirror's own keydown on the inner contentEditable;
-    `preventDefault` + `stopPropagation` there stops the descent so Milkdown
-    never inserts a newline for the send chord. Simpler than injecting a
-    high-precedence PM keymap. Plain `Enter` is never intercepted, so
-    Enter-never-submits holds. (This handler used to also drive the slash
-    palette's arrow/Tab/Enter navigation; that's gone with the palette.)
-  - **No headings or code blocks from typing:** the `wrapInHeadingInputRule` +
-    `headingKeymap` **and** `createCodeBlockInputRule` + `codeBlockKeymap` are
-    `crepe.editor.remove(...)`'d right after build (before `create()`), so
-    `# ` and ` ``` ` stay literal text in a prompt instead of silently
-    reshaping the editor mid-keystroke (the fence in particular read as
-    "nothing happens, then the closing backticks turn it into a code input").
-    The nodes stay in the schema so pasted markdown still round-trips; nothing
-    auto-formats as you type.
-  - **Cursor:** the `cursor` feature (which layers `prosemirror-virtual-cursor`,
-    a fake caret element, on top of the native one) is left OFF — it ghosted a
-    duplicate caret, worst inside code blocks. The native contentEditable caret
-    is the only one, made theme-visible via `caret-color: var(--foreground)` in
-    `composer.css` (no `cursor.css` import).
-  - **Theming:** Crepe's shipped color themes are never imported (hardcoded
-    colors, banned). `composer.css` imports only the structural common CSS the
-    enabled features need and bridges Crepe's `--crepe-color-*` variables to
-    wigl tokens, plus compactness overrides so a document editor reads as a
-    chat box. List markers are bumped from the faint `--crepe-color-outline` to
-    `--foreground`/80% so they read as clearly as the text.
-- **Everything stays widget-local.** Nothing here was promoted into
-  `src/wigl/` despite the "make it reusable" ask: the repo rule is that
-  nothing becomes shared until a *second* widget concretely needs it, and no
-  second chat-shaped widget exists. The reusable pieces that already exist
+    wrapper runs before ProseMirror's own keydown; `preventDefault` +
+    `stopPropagation` there stops the descent so Milkdown never inserts a
+    newline for the send chord. Plain `Enter` is never intercepted, so
+    Enter-never-submits holds.
+  - **Sizing** is via the editor's CSS vars in `className`
+    (`--md-padding`, `--md-max-height`), not a stylesheet of its own.
+- **The sessions rail is the shared `<Sidebar>`/`<SidebarItem>`** (`src/wigl/Sidebar.tsx`)
+  — collapsing frame, inline rename, inline confirm-delete. `components/Sidebar.tsx`
+  only adds this widget's header, loading skeleton, and pin toggle.
+- **Chat-specific pieces stay widget-local.** Only the editor and the sidebar
+  were promoted into `src/wigl/` (a second widget needed each); the repo rule
+  is that nothing becomes shared until then, and no second chat-shaped widget
+  exists. The reusable pieces that already exist
   (`Button`, `ScrollArea`, `cn`, `useStorage`) are used; the rest — palette,
   trace rows, turn layout — is one widget's opinion and would be a bad
   general API today. The one thing genuinely shared-shaped, an error
@@ -514,8 +488,8 @@ because "add a dropdown" is the default instinct and it's the wrong one here:
   were both fully implemented and completely unwired — no button called
   either one. Owner feedback: "the UI still feels lazy... I expected more
   features to already be implemented." Fixed: `Composer.tsx` swaps the send
-  button for a stop button (`onAbort`) whenever `busy`; `SessionRow.tsx` got
-  a hover-revealed delete button (confirms via `window.confirm` before
+  button for a stop button (`onAbort`) whenever `busy`; the sidebar row (now the shared
+  `SidebarItem`) got a hover-revealed delete button (confirms inline before
   calling through `Sidebar` → `index.tsx`'s `handleDelete`, which also
   clears `activeID` if the deleted session was the active one). Also added
   in the same pass: `MessageList.tsx` auto-scrolls to the bottom on new

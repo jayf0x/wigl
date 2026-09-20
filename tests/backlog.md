@@ -162,3 +162,12 @@ Rules for keeping this file real (same spirit as `backlog.md`):
   branch drives every elevation formula; (3) `saturation: 0` leaves
   `secondary`/`background` near-gray (chroma ≤ `SURFACE_CHROMA`). Parse the
   returned strings with `culori`'s own `oklch()` — it's already a dep.
+
+- **`sql()` in `src/wigl/storage/client.ts` — concurrent writes from separate
+  `useStorage` hooks were silently dropped (SQLITE_BUSY, no busy timeout).**
+  Fixed by passing `.timeout 3000` before the query. Each call is its own
+  `sqlite3` process, so two hooks writing in one tick (the notes widget
+  writes its list + active id together) raced and the loser only logged.
+  Test: mock `runCmd` and assert `sql()` invokes `sqlite3` with a `.timeout`
+  argument ahead of the query; a real-DB variant would fan out ~20 parallel
+  `sql("INSERT ...")` calls and assert every row landed.

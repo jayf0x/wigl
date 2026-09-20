@@ -9,19 +9,17 @@
 // Enter never submits. ⌘/Ctrl/⌥+Enter does. Owner's call, and the right one
 // for a field you're expected to write real multi-line prompts in.
 //
-// The field itself is Milkdown's Crepe editor (`CrepeField.tsx`), not a
-// `<textarea>` — WYSIWYG markdown, with native Tab/Shift+Tab list nesting and
-// Enter-continues/exits-a-list. Its stylesheet (`composer.css`) rides the
-// host's plugin CSS pipeline.
+// The field itself is the host's shared `<MarkdownEditor>` (Milkdown Crepe),
+// not a `<textarea>` — WYSIWYG markdown, with native Tab/Shift+Tab list
+// nesting and Enter-continues/exits-a-list.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Bot, Brain, Cpu, type LucideIcon, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MarkdownEditor, type MarkdownEditorHandle } from "@/wigl";
 import { cn } from "@/wigl/utils";
 import { DEFAULT_CHAT_AGENT } from "../config";
 import type { AgentDef, ModelSelection, ProviderCatalogEntry } from "../types";
-import { CrepeField, type CrepeHandle } from "./CrepeField";
-import "./composer.css";
 
 // `off` is a real variant now (opencodeConfig.ts maps it to Ollama's
 // `reasoning_effort: "none"`, the one value that actually suppresses
@@ -161,7 +159,7 @@ export const Composer = ({
   busy: boolean;
 }) => {
   const [text, setText] = useState("");
-  const crepeRef = useRef<CrepeHandle | null>(null);
+  const crepeRef = useRef<MarkdownEditorHandle | null>(null);
 
   const modelOptions = useMemo<Option[]>(
     () =>
@@ -232,7 +230,7 @@ export const Composer = ({
   // Mod/Alt-Enter must beat ProseMirror to the Enter key. A capture-phase
   // handler on the editor's wrapper runs before ProseMirror's own keydown
   // listener; stopPropagation there halts the descent so Milkdown never
-  // inserts a newline for the send chord. See CrepeField.tsx.
+  // inserts a newline for the send chord. See MarkdownEditor.
   const onKeyDownCapture = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey || e.altKey) && e.key === "Enter") {
       e.preventDefault();
@@ -247,13 +245,15 @@ export const Composer = ({
         data-no-drag
         className="rounded-xl border border-border bg-background/40 transition-colors duration-200 focus-within:border-ring/60"
       >
-        <CrepeField
+        {/* formatOnType off: `# ` and ``` stay literal in a prompt. */}
+        <MarkdownEditor
           value={text}
           onChange={setText}
           placeholder={busy ? "…" : "ask anything"}
+          formatOnType={false}
           handleRef={crepeRef}
           onKeyDownCapture={onKeyDownCapture}
-          className="composer-editor w-full"
+          className="w-full [--md-max-height:200px] [--md-padding:10px_12px_4px]"
         />
 
         <div className="flex items-center gap-0.5 px-1.5 pb-1.5">

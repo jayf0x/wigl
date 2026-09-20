@@ -8,3 +8,5 @@ export { ErrorOverlay } from "./ErrorOverlay";
 export { TILING } from "./grid/config";
 export type { WidgetGridProps } from "./widget";
 export { Widget, WidgetHeader } from "./widget";
+export { MarkdownEditor, type MarkdownEditorHandle } from "./markdown/MarkdownEditor";
+export { Sidebar, SidebarAction, SidebarItem } from "./Sidebar";

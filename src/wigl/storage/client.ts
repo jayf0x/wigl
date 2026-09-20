@@ -27,7 +27,10 @@ const dbPath = (): Promise<string> => {
 };
 
 export const sql = async (query: string): Promise<string> => {
-  const out = await runCmd("sqlite3", [await dbPath(), query]);
+  // `.timeout`: each call is its own sqlite3 process, so two hooks writing in
+  // the same tick collide — without a busy timeout the loser fails with
+  // SQLITE_BUSY and its write is silently dropped (only logged).
+  const out = await runCmd("sqlite3", [await dbPath(), ".timeout 3000", query]);
   if (out.code !== 0)
     throw new Error(`sqlite3 failed: ${out.stderr} (is sqlite3 installed? e.g. "apt install sqlite3")`);
   return out.stdout;
