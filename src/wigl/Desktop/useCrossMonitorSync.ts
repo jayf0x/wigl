@@ -23,7 +23,7 @@ export const useCrossMonitorSync = ({
   showGhost,
   wakeField,
   moveFieldCursor,
-  lastActivity,
+  touch,
   dragRef,
 }: {
   monitorIndex: number;
@@ -36,7 +36,8 @@ export const useCrossMonitorSync = ({
   showGhost: (col: number, row: number, w: number, h: number) => void;
   wakeField: (dragging: boolean) => void;
   moveFieldCursor: (x: number, y: number) => void;
-  lastActivity: MutableRefObject<number>;
+  /** Watchdog progress ping (see watchdog.ts). */
+  touch: () => void;
   /** The local drag session, if any — so a preview broadcast this same
    * monitor just sent (Tauri echoes emits back to the sender) doesn't get
    * treated as an incoming foreign one. */
@@ -67,7 +68,7 @@ export const useCrossMonitorSync = ({
         clearForeign();
         return;
       }
-      lastActivity.current = Date.now();
+      touch();
       if (!foreign.current) {
         foreign.current = {
           id: p.id,
@@ -139,7 +140,7 @@ export const useCrossMonitorSync = ({
     showGhost,
     wakeField,
     moveFieldCursor,
-    lastActivity,
+    touch,
     dragRef,
   ]);
 

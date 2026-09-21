@@ -26,7 +26,7 @@ export const useDragGesture = ({
   showGhost,
   hideGhost,
   wakeField,
-  lastActivity,
+  touch,
 }: {
   els: MutableRefObject<Record<string, HTMLDivElement | null>>;
   layoutRef: MutableRefObject<GridItem[] | null>;
@@ -43,7 +43,8 @@ export const useDragGesture = ({
   showGhost: (col: number, row: number, w: number, h: number) => void;
   hideGhost: () => void;
   wakeField: (dragging: boolean) => void;
-  lastActivity: MutableRefObject<number>;
+  /** Watchdog progress ping (see watchdog.ts) — call on every sign of life. */
+  touch: () => void;
 }) => {
   const drag = useRef<DragState | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -73,7 +74,7 @@ export const useDragGesture = ({
         },
       };
       setDragId(id);
-      lastActivity.current = Date.now();
+      touch();
       // A fast drag sweeps the pointer across other widgets' content, which
       // is selectable — the browser reads that as "extend a selection" and
       // highlights whatever it passed over. The .dragging class (see the
@@ -89,14 +90,14 @@ export const useDragGesture = ({
       // would sever the pointer capture. No poller exists in windowed mode.
       if (!windowed) invoke("set_drag_active", { active: true }).catch(console.error);
     },
-    [monitorIndex, windowed, els, layoutRef, monitorsRef, lastActivity, setGhostCell, moveFieldCursor, showGhost, wakeField],
+    [monitorIndex, windowed, els, layoutRef, monitorsRef, touch, setGhostCell, moveFieldCursor, showGhost, wakeField],
   );
 
   const onPointerMove = (e: React.PointerEvent) => {
     const d = drag.current;
     const layoutNow = layoutRef.current;
     if (!d || !layoutNow) return;
-    lastActivity.current = Date.now();
+    touch();
     const item = layoutNow.find((i) => i.id === d.id)!;
 
     // Which monitor is the cursor on? screenX/Y and the monitor rects share

@@ -11,7 +11,7 @@
 // See useCrossMonitorSync's doc comment for the cross-monitor drag
 // transaction model those last three cooperate on.
 import type { ComponentType } from "react";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { TILING } from "../grid/config";
@@ -28,6 +28,7 @@ import { useWidgetLayout } from "./useWidgetLayout";
 import { useDesktopMenu } from "./useDesktopMenu";
 import { useCrossMonitorSync } from "./useCrossMonitorSync";
 import { useResizeGesture } from "./useResizeGesture";
+import { createWatchdog } from "./watchdog";
 import { useDragGesture } from "./useDragGesture";
 
 export const Desktop = ({
@@ -66,17 +67,21 @@ export const Desktop = ({
 }) => {
   const els = useRef<Record<string, HTMLDivElement | null>>({});
   // Defensive backstop, independent of the root-cause fixes in endDrag/
-  // useCrossMonitorSync: bumped on every real sign of drag progress (a
-  // local pointermove while a drag is live, or an incoming `wigl-preview`
-  // while a foreign one is). The watchdog below force-clears a stuck
-  // transaction if neither has moved in ~1s — a dropped pointerup/
-  // pointercancel (focus stolen mid-drag, an IPC hiccup losing a
-  // `wigl-preview`/`wigl-drop`) can otherwise wedge the ghost/field on
-  // indefinitely, with no drag actually in progress to ever call
-  // endDrag/clearForeign. Not a substitute for those fixes — they prevent
-  // the state disagreement from happening; this only bounds how long an
-  // *unrelated* stall can leave the overlay visibly wedged.
-  const lastActivity = useRef(0);
+  // useCrossMonitorSync: force-clears a drag or foreign preview that has gone
+  // quiet for ~1s — a dropped pointerup/pointercancel (focus stolen
+  // mid-drag, an IPC hiccup losing a `wigl-preview`/`wigl-drop`) can
+  // otherwise wedge the ghost/field on indefinitely, with no drag actually
+  // in progress to ever call endDrag/clearForeign. Not a substitute for
+  // those fixes — they prevent the state disagreement from happening; this
+  // only bounds how long an *unrelated* stall can leave the overlay visibly
+  // wedged. Self-arming (see watchdog.ts): no timer runs while idle. The
+  // callbacks live in a ref because the hooks that own drag/foreign state
+  // are created after — and need — `touch`.
+  const watchdogCb = useRef<{ isActive: () => boolean; onStale: () => void }>({ isActive: () => false, onStale: () => {} });
+  const watchdog = useMemo(
+    () => createWatchdog({ isActive: () => watchdogCb.current.isActive(), onStale: () => watchdogCb.current.onStale() }),
+    [],
+  );
 
   const anchorField = useAnchorField();
   const { monitorsRef, refreshMonitors } = useMonitors();
@@ -136,7 +141,7 @@ export const Desktop = ({
     showGhost: anchorField.showGhost,
     hideGhost: anchorField.hideGhost,
     wakeField: anchorField.wakeField,
-    lastActivity,
+    touch: watchdog.touch,
   });
 
   const resize = useResizeGesture({
@@ -160,7 +165,7 @@ export const Desktop = ({
     showGhost: anchorField.showGhost,
     wakeField: anchorField.wakeField,
     moveFieldCursor: anchorField.moveFieldCursor,
-    lastActivity,
+    touch: watchdog.touch,
     dragRef: drag.dragRef,
   });
 
@@ -204,19 +209,14 @@ export const Desktop = ({
     invoke("set_hit_rects", { rects }).catch(console.error);
   }, [layout.layout, windowed]);
 
-  // Stuck-transaction watchdog: if a drag we own, or a foreign preview we're
-  // rendering a ghost for, goes quiet for a full second — no local
-  // pointermove, no incoming `wigl-preview` — force it closed rather than
-  // leaving the anchor field and ghost lit up with no live gesture behind
-  // them (a dropped pointerup/pointercancel, a lost IPC message).
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      if (Date.now() - lastActivity.current < 1000) return;
+  watchdogCb.current = {
+    isActive: () => !!drag.dragRef.current || !!crossMonitor.foreignRef.current,
+    onStale: () => {
       if (drag.dragRef.current) drag.abandonDrag();
       if (crossMonitor.foreignRef.current) crossMonitor.clearForeign();
-    }, 300);
-    return () => window.clearInterval(id);
-  }, [drag.abandonDrag, crossMonitor.clearForeign]);
+    },
+  };
+  useEffect(() => watchdog.dispose, [watchdog]);
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (resize.resizeRef.current) resize.onResizeMove(e, resize.resizeRef.current);
