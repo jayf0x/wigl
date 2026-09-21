@@ -78,7 +78,7 @@ Don't resurrect either piecemeal by building toward them feature-by-feature.
   editor for global state (theme knobs, other cross-widget config) instead
   of bespoke settings UI per surface. Unresearched — no concrete shape yet
   for what belongs in it beyond theme, or how "semi-live" updates would
-  work against `useStorage`'s poll-based sync. Trigger: a second piece of
+  work against `useStorage`'s broadcast-driven sync (no poll). Trigger: a second piece of
   global config shows up that would otherwise need its own settings popover.
 - **Agent-authored widgets: a permission gate for unattended writes.**
   Creating a widget folder is mechanically identical whether a human or an

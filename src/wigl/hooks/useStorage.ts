@@ -1,14 +1,13 @@
-// useStorage — SQLite-backed persistent state, shared across widget windows
-// and external writers (e.g. `bun run --cwd wigl-widgets/calendar add`). See
-// ./client.ts for the DB/table it reads and writes. External changes from
-// another process (a CLI script) are picked up by polling; changes from
-// another wigl window (another monitor's Desktop, or another widget) arrive
-// near-instantly over a broadcast event instead of waiting up to POLL_MS.
+// useStorage — SQLite-backed persistent state, shared across widget windows.
+// See ./client.ts for the DB/table it reads and writes. One read on mount,
+// then event-driven only: a change from another wigl window (another
+// monitor's Desktop, or another widget) arrives over the `wigl-kv` broadcast.
+// There is deliberately no poll — each poll tick was a `sqlite3` process
+// spawn per hook, forever, on a 24/7 app. A writer outside the app (a CLI)
+// is responsible for triggering an update itself; see backlog.md.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { sql, sqlLiteral } from "../storage/client";
-
-const POLL_MS = 3000;
 
 // Keys are baked into SQL strings, so restrict them instead of escaping them.
 // `:` is allowed for the registry's per-widget `<widget-id>:` key prefix
@@ -32,18 +31,19 @@ interface KvMsg {
  *   const [events, setEvents, { loading }] = useStorage<Event[]>("calendar_events", []);
  *
  * Values round-trip through JSON. Writes are optimistic (state updates
- * immediately, DB write follows). Changes made outside this window — another
- * widget, or the CLI — show up within POLL_MS.
+ * immediately, DB write follows). Changes made in another window/widget
+ * arrive over the `wigl-kv` broadcast; writes made straight to the DB from
+ * outside the app are NOT seen until the next mount.
  */
 export const useStorage = <T>(key: string, initialValue: T) => {
   if (!KEY_RE.test(key)) throw new Error(`useStorage key must match ${KEY_RE}: "${key}"`);
   const [value, setValue] = useState<T>(initialValue);
   const [loading, setLoading] = useState(true);
-  // Last JSON we read or wrote — poll results matching it are no-ops.
+  // Last JSON we read or wrote — a read/broadcast matching it is a no-op.
   const lastJson = useRef<string | null>(null);
-  // Bumped on every local write. A poll started before a write resolving
-  // after it is stale — even if its JSON differs from lastJson — so a read
-  // captures the seq at start and discards its result if a write beat it home.
+  // Bumped on every local write. The mount read resolving after a write is
+  // stale — even if its JSON differs from lastJson — so a read captures the
+  // seq at start and discards its result if a write beat it home.
   const writeSeq = useRef(0);
   // Chains writes so two rapid set() calls commit in call order instead of
   // racing as independent fire-and-forget sqlite3 spawns.
@@ -51,7 +51,7 @@ export const useStorage = <T>(key: string, initialValue: T) => {
 
   useEffect(() => {
     let cancelled = false;
-    const read = async () => {
+    (async () => {
       const seq = writeSeq.current;
       try {
         const raw = (await sql(`SELECT value FROM kv WHERE key=${sqlLiteral(key)}`)).trim();
@@ -63,24 +63,21 @@ export const useStorage = <T>(key: string, initialValue: T) => {
       } finally {
         if (!cancelled) setLoading(false);
       }
-    };
-    read();
-    const id = setInterval(read, POLL_MS);
+    })();
     const unlisten = listen<KvMsg>("wigl-kv", ({ payload: p }) => {
       // Not `p.from === SESSION_ID` — two useStorage instances on the same
       // key in the *same* window (e.g. a settings section writing while
       // another component reads) both need this broadcast; the json-equality
       // check below already suppresses the originating hook's own echo
       // (its lastJson is set before emit), so a same-window sender filter
-      // isn't needed for that and only holds other instances back until the
-      // next poll (see commit fixing the Settings-modal theme-apply lag).
+      // isn't needed for that (see commit fixing the Settings-modal
+      // theme-apply lag).
       if (p.key !== key || p.json === lastJson.current) return;
       lastJson.current = p.json;
       setValue(JSON.parse(p.json));
     });
     return () => {
       cancelled = true;
-      clearInterval(id);
       unlisten.then((u) => u());
     };
   }, [key]);

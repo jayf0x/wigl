@@ -37,7 +37,7 @@ export const useWidgetLayout = ({
   // Desktop.tsx's render. ponytail: a data URL in the kv blob is the whole
   // image's bytes, base64-inflated, in one SQLite row — fine for a wallpaper-
   // sized image, a ceiling for anything large (multi-MB blob on every
-  // useStorage poll/write). Upgrade path if that ever bites: write the bytes
+  // useStorage read/write). Upgrade path if that ever bites: write the bytes
   // to a file under storageRoot() and store just the path here instead.
   const [backgroundImage] = useStorage<string | null>("wigl_background_image", null);
   const [backgroundOpacity] = useStorage<number>("wigl_background_opacity", 1);

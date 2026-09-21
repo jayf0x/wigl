@@ -3,11 +3,11 @@
 // the layout/settings core. Covered here: key validation, load lifecycle,
 // optimistic write + read-back, and cross-window broadcast reception (the
 // `wigl-kv` event path that makes another monitor's write show up here
-// without waiting for the 3s poll). The sqlite3 shell-out itself lives in
+// with no poll behind it — see the no-timer test). The sqlite3 shell-out itself lives in
 // storage/client.ts and is mocked — see tests/mock-storage.ts.
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { mockStorage } from "./mock-storage";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 
 const storage = mockStorage();
 afterAll(() => storage.restore());
@@ -48,6 +48,21 @@ describe("useStorage", () => {
     const { useStorage } = await load();
     const { result } = renderHook(() => useStorage("us_existing", { n: 0 }));
     await waitFor(() => expect(result.current[0]).toEqual({ n: 42 }));
+  });
+
+  test("never starts a timer: each poll tick was a sqlite3 spawn per hook, 24/7", async () => {
+    const { useStorage } = await load();
+    const spy = spyOn(globalThis, "setInterval");
+    try {
+      const { result, unmount } = renderHook(() => useStorage("us_nopoll", 0));
+      // Not waitFor: testing-library's own waitFor polls with setInterval.
+      await act(() => new Promise((r) => setTimeout(r, 30)));
+      expect(result.current[2].loading).toBe(false);
+      expect(spy).not.toHaveBeenCalled();
+      unmount();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test("a wigl-kv broadcast for the same key updates a second reader near-instantly", async () => {
