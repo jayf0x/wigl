@@ -176,7 +176,7 @@ const [items, setItems, { loading }] = useStorage<Item[]>("items", []);
 
 External tools can write the same data (the app won't notice on its own — see the no-poll note above and `backlog.md`): any script in `scripts/` that talks to the DB is the pattern in action (run them via the `bun run` entries in `package.json`). If you build a CLI for a widget's data, copy that shape: same DB path, one kv key, JSON blob, `CREATE TABLE IF NOT EXISTS kv (...)` before use. A CLI talks to sqlite directly, outside the registry, so it doesn't get the auto-prefix for free — **write the key as `<widget-id>:<key>` by hand** to land in the same row the widget reads (`wigl-widgets/calendar/cli.ts` is the reference). The contract between widget and CLI is the key **and the JSON shape** — export both the key constant and the TypeScript type from the widget folder and import them in the CLI (scripts run under bun and can import from `src/` directly; don't hand-duplicate the type).
 
-Ceiling to know about: last-writer-wins on the whole blob — two writers mutating the same key within one poll window can drop a write. Fine for single-user widget data; if that ever bites, move that key to its own table with row-level writes.
+Ceiling to know about: last-writer-wins on the whole blob — two writers mutating the same key at nearly the same time can drop a write. Fine for single-user widget data; if that ever bites, move that key to its own table with row-level writes.
 
 ## Caching expensive calls (`useQuery`)
 

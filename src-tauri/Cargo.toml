@@ -26,6 +26,12 @@ tauri-plugin-shell = "2"
 tauri-plugin-process = "2"
 portable-pty = "0.9"
 
+# Same major versions tao already pulls in (Cargo.lock), so this adds no new
+# crates — only enables the NSEvent monitor API for src/cursor.rs.
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSEvent", "block2"] }
+
 
 # Release is what runs 24/7; debug builds are unoptimized (the cursor poller
 # alone was ~10x costlier there). No `panic = "abort"`: tao's event loop

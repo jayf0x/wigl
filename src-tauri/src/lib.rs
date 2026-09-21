@@ -392,6 +392,8 @@ fn reconcile_monitors(app: &tauri::AppHandle) {
     let _ = app.emit("wigl-monitor-count", new_count);
 }
 
+// Also drives cursor::tick — the 2s safety net for click-through hit-testing.
+//
 // Polls available_monitors() (the only cross-platform monitor-change signal
 // Tauri exposes) so plugging/unplugging a display doesn't need a relaunch.
 // Treats monitor indices as append-only: a newly plugged monitor becomes the
@@ -406,7 +408,10 @@ fn spawn_monitor_poller(app: tauri::AppHandle) {
         loop {
             thread::sleep(Duration::from_secs(2)); // ponytail: 2s poll, cheap and nobody notices a 2s lag on a docking event
             let handle = app.clone();
-            let _ = app.run_on_main_thread(move || reconcile_monitors(&handle));
+            let _ = app.run_on_main_thread(move || {
+                reconcile_monitors(&handle);
+                cursor::tick(&handle);
+            });
         }
     });
 }
