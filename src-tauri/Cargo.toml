@@ -26,3 +26,13 @@ tauri-plugin-shell = "2"
 tauri-plugin-process = "2"
 portable-pty = "0.9"
 
+
+# Release is what runs 24/7; debug builds are unoptimized (the cursor poller
+# alone was ~10x costlier there). No `panic = "abort"`: tao's event loop
+# catches panics (stop_app_on_panic) and a stray `unwrap` in a poller thread
+# shouldn't take every widget down with it.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
