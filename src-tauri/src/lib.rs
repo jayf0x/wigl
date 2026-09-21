@@ -1,13 +1,13 @@
 use std::{
     collections::HashMap,
     fs,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::{Arc, Mutex},
+    sync::Mutex,
     thread,
     time::Duration,
 };
 use tauri::{Emitter, Manager};
 
+mod cursor;
 mod pty;
 
 // Secret/token storage: a widget needing an API key or OAuth token has
@@ -154,39 +154,6 @@ fn config_set(app: tauri::AppHandle, config: serde_json::Value) -> Result<(), St
     let json = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
     fs::write(&tmp, json).map_err(|e| e.to_string())?;
     fs::rename(&tmp, path).map_err(|e| e.to_string())
-}
-
-// Click-through for the fullscreen desktop window: the webview reports the
-// physical-pixel rects of every widget on the tiling grid (the whole screen
-// while a drag is live). A Rust thread polls the global cursor and flips
-// set_ignore_cursor_events: cursor over a widget -> window interactive,
-// cursor over the transparent remainder -> clicks fall through to the
-// desktop. Polling is required because a window ignoring cursor events
-// receives no enter/leave events at all.
-#[derive(serde::Deserialize, Clone, Copy)]
-struct Rect {
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-}
-
-#[derive(Default)]
-struct HitRects(Mutex<HashMap<String, Vec<Rect>>>);
-
-// While a drag is live the poller pauses: flipping set_ignore_cursor_events
-// mid-drag would sever the webview's pointer capture.
-#[derive(Default)]
-struct DragActive(AtomicBool);
-
-#[tauri::command]
-fn set_hit_rects(window: tauri::Window, state: tauri::State<HitRects>, rects: Vec<Rect>) {
-    state.0.lock().unwrap().insert(window.label().into(), rects);
-}
-
-#[tauri::command]
-fn set_drag_active(state: tauri::State<DragActive>, active: bool) {
-    state.0.store(active, Ordering::Relaxed);
 }
 
 // Desktop-overlay mode (fullscreen, transparent, always-on-bottom,
@@ -414,9 +381,11 @@ fn reconcile_monitors(app: &tauri::AppHandle) {
         }
     } else {
         for i in new_count..*count {
-            if let Some(w) = app.get_webview_window(&format!("screen-{i}")) {
+            let label = format!("screen-{i}");
+            if let Some(w) = app.get_webview_window(&label) {
                 let _ = w.close();
             }
+            cursor::forget_window(app, &label);
         }
     }
     *count = new_count;
@@ -438,49 +407,6 @@ fn spawn_monitor_poller(app: tauri::AppHandle) {
             thread::sleep(Duration::from_secs(2)); // ponytail: 2s poll, cheap and nobody notices a 2s lag on a docking event
             let handle = app.clone();
             let _ = app.run_on_main_thread(move || reconcile_monitors(&handle));
-        }
-    });
-}
-
-fn spawn_cursor_poller(app: tauri::AppHandle) {
-    // GTK isn't thread-safe: every call here (cursor_position, a window's
-    // outer_position, set_ignore_cursor_events) has to land on the main
-    // thread, same as spawn_monitor_poller's run_on_main_thread above. This
-    // used to call them straight from the polling thread — usually got away
-    // with it (tao does queue the request internally), but under enough
-    // concurrent main-thread GTK/webkit traffic — e.g. dragging a widget,
-    // which repaints heavily — the race corrupted glibc's heap outright
-    // (`malloc(): smallbin double linked list corrupted`, not a clean Rust
-    // panic). `ignoring` moves to an Arc<Mutex<_>> since the closure posted
-    // to the main thread now outlives a single loop iteration on this one.
-    let ignoring: Arc<Mutex<HashMap<String, bool>>> = Arc::new(Mutex::new(HashMap::new()));
-    thread::spawn(move || {
-        loop {
-            thread::sleep(Duration::from_millis(33)); // ponytail: 30Hz poll, raise if hover feels laggy
-            if app.state::<DragActive>().0.load(Ordering::Relaxed) {
-                continue;
-            }
-            let handle = app.clone();
-            let ignoring = ignoring.clone();
-            let _ = app.run_on_main_thread(move || {
-                let Ok(cursor) = handle.cursor_position() else { return };
-                let rects = handle.state::<HitRects>().0.lock().unwrap().clone();
-                let mut ignoring = ignoring.lock().unwrap();
-                for (label, window) in handle.webview_windows() {
-                    let Some(widget_rects) = rects.get(&label) else { continue };
-                    let Ok(pos) = window.outer_position() else { continue };
-                    let (lx, ly) = (cursor.x - pos.x as f64, cursor.y - pos.y as f64);
-                    let hit = widget_rects
-                        .iter()
-                        .any(|r| lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h);
-                    let want_ignore = !hit;
-                    if ignoring.get(&label) != Some(&want_ignore) {
-                        if window.set_ignore_cursor_events(want_ignore).is_ok() {
-                            ignoring.insert(label, want_ignore);
-                        }
-                    }
-                }
-            });
         }
     });
 }
@@ -514,12 +440,11 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
-        .manage(HitRects::default())
-        .manage(DragActive::default())
+        .manage(cursor::CursorState::default())
         .manage(pty::PtyState::default())
         .invoke_handler(tauri::generate_handler![
-            set_hit_rects,
-            set_drag_active,
+            cursor::set_hit_rects,
+            cursor::set_drag_active,
             is_windowed_mode,
             secrets_get,
             secrets_set,
@@ -615,7 +540,7 @@ pub fn run() {
                 spawn_screen_window(app.handle(), i, mon);
             }
             app.manage(MonitorCount(Mutex::new(monitors.len())));
-            spawn_cursor_poller(app.handle().clone());
+            cursor::start(app.handle());
             spawn_monitor_poller(app.handle().clone());
             Ok(())
         })
