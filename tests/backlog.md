@@ -87,8 +87,8 @@ Rules for keeping this file real (same spirit as `backlog.md`):
   instead of requiring the click-drag `onResizeStart` path; a window
   `pointermove`/`pointerdown`(capture)/`keydown` effect then drives the same
   `onResizeMove`/`endResize` a real click-drag uses, and Escape reverts to
-  `resize.current.snapshot` (mirrors the drag-abandon revert in the stuck-
-  transaction watchdog further down the file). No real pointer/DOM
+  `resize.current.snapshot` (mirrors the drag-abandon revert the stuck-
+  transaction watchdog does, see `src/wigl/Desktop/watchdog.ts`). No real pointer/DOM
   automation needed — the state machine itself is pure enough to unit-test
   directly: (1) after arming, a plain `onResizeMove` call previews the new
   size without touching storage; (2) a synthetic `keydown` with `key:

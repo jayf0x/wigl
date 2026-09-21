@@ -98,6 +98,12 @@ export const PLAYLIST_RENDER_CAP = 250;
 export const RECONNECT_MIN_MS = 1_000;
 export const RECONNECT_MAX_MS = 15_000;
 
+/** How often the scrubber's JS clock ticks (label + reconcile with the SDK
+ * position). The bar itself is animated by a CSS transition between ticks, so
+ * this is the only per-second JS/React work while playing — keep it coarse
+ * (power: every tick is a wakeup + render on an app that runs all day). */
+export const SCRUBBER_TICK_MS = 1000;
+
 /** How often to re-poll the queue snapshot as a backstop for missed events. */
 export const QUEUE_POLL_MS = 10_000;
 
