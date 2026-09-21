@@ -131,10 +131,12 @@ first new response lands, so old results never blank.
 
 **Now-playing / time**: `now.elapsed` is the event-seeded value from MA's
 `queue_time_updated` (fires only ~once every several seconds). The scrubber no
-longer renders it directly — its `Scrubber` runs a **`requestAnimationFrame`
-counter** (A2) that advances a local `posRef` by real elapsed time ×
-`getProgress().playbackSpeed` every frame while playing. Each frame it also
-reads `api.getProgress()` (the Sendspin SDK's `trackProgress`, a live clock off
+longer renders it directly — its `Scrubber` runs a **coarse JS clock**
+(A2, one `setInterval` per `SCRUBBER_TICK_MS`, no rAF — power) that advances a
+local `posRef` by real elapsed time × `getProgress().playbackSpeed` while
+playing. The bar itself is moved by a CSS `transform` transition toward an
+optimistic target one tick ahead (retargeted each tick, so corrections stay
+smooth). Each tick it also reads `api.getProgress()` (the Sendspin SDK's `trackProgress`, a live clock off
 the last server sync) and reconciles: drift > 0.35 s snaps `posRef` and bumps
 `syncKey` → the time label replays `.mx-sync` (a one-shot LED blink); drift
 0.02–0.35 s glides in silently. The counter resets on track change and pauses
