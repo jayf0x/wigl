@@ -329,8 +329,9 @@ html.wigl-windowed #root {
 
 /* The anchor field: cross marks on cell corners (Desktop.tsx builds the
    <path> grid, cell/cursor math shared with the drag engine via
-   grid/math.ts). Idle it's invisible; `.active` (dragging, or
-   TILING.field.show === "always") fades it in. Cursor-proximity brightening
+   grid/math.ts). Idle it's invisible; `.active` (dragging, TILING.field.show
+   === "always", or Settings being open — see useAnchorField's wakeField
+   `force` param) fades it in. Cursor-proximity brightening
    is one radial-gradient glow circle whose cx/cy Desktop.tsx moves on
    pointer move — no per-anchor JS. The drop target's four corners get
    `.locked` instead of proximity brightening. */

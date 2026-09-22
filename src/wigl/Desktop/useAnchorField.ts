@@ -60,10 +60,17 @@ export const useAnchorField = () => {
     }
   }, []);
 
-  const wakeField = useCallback((dragging: boolean) => {
+  // `force` bypasses the user's `field.show` preference (including
+  // "never") — for a caller with its own reason the grid must be visible
+  // regardless of that setting, e.g. Settings being open (see Desktop.tsx):
+  // customizing the grid without seeing it defeats the purpose. Computed
+  // fresh each call rather than short-circuiting on "never", so a later
+  // plain `wakeField(false)` (settings closing) reliably turns it back off
+  // instead of leaving a force-shown grid stuck on.
+  const wakeField = useCallback((dragging: boolean, force = false) => {
     const { show } = TILING.field;
-    if (show === "never") return;
-    fieldRef.current?.classList.toggle("active", dragging || show === "always");
+    const active = force || (show !== "never" && (dragging || show === "always"));
+    fieldRef.current?.classList.toggle("active", active);
   }, []);
   useEffect(() => {
     wakeField(false); // honor field.show === "always" from boot

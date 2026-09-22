@@ -125,6 +125,15 @@ export const Desktop = ({
     setSaved: layout.setSaved,
   });
 
+  // Grid visible for the duration of Settings being open — customizing it
+  // (or anything else in there) without seeing it defeats the point, so this
+  // overrides the user's own field.show preference (see wakeField's `force`
+  // param), including "never". Reverts to that preference on close, same as
+  // a drag ending.
+  useEffect(() => {
+    anchorField.wakeField(menu.settingsOpen, menu.settingsOpen);
+  }, [menu.settingsOpen, anchorField.wakeField]);
+
   const drag = useDragGesture({
     els,
     layoutRef: layout.layoutRef,
