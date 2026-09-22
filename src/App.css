@@ -334,7 +334,11 @@ html.wigl-windowed #root {
    `force` param) fades it in. Cursor-proximity brightening
    is one radial-gradient glow circle whose cx/cy Desktop.tsx moves on
    pointer move — no per-anchor JS. The drop target's four corners get
-   `.locked` instead of proximity brightening. */
+   `.locked` instead of proximity brightening — and while Settings is open
+   (`.settings-open`, set alongside `.active` off menu.settingsOpen) every
+   anchor gets that same accent treatment instead of just the locked ones,
+   so the whole grid reads as "you're editing this" rather than the plain
+   idle-drag look. */
 .wigl-field {
   position: absolute;
   inset: 0;
@@ -356,7 +360,8 @@ html.wigl-windowed #root {
     stroke 0.15s ease,
     opacity 0.15s ease;
 }
-.wigl-anchor.locked {
+.wigl-anchor.locked,
+.wigl-field.settings-open .wigl-anchor {
   stroke: var(--wigl-accent);
   stroke-width: 1.5;
   opacity: 1;

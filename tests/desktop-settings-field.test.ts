@@ -1,8 +1,10 @@
-// Wiring check for the "always show the grid while Settings is open" fix —
-// useAnchorField's own force-override behavior is covered in
-// tests/anchor-field.test.ts; this is the one line in Desktop.tsx that
-// actually calls it off `menu.settingsOpen`, exercised through the real
-// right-click menu → "Settings" action, the same path a user takes.
+// Wiring check for "always show the grid while Settings is open, in the
+// same accent color as a drag's locked drop target" — useAnchorField's own
+// force-override behavior is covered in tests/anchor-field.test.ts; this is
+// the Desktop.tsx wiring off `menu.settingsOpen` (the field's `.active`
+// visibility, and the `.settings-open` class App.css uses to give every
+// anchor the `.locked` accent treatment instead of just the drop target's),
+// exercised through the real right-click menu → "Settings" action.
 import * as React from "react";
 import { act, render } from "@testing-library/react";
 import { mockStorage } from "./mock-storage";
@@ -39,6 +41,7 @@ test('opening Settings shows the grid even with field.show: "never"; closing it 
 
   const field = () => container.querySelector(".wigl-field") as HTMLElement;
   expect(field().classList.contains("active")).toBe(false);
+  expect(field().classList.contains("settings-open")).toBe(false);
 
   const header = container.querySelector('[data-testid="header"]') as HTMLElement;
   await act(async () => {
@@ -53,6 +56,7 @@ test('opening Settings shows the grid even with field.show: "never"; closing it 
   });
 
   expect(field().classList.contains("active")).toBe(true);
+  expect(field().classList.contains("settings-open")).toBe(true);
 
   unmount();
 });

@@ -313,7 +313,11 @@ export const Desktop = ({
           style={{ backgroundImage: `url(${layout.backgroundImage})`, opacity: layout.backgroundOpacity }}
         />
       ) : null}
-      <svg ref={anchorField.fieldRef} className="wigl-field" aria-hidden="true">
+      <svg
+        ref={anchorField.fieldRef}
+        className={`wigl-field${menu.settingsOpen ? " settings-open" : ""}`}
+        aria-hidden="true"
+      >
         {anchorField.anchors.map((a) => (
           <path
             key={`${a.col}-${a.row}`}
