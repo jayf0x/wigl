@@ -34,7 +34,7 @@ const Stub = () => null;
 afterAll(() => storage.restore());
 
 test("resizing a widget's east edge grows it, pushes a colliding neighbor, and persists the new size", async () => {
-  const { container } = render(
+  const { container, unmount } = render(
     React.createElement(Desktop, { widgets: { w1: Stub, w2: Stub }, monitorIndex: 0, windowed: false }),
   );
 
@@ -84,11 +84,12 @@ test("resizing a widget's east edge grows it, pushes a colliding neighbor, and p
   // runs for a colliding drag, reused unmodified for resize. w2's own w/h
   // were never touched by this resize, only its position.
   expect(saved.w2).toMatchObject({ col: 0, row: 0, w: 2, h: 2 });
+  unmount();
 });
 
 test("resizing a widget's west edge shrinks it and shifts its col, keeping the right edge fixed", async () => {
   storage.kv.set("widget_layout", JSON.stringify({ w1: { col: 2, row: 2, w: 4, h: 3, m: 0 } }));
-  const { container } = render(
+  const { container, unmount } = render(
     React.createElement(Desktop, { widgets: { w1: Stub }, monitorIndex: 0, windowed: false }),
   );
 
@@ -118,4 +119,5 @@ test("resizing a widget's west edge shrinks it and shifts its col, keeping the r
 
   const saved = JSON.parse(storage.kv.get("widget_layout")!);
   expect(saved.w1).toMatchObject({ col: 3, row: 2, w: 3, h: 3 });
+  unmount();
 });

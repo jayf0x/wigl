@@ -40,7 +40,7 @@ test("a monitor y-offset doesn't distort where a cross-monitor drag lands", asyn
     preview = e.payload;
   });
 
-  const { container } = render(
+  const { container, unmount } = render(
     React.createElement(Desktop, { widgets: { w1: DragHandle }, monitorIndex: 0, windowed: false }),
   );
 
@@ -92,7 +92,12 @@ test("a monitor y-offset doesn't distort where a cross-monitor drag lands", asyn
   // (what an uncorrected screenY produces: no monitor's rect contains sy).
   expect(preview).toEqual({ id: "w1", to: 1, w: 3, h: 4, col: 5, row: 3, cx: 500, cy: 300 });
 
+  // Left mid-drag (no pointerup): unmount stands in for the gesture actually
+  // ending, so this doesn't leave a permanent listener (Desktop.tsx's
+  // selectionchange clear among them) armed for every test that runs after
+  // this one in the same process.
   unlisten();
+  unmount();
   storage.restore();
 });
 
@@ -108,7 +113,7 @@ test("a monitor y-offset doesn't distort where a cross-monitor drag lands", asyn
 test("a widget dropped onto another monitor doesn't reappear on the source monitor", async () => {
   storage.kv.set("widget_layout", JSON.stringify({ w1: { col: 0, row: 0, m: 0 } }));
 
-  const { container } = render(
+  const { container, unmount } = render(
     React.createElement(Desktop, { widgets: { w1: DragHandle }, monitorIndex: 0, windowed: false }),
   );
 
@@ -169,6 +174,7 @@ test("a widget dropped onto another monitor doesn't reappear on the source monit
   // independent of any second monitor window ever persisting anything.
   expect(JSON.parse(storage.kv.get("widget_layout")!).w1.m).toBe(1);
 
+  unmount();
   storage.restore();
 });
 
@@ -196,7 +202,7 @@ test("a widget belonging to another monitor doesn't loop the reconcile effect fo
   // Monitor 1's own widget (w2) plus one that only ever belongs to
   // monitor 0 (w1) — w1 is permanently "missing" from monitor 1's layout,
   // by design, not a bug to fix in `saved`.
-  const { container } = render(
+  const { container, unmount } = render(
     React.createElement(Desktop, {
       widgets: { w1: DragHandle, w2: DragHandle },
       monitorIndex: 1,
@@ -211,5 +217,6 @@ test("a widget belonging to another monitor doesn't loop the reconcile effect fo
   expect(container.querySelector('[data-widget-id="w2"]')).not.toBeNull();
   expect(container.querySelector('[data-widget-id="w1"]')).toBeNull();
 
+  unmount();
   storage.restore();
 }, 5000);

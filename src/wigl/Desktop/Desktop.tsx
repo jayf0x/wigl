@@ -218,6 +218,34 @@ export const Desktop = ({
   };
   useEffect(() => watchdog.dispose, [watchdog]);
 
+  // Selection leaks that survive the CSS fix (App.css's `.dragging`/
+  // `.resizing` rules, and the one-shot `removeAllRanges()` each gesture's
+  // start already does — see onPointerDown/onResizeStart/
+  // onResizeDoubleClick): those only cover the moment the class/clear is
+  // applied. A selection that starts *after* that — WebKit re-evaluating
+  // drag-to-select on a later pointermove that lands over selectable
+  // content before React's class update has actually committed, or a
+  // widget's own editor (a contentEditable, xterm) extending its own
+  // selection via the Selection API rather than a native drag the CSS rule
+  // can veto — isn't touched by either fix, and is what's left over once
+  // the fast-flick case above is gone. This doesn't try to identify or
+  // prevent any specific cause: for the duration of the gesture, any
+  // selection at all is wrong (nothing here is text you're meant to be
+  // selecting while you're mid-drag), so any `selectionchange` firing while
+  // one is live just gets it collapsed straight back to nothing — usually
+  // before the next paint, so it never gets to look like a selection changed
+  // rather than one flickering into existence.
+  const dragging = drag.dragId != null || resize.resizeId != null;
+  useLayoutEffect(() => {
+    if (!dragging) return;
+    const onSelectionChange = () => {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) sel.removeAllRanges();
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, [dragging]);
+
   const onPointerMove = (e: React.PointerEvent) => {
     if (resize.resizeRef.current) resize.onResizeMove(e, resize.resizeRef.current);
     else drag.onPointerMove(e);
